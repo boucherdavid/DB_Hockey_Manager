@@ -276,6 +276,55 @@ Configuration locale GitHub completee:
   - `git push` via SSH;
   - usage de `gh` pour consulter le repo, les PR, les issues et les workflows.
 
+### 2026-04-13 (session 11)
+
+Mise a jour du suivi pour refleter l'etat reel du code dans `app/`:
+
+Chantier 3 - Transactions admin et historique public:
+- Nouvelle page admin `app/app/admin/transactions/page.tsx`.
+- Nouveau composant `app/app/admin/transactions/TransactionBuilder.tsx`.
+- Nouvelles Server Actions `app/app/admin/transactions/actions.ts`.
+- Nouvelle page publique `app/app/transactions/page.tsx`.
+- Lien `Transactions` visible dans la Navbar publique.
+
+Fonctionnellement, le module transactions permet maintenant:
+- d'effectuer des echanges de joueurs entre deux poolers;
+- d'effectuer des transferts de choix de repechage;
+- de promouvoir une recrue vers `actif` ou `reserviste`;
+- de reactiver un joueur `ltir`;
+- de signer un agent libre;
+- de liberer un joueur;
+- de changer le type d'un joueur dans le roster.
+
+Validation cote serveur du builder de transactions:
+- reconstitution d'un roster virtuel par pooler avant application;
+- validation des limites `12F / 6D / 2G`;
+- validation du minimum de `2` reservistes;
+- validation de la masse salariale par rapport au `pool_cap`;
+- verification de la possession des picks avant transfert;
+- persistance de la transaction dans `transactions` et `transaction_items`.
+
+Historique public des transactions:
+- affichage des transactions de la saison active;
+- separation entre:
+  - `Echanges`
+  - `Ajustements`
+
+Extension du chantier saisons:
+- `app/app/admin/config/actions.ts` contient maintenant des actions supplementaires de transition de saison:
+  - `previewTransitionAction`
+  - `transitionSeasonAction`
+  - `deleteSeasonAction`
+- `app/app/admin/config/SeasonsManager.tsx` permet maintenant:
+  - de previsualiser la copie des rosters de la saison active vers une saison future;
+  - d'identifier les joueurs sans contrat dans la saison cible;
+  - de confirmer la transition;
+  - de supprimer une saison non active.
+
+Note de suivi:
+- ces fonctionnalites etaient deja presentes dans le code mais n'etaient pas encore documentees dans `SUIVI_PROJET.md`;
+- le suivi est maintenant aligne avec l'etat applicatif observe localement.
+
 ### 2026-04-09 (session 8)
 
 Toutes les migrations SQL en attente exécutées dans Supabase:
