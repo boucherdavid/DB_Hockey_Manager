@@ -180,7 +180,8 @@ export async function transitionSeasonAction(
     pooler_id: e.pooler_id,
     player_id: e.player_id,
     pool_season_id: toSaisonId,
-    player_type: e.player_type,
+    // Les joueurs en LTIR reviennent actif au début de la nouvelle saison
+    player_type: e.player_type === 'ltir' ? 'actif' : e.player_type,
     rookie_type: e.rookie_type ?? null,
     pool_draft_year: e.pool_draft_year ?? null,
     is_active: true,

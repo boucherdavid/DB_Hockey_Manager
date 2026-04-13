@@ -388,7 +388,7 @@ export default function TransactionBuilder({ poolers, saison }: { poolers: Poole
           <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">Pooler A</label>
           <select
             value={selectedA}
-            onChange={e => { setSelectedA(e.target.value); setItems(prev => prev.filter(i => i.from_pooler_id !== e.target.value && i.to_pooler_id !== e.target.value)) }}
+            onChange={e => { const prev_id = selectedA; setSelectedA(e.target.value); setItems(prev => prev.filter(i => i.from_pooler_id !== prev_id && i.to_pooler_id !== prev_id)) }}
             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">— Sélectionner —</option>

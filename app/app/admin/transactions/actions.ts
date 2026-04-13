@@ -164,6 +164,22 @@ export async function submitTransactionAction(
     for (const p of (sPlayers ?? [])) signPlayerMap.set(p.id, p)
   }
 
+  // Vérifier qu'aucun joueur signé n'est déjà actif dans la saison (unicité métier)
+  if (signPlayerIds.length > 0) {
+    const { data: alreadyActive } = await supabase
+      .from('pooler_rosters')
+      .select('player_id')
+      .in('player_id', signPlayerIds)
+      .eq('pool_season_id', saisonId)
+      .eq('is_active', true)
+    if (alreadyActive && alreadyActive.length > 0) {
+      const pid = (alreadyActive[0] as any).player_id
+      const sp = signPlayerMap.get(pid)
+      const name = sp ? `${sp.first_name ?? ''} ${sp.last_name ?? ''}`.trim() : `id: ${pid}`
+      return { error: `${name} est déjà actif dans un roster cette saison.` }
+    }
+  }
+
   // Valider préconditions et simuler
   for (const item of items) {
     const { action_type, from_pooler_id, to_pooler_id, player_id, pick_id, old_player_type, new_player_type } = item
@@ -240,6 +256,30 @@ export async function submitTransactionAction(
     }
   }
 
+  // Enregistrer la transaction avant d'appliquer les mutations.
+  // Ainsi, si une mutation échoue à mi-chemin, l'intent est toujours tracé
+  // et un admin peut identifier et corriger l'état partiel.
+  // (Une atomicité complète nécessiterait une fonction PostgreSQL via rpc().)
+  const { data: tx, error: txErr } = await supabase
+    .from('transactions')
+    .insert({ pool_season_id: saisonId, notes: notes || null, created_by: user.id })
+    .select('id')
+    .single()
+  if (txErr) return { error: txErr.message }
+
+  const txItems = items.map(item => ({
+    transaction_id: tx.id,
+    action_type: item.action_type,
+    from_pooler_id: item.from_pooler_id ?? null,
+    to_pooler_id: item.to_pooler_id ?? null,
+    player_id: item.player_id ?? null,
+    pick_id: item.pick_id ?? null,
+    old_player_type: item.old_player_type ?? null,
+    new_player_type: item.new_player_type ?? null,
+  }))
+  const { error: itemsErr } = await supabase.from('transaction_items').insert(txItems)
+  if (itemsErr) return { error: itemsErr.message }
+
   // Appliquer
   for (const item of items) {
     const { action_type, from_pooler_id, to_pooler_id, player_id, pick_id, old_player_type, new_player_type } = item
@@ -258,6 +298,7 @@ export async function submitTransactionAction(
         .eq('pooler_id', from_pooler_id!)
         .eq('player_id', player_id)
         .eq('pool_season_id', saisonId)
+        .eq('is_active', true)
       if (e1) return { error: e1.message }
       // Ajouter au roster dest
       const { data: existingDest } = await supabase.from('pooler_rosters').select('id').eq('pooler_id', to_pooler_id!).eq('player_id', player_id).eq('pool_season_id', saisonId).maybeSingle()
@@ -310,27 +351,6 @@ export async function submitTransactionAction(
       continue
     }
   }
-
-  // Enregistrer la transaction
-  const { data: tx, error: txErr } = await supabase
-    .from('transactions')
-    .insert({ pool_season_id: saisonId, notes: notes || null, created_by: user.id })
-    .select('id')
-    .single()
-  if (txErr) return { error: txErr.message }
-
-  const txItems = items.map(item => ({
-    transaction_id: tx.id,
-    action_type: item.action_type,
-    from_pooler_id: item.from_pooler_id ?? null,
-    to_pooler_id: item.to_pooler_id ?? null,
-    player_id: item.player_id ?? null,
-    pick_id: item.pick_id ?? null,
-    old_player_type: item.old_player_type ?? null,
-    new_player_type: item.new_player_type ?? null,
-  }))
-  const { error: itemsErr } = await supabase.from('transaction_items').insert(txItems)
-  if (itemsErr) return { error: itemsErr.message }
 
   return {}
 }

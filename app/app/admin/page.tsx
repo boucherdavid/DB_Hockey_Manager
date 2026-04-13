@@ -67,6 +67,10 @@ export default async function AdminPage() {
           <h2 className="font-bold text-lg text-gray-800 group-hover:text-purple-700">Transactions</h2>
           <p className="text-gray-500 text-sm mt-1">{'Effectuer des \u00e9changes, signatures et ajustements entre poolers'}</p>
         </Link>
+        <Link href="/admin/presaison" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow group">
+          <h2 className="font-bold text-lg text-gray-800 group-hover:text-amber-700">Repêchage pré-saison</h2>
+          <p className="text-gray-500 text-sm mt-1">Conformité des rosters, ordre de signature et marché d'agents libres</p>
+        </Link>
         <Link href="/admin/config" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow group">
           <h2 className="font-bold text-lg text-gray-800 group-hover:text-gray-600">Configuration du pool</h2>
           <p className="text-gray-500 text-sm mt-1">{'Modifier le cap NHL et les param\u00e8tres de la saison active'}</p>

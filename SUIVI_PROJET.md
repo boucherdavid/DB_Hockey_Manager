@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-04-03
+Derniere mise a jour: 2026-04-13
 
 ## Role du fichier
 
@@ -359,3 +359,46 @@ Toutes les migrations SQL en attente exécutées dans Supabase:
 - `pooler_rosters`: colonnes `rookie_type` et `pool_draft_year` ajoutées.
 - `pool_seasons`: colonne `cap_multiplier DECIMAL(5,4) DEFAULT 1.24` ajoutée; `pool_cap` recréé comme colonne générée `CEIL(nhl_cap * cap_multiplier / 1000000) * 1000000`; `nhl_cap` de la saison 2025-26 corrigé à `95 500 000`.
 - Note: la base contenait déjà une ligne `ltir` (test), ce qui a nécessité d'adapter le script pour inclure `ltir` dès la recréation de la contrainte.
+
+### 2026-04-13 (session 12)
+
+Correctifs module transactions (`app/app/admin/transactions/`):
+
+1. **Atomicité**: l'enregistrement `transactions` + `transaction_items` est maintenant inséré AVANT la boucle de mutations afin que la trace d'audit existe même si une mutation échoue partiellement. (Vrai atomicité nécessiterait une fonction PostgreSQL RPC.)
+2. **Unicité des signatures**: vérification serveur avant simulation — si un joueur signé est déjà actif dans un roster cette saison, la transaction est refusée.
+3. **Filtre pooler dans le builder**: correction d'un bug UI où changer le pooler A ne retirait pas les items déjà associés à l'ancien pooler. L'ID précédent est capturé avant la mise à jour du state.
+4. **Corruption de l'historique lors d'un transfert**: `UPDATE pooler_rosters` de désactivation manquait `.eq('is_active', true)`, ce qui pouvait désactiver d'anciennes lignes d'un joueur ayant changé de pooler. Corrigé.
+
+Fichiers touchés: `actions.ts`, `TransactionBuilder.tsx`.
+
+Nouveau module pré-saison (`app/app/admin/presaison/`):
+
+Fichiers créés:
+- `types.ts`: types `PoolerCapInfo`, `RosterEntry` et constante `FREE_AGENT_THRESHOLD = 500_000`. Séparé de `actions.ts` car `'use server'` interdit les exports non-async.
+- `actions.ts`: Server Actions — `loadPresaisonDataAction`, `resetLtirToActifAction`, `saveDraftOrderAction`, `resetPresaisonDraftAction`.
+- `page.tsx`: page serveur avec garde admin, chargement de la liste des saisons.
+- `PresaisonManager.tsx`: composant client principal.
+
+Logique de `loadPresaisonDataAction`:
+- Les recrues protégées sont **exclues** du calcul de masse et de l'affichage:
+  - `rookie_type = 'draft'`: protégée si `(seasonStartYear - pool_draft_year) < 5`.
+  - `rookie_type = 'elc'`: protégée si `is_elc = true` sur le contrat courant.
+- Les recrues dont la protection est expirée sont traitées comme `actif`.
+- Les joueurs `ltir` sont inclus dans le roster (ils peuvent être remis sur LTIR manuellement).
+
+Fonctionnalités du `PresaisonManager`:
+- **Aperçu des rosters**: joueurs groupés par position (Attaquants / Défenseurs / Gardiens / Réservistes / LTIR). Libération multi-sélection par cases à cocher. Changement de type joueur par joueur.
+- **Remise LTIR → Actif en lot**: bouton pour remettre tous les joueurs LTIR de la saison en `actif` d'un seul coup (`resetLtirToActifAction`). Utile en début de saison.
+- **Ordre du repêchage**: glisser-déposer (ou liste ordonnée) des poolers; sauvegardé dans `pool_seasons.presaison_draft_order` (JSONB).
+- **Draft actif**: file rotative — le pooler courant signe un agent libre, puis passe en fin de file s'il reste éligible (espace cap ≥ 500 000 $). Les poolers sous le seuil sont retirés automatiquement. L'admin peut clore manuellement.
+- **Zone de test — Réinitialiser le repêchage**: annule toutes les transactions `'Repêchage pré-saison'` de la saison, désactive les joueurs signés dans `pooler_rosters`, supprime les items et transactions. Protégé par `window.confirm`.
+
+Lien ajouté dans `app/app/admin/page.tsx` vers `/admin/presaison`.
+
+Migration SQL à exécuter dans Supabase (pas encore confirmée):
+```sql
+ALTER TABLE pool_seasons ADD COLUMN IF NOT EXISTS presaison_draft_order JSONB;
+```
+
+Transition de saison — correction dans `transitionSeasonAction` (`admin/config/actions.ts`):
+- Les joueurs en `ltir` dans la saison source sont copiés comme `actif` dans la saison cible (règle métier: LTIR se remet à actif en début de saison).
