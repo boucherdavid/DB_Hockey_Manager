@@ -1,0 +1,17 @@
+app/node_modules/
+app/.next/
+app/.env.local
+app/.env*
+
+python_script/venv/
+python_script/__pycache__/
+python_script/.env
+python_script/.env*
+python_script/diagnostics/
+
+*.pyc
+*.pyo
+*.pyd
+
+.DS_Store
+Thumbs.db

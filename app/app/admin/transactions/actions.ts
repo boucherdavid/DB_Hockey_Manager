@@ -1,0 +1,336 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+
+export type ActionType = 'transfer' | 'promote' | 'sign' | 'reactivate' | 'release' | 'type_change'
+
+export type TxItemPayload = {
+  action_type: ActionType
+  from_pooler_id?: string
+  to_pooler_id?: string
+  player_id?: number
+  pick_id?: number
+  old_player_type?: string
+  new_player_type?: string
+}
+
+type VEntry = {
+  roster_id: number
+  player_id: number
+  player_type: string
+  position: string | null
+  cap_number: number
+}
+
+function getPlayerBucket(position: string | null): 'forward' | 'defense' | 'goalie' {
+  const pos = (position ?? '').toUpperCase()
+  if (pos.includes('G')) return 'goalie'
+  if (pos.includes('D')) return 'defense'
+  return 'forward'
+}
+
+const ACTIVE_LIMITS = { forward: 12, defense: 6, goalie: 2 }
+
+function validateFinalRoster(entries: VEntry[], poolCap: number, season: string): string | null {
+  const actifs = entries.filter(e => e.player_type === 'actif')
+  const reservistes = entries.filter(e => e.player_type === 'reserviste')
+
+  const counts = actifs.reduce((acc, e) => {
+    acc[getPlayerBucket(e.position)] += 1
+    return acc
+  }, { forward: 0, defense: 0, goalie: 0 })
+
+  if (counts.forward > ACTIVE_LIMITS.forward) return `Trop d'attaquants actifs (${counts.forward} / ${ACTIVE_LIMITS.forward})`
+  if (counts.defense > ACTIVE_LIMITS.defense) return `Trop de défenseurs actifs (${counts.defense} / ${ACTIVE_LIMITS.defense})`
+  if (counts.goalie > ACTIVE_LIMITS.goalie) return `Trop de gardiens actifs (${counts.goalie} / ${ACTIVE_LIMITS.goalie})`
+  if (reservistes.length < 2) return `Minimum 2 réservistes requis (${reservistes.length})`
+
+  const cap = [...actifs, ...reservistes].reduce((sum, e) => sum + e.cap_number, 0)
+  if (cap > poolCap) return `Cap dépassé (${new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(cap)} / ${new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(poolCap)})`
+
+  return null
+}
+
+export async function loadRosterAction(poolerId: string, saisonId: number) {
+  const supabase = await createClient()
+  const [{ data: rosterData }, { data: picksData }] = await Promise.all([
+    supabase
+      .from('pooler_rosters')
+      .select(`id, player_id, player_type, players (id, first_name, last_name, position, status, is_rookie, teams (code), player_contracts (season, cap_number))`)
+      .eq('pooler_id', poolerId)
+      .eq('pool_season_id', saisonId)
+      .eq('is_active', true)
+      .order('player_type'),
+    supabase
+      .from('pool_draft_picks')
+      .select(`id, round, pool_season_id, pool_seasons (season), original_owner:poolers!original_owner_id (id, name)`)
+      .eq('current_owner_id', poolerId)
+      .eq('is_used', false)
+      .order('pool_season_id')
+      .order('round'),
+  ])
+  return { roster: (rosterData ?? []) as any[], picks: (picksData ?? []) as any[] }
+}
+
+export async function searchFreeAgentsAction(saisonId: number, query: string): Promise<{ players: any[] }> {
+  if (query.trim().length < 2) return { players: [] }
+  const supabase = await createClient()
+
+  const { data: onRoster } = await supabase
+    .from('pooler_rosters')
+    .select('player_id')
+    .eq('pool_season_id', saisonId)
+    .eq('is_active', true)
+
+  const takenIds = (onRoster ?? []).map((r: any) => r.player_id)
+  const q = query.trim()
+
+  let dbQuery = supabase
+    .from('players')
+    .select(`id, first_name, last_name, position, status, teams (code), player_contracts (season, cap_number)`)
+    .or(`last_name.ilike.%${q}%,first_name.ilike.%${q}%`)
+    .limit(15)
+
+  if (takenIds.length > 0) {
+    dbQuery = dbQuery.not('id', 'in', `(${takenIds.join(',')})`)
+  }
+
+  const { data } = await dbQuery
+  return { players: (data ?? []) as any[] }
+}
+
+export async function submitTransactionAction(
+  saisonId: number,
+  notes: string,
+  items: TxItemPayload[],
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+  if (items.length === 0) return { error: 'La transaction est vide.' }
+
+  const { data: saison } = await supabase.from('pool_seasons').select('season, pool_cap').eq('id', saisonId).single()
+  if (!saison) return { error: 'Saison introuvable.' }
+
+  // Poolers affectés
+  const affectedIds = new Set<string>()
+  for (const item of items) {
+    if (item.from_pooler_id) affectedIds.add(item.from_pooler_id)
+    if (item.to_pooler_id) affectedIds.add(item.to_pooler_id)
+  }
+
+  // Charger les rosters
+  const { data: allRosters } = await supabase
+    .from('pooler_rosters')
+    .select(`id, pooler_id, player_id, player_type, players (id, position, player_contracts (season, cap_number))`)
+    .in('pooler_id', Array.from(affectedIds))
+    .eq('pool_season_id', saisonId)
+    .eq('is_active', true)
+
+  // Construire les rosters virtuels
+  const virtual = new Map<string, VEntry[]>()
+  for (const id of affectedIds) virtual.set(id, [])
+
+  for (const entry of (allRosters ?? []) as any[]) {
+    const cap = entry.players?.player_contracts?.find((c: any) => c.season === saison.season)?.cap_number ?? 0
+    virtual.get(entry.pooler_id)!.push({
+      roster_id: entry.id,
+      player_id: entry.player_id,
+      player_type: entry.player_type,
+      position: entry.players?.position ?? null,
+      cap_number: cap,
+    })
+  }
+
+  // Charger les picks pour validation
+  const pickIds = items.filter(i => i.pick_id).map(i => i.pick_id!)
+  const pickMap = new Map<number, any>()
+  if (pickIds.length > 0) {
+    const { data: picks } = await supabase.from('pool_draft_picks').select('id, current_owner_id, is_used').in('id', pickIds)
+    for (const p of (picks ?? [])) pickMap.set(p.id, p)
+  }
+
+  // Charger les joueurs signés (sign) pour cap
+  const signPlayerIds = items.filter(i => i.action_type === 'sign' && i.player_id).map(i => i.player_id!)
+  const signPlayerMap = new Map<number, any>()
+  if (signPlayerIds.length > 0) {
+    const { data: sPlayers } = await supabase
+      .from('players')
+      .select(`id, position, player_contracts (season, cap_number)`)
+      .in('id', signPlayerIds)
+    for (const p of (sPlayers ?? [])) signPlayerMap.set(p.id, p)
+  }
+
+  // Valider préconditions et simuler
+  for (const item of items) {
+    const { action_type, from_pooler_id, to_pooler_id, player_id, pick_id, old_player_type, new_player_type } = item
+
+    if (action_type === 'transfer' && pick_id) {
+      const pick = pickMap.get(pick_id)
+      if (!pick) return { error: `Choix introuvable (id: ${pick_id}).` }
+      if (pick.is_used) return { error: `Ce choix a déjà été utilisé.` }
+      if (pick.current_owner_id !== from_pooler_id) return { error: `Ce choix n'appartient pas au pooler source.` }
+      continue
+    }
+
+    if (action_type === 'transfer' && player_id) {
+      const fromRoster = virtual.get(from_pooler_id!)
+      const entry = fromRoster?.find(e => e.player_id === player_id)
+      if (!entry) return { error: `Joueur (id: ${player_id}) introuvable dans le roster source.` }
+      const cap = entry.cap_number
+      const pos = entry.position
+      // Remove from source
+      fromRoster!.splice(fromRoster!.indexOf(entry), 1)
+      // Add to dest
+      const toRoster = virtual.get(to_pooler_id!)!
+      toRoster.push({ roster_id: -1, player_id, player_type: new_player_type ?? entry.player_type, position: pos, cap_number: cap })
+      continue
+    }
+
+    if (action_type === 'promote') {
+      const roster = virtual.get(to_pooler_id!)!
+      const entry = roster.find(e => e.player_id === player_id && e.player_type === 'recrue')
+      if (!entry) return { error: `Recrue (id: ${player_id}) introuvable dans la banque.` }
+      entry.player_type = new_player_type!
+      continue
+    }
+
+    if (action_type === 'sign') {
+      const p = signPlayerMap.get(player_id!)
+      if (!p) return { error: `Joueur (id: ${player_id}) introuvable.` }
+      const cap = p.player_contracts?.find((c: any) => c.season === saison.season)?.cap_number ?? 0
+      virtual.get(to_pooler_id!)!.push({ roster_id: -1, player_id: player_id!, player_type: new_player_type!, position: p.position, cap_number: cap })
+      continue
+    }
+
+    if (action_type === 'reactivate') {
+      const roster = virtual.get(to_pooler_id!)!
+      const entry = roster.find(e => e.player_id === player_id && e.player_type === 'ltir')
+      if (!entry) return { error: `Joueur (id: ${player_id}) non trouvé en LTIR.` }
+      entry.player_type = new_player_type!
+      continue
+    }
+
+    if (action_type === 'release') {
+      const roster = virtual.get(from_pooler_id!)!
+      const entry = roster.find(e => e.player_id === player_id)
+      if (!entry) return { error: `Joueur (id: ${player_id}) introuvable dans le roster.` }
+      roster.splice(roster.indexOf(entry), 1)
+      continue
+    }
+
+    if (action_type === 'type_change') {
+      const roster = virtual.get(from_pooler_id!)!
+      const entry = roster.find(e => e.player_id === player_id && e.player_type === old_player_type)
+      if (!entry) return { error: `Joueur (id: ${player_id}) avec type "${old_player_type}" introuvable.` }
+      entry.player_type = new_player_type!
+      continue
+    }
+  }
+
+  // Valider état final
+  for (const [poolerId, entries] of virtual) {
+    const err = validateFinalRoster(entries, saison.pool_cap, saison.season)
+    if (err) {
+      const { data: p } = await supabase.from('poolers').select('name').eq('id', poolerId).single()
+      return { error: `${p?.name ?? poolerId}: ${err}` }
+    }
+  }
+
+  // Appliquer
+  for (const item of items) {
+    const { action_type, from_pooler_id, to_pooler_id, player_id, pick_id, old_player_type, new_player_type } = item
+
+    if (action_type === 'transfer' && pick_id) {
+      const { error } = await supabase.from('pool_draft_picks').update({ current_owner_id: to_pooler_id }).eq('id', pick_id)
+      if (error) return { error: error.message }
+      continue
+    }
+
+    if (action_type === 'transfer' && player_id) {
+      // Retirer du roster source
+      const { error: e1 } = await supabase
+        .from('pooler_rosters')
+        .update({ is_active: false, removed_at: new Date().toISOString() })
+        .eq('pooler_id', from_pooler_id!)
+        .eq('player_id', player_id)
+        .eq('pool_season_id', saisonId)
+      if (e1) return { error: e1.message }
+      // Ajouter au roster dest
+      const { data: existingDest } = await supabase.from('pooler_rosters').select('id').eq('pooler_id', to_pooler_id!).eq('player_id', player_id).eq('pool_season_id', saisonId).maybeSingle()
+      if (existingDest) {
+        const { error: e2 } = await supabase.from('pooler_rosters').update({ is_active: true, player_type: new_player_type ?? 'actif', removed_at: null }).eq('id', existingDest.id)
+        if (e2) return { error: e2.message }
+      } else {
+        const { error: e2 } = await supabase.from('pooler_rosters').insert({ pooler_id: to_pooler_id, player_id, pool_season_id: saisonId, player_type: new_player_type ?? 'actif', is_active: true })
+        if (e2) return { error: e2.message }
+      }
+      continue
+    }
+
+    if (action_type === 'promote' || action_type === 'reactivate' || action_type === 'type_change') {
+      const matchType = action_type === 'type_change' ? old_player_type : action_type === 'promote' ? 'recrue' : 'ltir'
+      const poolerId = to_pooler_id ?? from_pooler_id!
+      const { error } = await supabase
+        .from('pooler_rosters')
+        .update({ player_type: new_player_type })
+        .eq('pooler_id', poolerId)
+        .eq('player_id', player_id!)
+        .eq('pool_season_id', saisonId)
+        .eq('player_type', matchType!)
+        .eq('is_active', true)
+      if (error) return { error: error.message }
+      continue
+    }
+
+    if (action_type === 'sign') {
+      const { data: existing } = await supabase.from('pooler_rosters').select('id').eq('pooler_id', to_pooler_id!).eq('player_id', player_id!).eq('pool_season_id', saisonId).maybeSingle()
+      if (existing) {
+        const { error } = await supabase.from('pooler_rosters').update({ is_active: true, player_type: new_player_type!, removed_at: null }).eq('id', existing.id)
+        if (error) return { error: error.message }
+      } else {
+        const { error } = await supabase.from('pooler_rosters').insert({ pooler_id: to_pooler_id, player_id, pool_season_id: saisonId, player_type: new_player_type, is_active: true })
+        if (error) return { error: error.message }
+      }
+      continue
+    }
+
+    if (action_type === 'release') {
+      const { error } = await supabase
+        .from('pooler_rosters')
+        .update({ is_active: false, removed_at: new Date().toISOString() })
+        .eq('pooler_id', from_pooler_id!)
+        .eq('player_id', player_id!)
+        .eq('pool_season_id', saisonId)
+        .eq('is_active', true)
+      if (error) return { error: error.message }
+      continue
+    }
+  }
+
+  // Enregistrer la transaction
+  const { data: tx, error: txErr } = await supabase
+    .from('transactions')
+    .insert({ pool_season_id: saisonId, notes: notes || null, created_by: user.id })
+    .select('id')
+    .single()
+  if (txErr) return { error: txErr.message }
+
+  const txItems = items.map(item => ({
+    transaction_id: tx.id,
+    action_type: item.action_type,
+    from_pooler_id: item.from_pooler_id ?? null,
+    to_pooler_id: item.to_pooler_id ?? null,
+    player_id: item.player_id ?? null,
+    pick_id: item.pick_id ?? null,
+    old_player_type: item.old_player_type ?? null,
+    new_player_type: item.new_player_type ?? null,
+  }))
+  const { error: itemsErr } = await supabase.from('transaction_items').insert(txItems)
+  if (itemsErr) return { error: itemsErr.message }
+
+  return {}
+}

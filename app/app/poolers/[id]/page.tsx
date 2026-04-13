@@ -1,0 +1,384 @@
+import { createClient } from '@/lib/supabase/server'
+import { notFound } from 'next/navigation'
+
+const DASH = '\u2014'
+const STAR = '\u2605'
+const PROTECTION_SEASONS = 5
+
+const getSaisonFin = (season: string): number =>
+  parseInt(season.split('-')[0], 10) + 1
+
+const isProtected = (row: RosterRow, saisonFin: number): boolean => {
+  if (!row.rookie_type) return true
+  if (row.rookie_type === 'repcheche') {
+    return (row.pool_draft_year ?? 0) + PROTECTION_SEASONS >= saisonFin
+  }
+  // agent_libre : protégé tant que ELC
+  return row.players?.status === 'ELC'
+}
+
+type PlayerRow = {
+  id: number
+  first_name: string
+  last_name: string
+  position: string | null
+  status: string | null
+  is_rookie: boolean
+  draft_year: number | null
+  draft_round: number | null
+  draft_overall: number | null
+  teams: { code: string } | null
+  player_contracts: { season: string; cap_number: number }[]
+}
+
+type DraftPickRow = {
+  id: number
+  round: number
+  is_used: boolean
+  original_pooler: { id: string; name: string } | null
+  pool_seasons: { season: string } | null
+}
+
+type RosterRow = {
+  id: number
+  player_type: string
+  rookie_type: 'repcheche' | 'agent_libre' | null
+  pool_draft_year: number | null
+  players: PlayerRow | null
+}
+
+type Bucket = 'forward' | 'defense' | 'goalie'
+
+const normalizePlayerType = (playerType: string) => {
+  if (playerType === 'agent_libre') return 'reserviste'
+  return playerType
+}
+
+const getPlayerBucket = (position: string | null): Bucket => {
+  const normalizedPosition = (position ?? '').toUpperCase()
+  if (normalizedPosition.includes('G')) return 'goalie'
+  if (normalizedPosition.includes('D')) return 'defense'
+  return 'forward'
+}
+
+const formatCap = (amount: number | null) => {
+  if (!amount) return DASH
+  return new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount)
+}
+
+const getCurrentCap = (player: PlayerRow | null, season: string | undefined) => {
+  if (!player || !season) return 0
+  return player.player_contracts?.find((contract) => contract.season === season)?.cap_number ?? 0
+}
+
+const draftLabel = (player: PlayerRow | null) => {
+  if (!player?.draft_year) return null
+  const parts = [String(player.draft_year)]
+  if (player.draft_round) parts.push(`R${player.draft_round}`)
+  if (player.draft_overall) parts.push(`#${player.draft_overall}`)
+  return parts.join(' ')
+}
+
+const protectionRestante = (row: RosterRow, saisonFin: number, currentSeason?: string): string => {
+  if (row.rookie_type === 'repcheche' && row.pool_draft_year) {
+    const restant = row.pool_draft_year + PROTECTION_SEASONS - saisonFin
+    if (restant < 0) return 'Expirée'
+    if (restant === 0) return 'Dernière saison'
+    return `${restant} an${restant > 1 ? 's' : ''}`
+  }
+  if (row.rookie_type === 'agent_libre' || !row.rookie_type) {
+    if (row.players?.status !== 'ELC') return 'Expirée'
+    if (!currentSeason) return 'ELC'
+    const restant = (row.players?.player_contracts ?? [])
+      .filter(c => c.season >= currentSeason).length
+    if (restant === 0) return 'Dernière saison (ELC)'
+    if (restant === 1) return '1 an (ELC)'
+    return `${restant} ans (ELC)`
+  }
+  return DASH
+}
+
+const sortByDraftYearAsc = (a: RosterRow, b: RosterRow) =>
+  (a.pool_draft_year ?? 9999) - (b.pool_draft_year ?? 9999)
+
+function RosterTable({ rows, title, season, salaryCounts, showDraft, saisonFin, splitByPosition }: {
+  rows: RosterRow[]
+  title: string
+  season?: string
+  salaryCounts: boolean
+  showDraft?: boolean
+  saisonFin?: number
+  splitByPosition?: boolean
+}) {
+  const renderRows = (rowsToRender: RosterRow[]) => rowsToRender.map((row) => {
+    const player = row.players
+    const capNumber = salaryCounts ? getCurrentCap(player, season) : null
+    return (
+      <tr key={row.id} className="border-b hover:bg-gray-50">
+        <td className="px-3 py-2 font-medium text-gray-800">
+          {player?.is_rookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
+          {player?.last_name}, {player?.first_name}
+        </td>
+        <td className="px-3 py-2 text-gray-500">{player?.teams?.code ?? DASH}</td>
+        <td className="px-3 py-2 text-gray-500">{player?.position ?? DASH}</td>
+        {showDraft
+          ? <>
+              <td className="px-3 py-2 text-xs">
+                {row.rookie_type === 'repcheche'
+                  ? <span className="inline-block bg-emerald-50 text-emerald-700 rounded px-1.5 py-0.5 font-medium">
+                      Repêché {row.pool_draft_year ?? ''}
+                    </span>
+                  : row.rookie_type === 'agent_libre'
+                    ? <span className="inline-block bg-amber-50 text-amber-600 rounded px-1.5 py-0.5 font-medium">Agent libre</span>
+                    : <span className="text-gray-400">{DASH}</span>
+                }
+              </td>
+              <td className="px-3 py-2 text-gray-400 text-xs">{draftLabel(player) ?? DASH}</td>
+              <td className="px-3 py-2 text-xs">
+                {(() => {
+                  const p = protectionRestante(row, saisonFin ?? 0, season)
+                  const expired = p === 'Expirée'
+                  return <span className={expired ? 'text-red-500 font-medium' : 'text-gray-600'}>{p}</span>
+                })()}
+              </td>
+            </>
+          : <td className="px-3 py-2 text-right text-gray-700">{formatCap(capNumber)}</td>
+        }
+      </tr>
+    )
+  })
+
+  const thead = (
+    <thead>
+      <tr className="bg-gray-50 border-b">
+        <th className="text-left px-3 py-2 font-medium text-gray-600">Joueur</th>
+        <th className="text-left px-3 py-2 font-medium text-gray-600">Equipe</th>
+        <th className="text-left px-3 py-2 font-medium text-gray-600">Pos</th>
+        {showDraft
+          ? <>
+              <th className="text-left px-3 py-2 font-medium text-gray-600">Type</th>
+              <th className="text-left px-3 py-2 font-medium text-gray-600">Rep. LNH</th>
+              <th className="text-left px-3 py-2 font-medium text-gray-600">Protection</th>
+            </>
+          : <th className="text-right px-3 py-2 font-medium text-gray-600">Cap {season}</th>
+        }
+      </tr>
+    </thead>
+  )
+
+  if (splitByPosition) {
+    const groups: { label: string; bucket: Bucket }[] = [
+      { label: 'Attaquants', bucket: 'forward' },
+      { label: 'Défenseurs', bucket: 'defense' },
+      { label: 'Gardiens', bucket: 'goalie' },
+    ]
+    return (
+      <div className="mb-6">
+        {title && <h3 className="font-semibold text-gray-700 mb-2">{title} ({rows.length})</h3>}
+        {rows.length === 0
+          ? <p className="text-gray-400 text-sm py-2">Aucun joueur</p>
+          : groups.map(({ label, bucket }) => {
+              const group = rows.filter(r => getPlayerBucket(r.players?.position ?? null) === bucket)
+              if (group.length === 0) return null
+              return (
+                <div key={bucket} className="mb-3">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 mb-1">{label} ({group.length})</p>
+                  <table className="w-full text-sm">{thead}<tbody>{renderRows(group)}</tbody></table>
+                </div>
+              )
+            })
+        }
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-6">
+      <h3 className="font-semibold text-gray-700 mb-2">{title} ({rows.length})</h3>
+      {rows.length > 0
+        ? <table className="w-full text-sm">{thead}<tbody>{renderRows(rows)}</tbody></table>
+        : <p className="text-gray-400 text-sm py-2">Aucun joueur</p>
+      }
+    </div>
+  )
+}
+
+export default async function PoolerPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const supabase = await createClient()
+
+  const { data: saison } = await supabase
+    .from('pool_seasons')
+    .select('*')
+    .eq('is_active', true)
+    .single()
+
+  const { data: pooler } = await supabase
+    .from('poolers')
+    .select('id, name')
+    .eq('id', id)
+    .single()
+
+  if (!pooler) notFound()
+
+  const { data: picksData } = await supabase
+    .from('pool_draft_picks')
+    .select(`
+      id, round, is_used,
+      original_pooler:poolers!original_owner_id (id, name),
+      pool_seasons (season)
+    `)
+    .eq('current_owner_id', id)
+    .eq('is_used', false)
+    .order('pool_season_id')
+    .order('round')
+
+  const picks = (picksData ?? []) as unknown as DraftPickRow[]
+
+  // Grouper par saison
+  const picksBySaison = picks.reduce<Record<string, DraftPickRow[]>>((acc, pick) => {
+    const season = pick.pool_seasons?.season ?? '?'
+    acc[season] = [...(acc[season] ?? []), pick]
+    return acc
+  }, {})
+
+  const { data } = await supabase
+    .from('pooler_rosters')
+    .select(`
+      id, player_type, rookie_type, pool_draft_year,
+      players (
+        id, first_name, last_name, position, status, is_rookie,
+        draft_year, draft_round, draft_overall,
+        teams (code),
+        player_contracts (season, cap_number)
+      )
+    `)
+    .eq('pooler_id', id)
+    .eq('pool_season_id', saison?.id)
+    .eq('is_active', true)
+    .order('player_type')
+
+  const roster = ((data ?? []) as unknown as RosterRow[]).map((row) => ({
+    ...row,
+    player_type: normalizePlayerType(row.player_type),
+  }))
+
+  const saisonFin = saison ? getSaisonFin(saison.season) : 0
+  const actifs = roster.filter((row) => row.player_type === 'actif')
+  const reservistes = roster.filter((row) => row.player_type === 'reserviste')
+  const ltir = roster.filter((row) => row.player_type === 'ltir')
+  const recrues = roster.filter((row) => row.player_type === 'recrue')
+  const banqueRecrues = recrues.filter((row) => isProtected(row, saisonFin))
+  const activationObligatoire = recrues.filter((row) => !isProtected(row, saisonFin))
+
+  const activeCounts = actifs.reduce(
+    (counts, row) => {
+      const bucket = getPlayerBucket(row.players?.position ?? null)
+      counts[bucket] += 1
+      return counts
+    },
+    { forward: 0, defense: 0, goalie: 0 } as Record<Bucket, number>,
+  )
+
+  const capUtilise = [...actifs, ...reservistes, ...ltir].reduce((sum, row) => {
+    if (row.player_type === 'ltir') return sum  // LTIR exclut de la masse salariale
+    return sum + getCurrentCap(row.players, saison?.season)
+  }, 0)
+
+  const capTotal = saison?.pool_cap ?? 0
+  const capPct = capTotal > 0 ? (capUtilise / capTotal) * 100 : 0
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">{pooler.name}</h1>
+        {saison && <p className="text-gray-500 text-sm">Saison {saison.season}</p>}
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-5 mb-6 space-y-3">
+        <div className="flex justify-between text-sm mb-2">
+          <span className="font-medium text-gray-700">Masse salariale</span>
+          <span className="font-semibold">
+            <span className={capPct > 100 ? 'text-red-600' : 'text-gray-800'}>{formatCap(capUtilise)}</span>
+            <span className="text-gray-400"> / {formatCap(capTotal)}</span>
+          </span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-3">
+          <div
+            className={`h-3 rounded-full transition-all ${capPct > 100 ? 'bg-red-500' : capPct > 90 ? 'bg-orange-500' : 'bg-green-500'}`}
+            style={{ width: `${Math.min(capPct, 100)}%` }}
+          />
+        </div>
+        <p className="text-xs text-gray-400 text-right">
+          Disponible: {formatCap(capTotal - capUtilise)}
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+          <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">Actifs: {actifs.length} / 20</div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">Attaquants: {activeCounts.forward} / 12</div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">Defenseurs: {activeCounts.defense} / 6</div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">Gardiens: {activeCounts.goalie} / 2</div>
+        </div>
+        <p className="text-xs text-gray-500">La banque de recrues ne compte pas dans la masse salariale. Les joueurs actifs et reservistes comptent toujours dans la masse salariale, meme s'ils sont recrues.</p>
+      </div>
+
+      {picks.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-5 mb-6">
+          <h2 className="text-base font-semibold text-gray-700 mb-4">Choix de repêchage</h2>
+          <div className="space-y-4">
+            {Object.entries(picksBySaison)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([season, seasonPicks]) => (
+                <div key={season}>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                    Saison {season}
+                    {season === saison?.season && (
+                      <span className="ml-2 bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded normal-case font-medium">Active</span>
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {seasonPicks.map((pick) => {
+                      const isOwn = pick.original_pooler?.id === id
+                      return (
+                        <div key={pick.id} className="flex flex-col items-center bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 min-w-[90px]">
+                          <span className="text-sm font-bold text-slate-700">Ronde {pick.round}</span>
+                          {isOwn
+                            ? <span className="text-xs text-gray-400 mt-1">Propre</span>
+                            : <span className="text-xs text-amber-600 mt-1 text-center">De: {pick.original_pooler?.name}</span>
+                          }
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg shadow p-5">
+        {(() => {
+          const byCapDesc = (a: RosterRow, b: RosterRow) =>
+            getCurrentCap(b.players, saison?.season) - getCurrentCap(a.players, saison?.season)
+          return <>
+            <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'forward').sort(byCapDesc)} title={`Attaquants (${activeCounts.forward} / 12)`} season={saison?.season} salaryCounts={true} />
+            <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'defense').sort(byCapDesc)} title={`Défenseurs (${activeCounts.defense} / 6)`} season={saison?.season} salaryCounts={true} />
+            <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'goalie').sort(byCapDesc)} title={`Gardiens (${activeCounts.goalie} / 2)`} season={saison?.season} salaryCounts={true} />
+          </>
+        })()}
+        <RosterTable rows={reservistes} title="Reservistes" season={saison?.season} salaryCounts={true} />
+        {ltir.length > 0 && (
+          <RosterTable rows={ltir} title={`Liste de blessés long terme — LTIR (${ltir.length})`} season={saison?.season} salaryCounts={false} />
+        )}
+        <RosterTable rows={[...banqueRecrues].sort(sortByDraftYearAsc)} title="Banque de recrues" season={saison?.season} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
+        {activationObligatoire.length > 0 && (
+          <div className="mt-4 border-l-4 border-red-400 pl-4">
+            <h3 className="font-semibold text-red-600 mb-1">Activation obligatoire ({activationObligatoire.length})</h3>
+            <p className="text-xs text-gray-400 mb-2">La période de protection est terminée. Ces recrues doivent être activées en début de saison.</p>
+            <RosterTable rows={[...activationObligatoire].sort(sortByDraftYearAsc)} title="" season={saison?.season} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

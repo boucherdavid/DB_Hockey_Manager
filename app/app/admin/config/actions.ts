@@ -1,0 +1,249 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+
+const REVALIDATE_PATHS = ['/admin/config', '/admin', '/', '/poolers', '/dashboard']
+const revalidateAll = () => REVALIDATE_PATHS.forEach(p => revalidatePath(p))
+
+function nextSeasonLabel(season: string, offset: number): string {
+  const startYear = parseInt(season.split('-')[0], 10) + offset
+  const endShort = String(startYear + 1).slice(2)
+  return `${startYear}-${endShort}`
+}
+
+async function ensureSeasonWithPicks(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  season: string,
+  nhlCap: number,
+  capMultiplier: number,
+  poolerIds: string[],
+): Promise<{ id: number; created: boolean } | { error: string }> {
+  const { data: existing } = await supabase
+    .from('pool_seasons')
+    .select('id')
+    .eq('season', season)
+    .maybeSingle()
+
+  let saisonId: number
+  let created = false
+
+  if (existing) {
+    saisonId = existing.id
+  } else {
+    const { data: newSaison, error } = await supabase
+      .from('pool_seasons')
+      .insert({ season, nhl_cap: nhlCap, cap_multiplier: capMultiplier, is_active: false })
+      .select('id')
+      .single()
+    if (error) return { error: error.message }
+    saisonId = newSaison.id
+    created = true
+  }
+
+  // Créer les picks manquants (ON CONFLICT DO NOTHING via upsert)
+  if (poolerIds.length > 0) {
+    const picks = poolerIds.flatMap(id =>
+      [1, 2, 3, 4].map(round => ({
+        pool_season_id: saisonId,
+        original_owner_id: id,
+        current_owner_id: id,
+        round,
+        is_used: false,
+      }))
+    )
+    const { error: pickError } = await supabase
+      .from('pool_draft_picks')
+      .upsert(picks, { onConflict: 'pool_season_id,original_owner_id,round', ignoreDuplicates: true })
+    if (pickError) return { error: pickError.message }
+  }
+
+  return { id: saisonId, created }
+}
+
+export async function createSeasonAction(
+  season: string,
+  nhlCap: number,
+  capMultiplier: number,
+): Promise<{ error?: string }> {
+  if (!/^\d{4}-\d{2}$/.test(season)) return { error: 'Format invalide. Utiliser ex: 2026-27' }
+  if (nhlCap < 1_000_000) return { error: 'Cap NHL invalide.' }
+  if (capMultiplier <= 0) return { error: 'Facteur invalide.' }
+
+  const supabase = await createClient()
+
+  const { data: existing } = await supabase
+    .from('pool_seasons')
+    .select('id')
+    .eq('season', season)
+    .maybeSingle()
+  if (existing) return { error: `La saison ${season} existe déjà.` }
+
+  const { data: poolers } = await supabase.from('poolers').select('id')
+  const poolerIds = (poolers ?? []).map(p => p.id)
+
+  // Créer la saison demandée + les 2 suivantes comme placeholders
+  for (let offset = 0; offset < 3; offset++) {
+    const label = offset === 0 ? season : nextSeasonLabel(season, offset)
+    const result = await ensureSeasonWithPicks(supabase, label, nhlCap, capMultiplier, poolerIds)
+    if ('error' in result) return { error: result.error }
+    if (offset === 0 && !result.created) return { error: `La saison ${season} existe déjà.` }
+  }
+
+  revalidateAll()
+  return {}
+}
+
+export async function activateSeasonAction(saisonId: number): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  // Désactiver toutes les saisons
+  const { error: deactivateError } = await supabase
+    .from('pool_seasons')
+    .update({ is_active: false })
+    .neq('id', 0)
+  if (deactivateError) return { error: deactivateError.message }
+
+  // Activer la saison cible
+  const { error } = await supabase
+    .from('pool_seasons')
+    .update({ is_active: true })
+    .eq('id', saisonId)
+  if (error) return { error: error.message }
+
+  revalidateAll()
+  return {}
+}
+
+export async function previewTransitionAction(
+  fromSaisonId: number,
+  toSaisonId: number,
+): Promise<{
+  error?: string
+  playerCount?: number
+  poolerCount?: number
+  noContract?: { playerName: string; poolerName: string; playerType: string }[]
+}> {
+  const supabase = await createClient()
+
+  const [{ data: toSaison }, { data: rosters }] = await Promise.all([
+    supabase.from('pool_seasons').select('season').eq('id', toSaisonId).single(),
+    supabase
+      .from('pooler_rosters')
+      .select(`pooler_id, player_id, player_type, poolers (name), players (first_name, last_name, player_contracts (season, cap_number))`)
+      .eq('pool_season_id', fromSaisonId)
+      .eq('is_active', true),
+  ])
+
+  if (!toSaison) return { error: 'Saison cible introuvable.' }
+
+  const entries = (rosters ?? []) as any[]
+  const noContract: { playerName: string; poolerName: string; playerType: string }[] = []
+
+  for (const e of entries) {
+    const hasContract = (e.players?.player_contracts ?? []).some((c: any) => c.season === toSaison.season && c.cap_number > 0)
+    if (!hasContract) {
+      noContract.push({
+        playerName: `${e.players?.last_name}, ${e.players?.first_name}`,
+        poolerName: e.poolers?.name ?? '?',
+        playerType: e.player_type,
+      })
+    }
+  }
+
+  const poolerCount = new Set(entries.map((e: any) => e.pooler_id)).size
+
+  return { playerCount: entries.length, poolerCount, noContract }
+}
+
+export async function transitionSeasonAction(
+  fromSaisonId: number,
+  toSaisonId: number,
+): Promise<{ error?: string; copied?: number }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { data: rosters } = await supabase
+    .from('pooler_rosters')
+    .select('pooler_id, player_id, player_type, rookie_type, pool_draft_year')
+    .eq('pool_season_id', fromSaisonId)
+    .eq('is_active', true)
+
+  const entries = (rosters ?? []) as any[]
+  if (entries.length === 0) return { error: 'Aucun roster à copier dans la saison source.' }
+
+  const toInsert = entries.map((e: any) => ({
+    pooler_id: e.pooler_id,
+    player_id: e.player_id,
+    pool_season_id: toSaisonId,
+    player_type: e.player_type,
+    rookie_type: e.rookie_type ?? null,
+    pool_draft_year: e.pool_draft_year ?? null,
+    is_active: true,
+  }))
+
+  const { error } = await supabase
+    .from('pooler_rosters')
+    .upsert(toInsert, { onConflict: 'pooler_id,player_id,pool_season_id', ignoreDuplicates: true })
+
+  if (error) return { error: error.message }
+
+  revalidateAll()
+  return { copied: toInsert.length }
+}
+
+export async function deleteSeasonAction(saisonId: number): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { data: saison } = await supabase.from('pool_seasons').select('is_active, season').eq('id', saisonId).single()
+  if (!saison) return { error: 'Saison introuvable.' }
+  if (saison.is_active) return { error: 'Impossible de supprimer la saison active.' }
+
+  // Supprimer les transaction_items puis transactions liés (pas de CASCADE)
+  const { data: txs } = await supabase.from('transactions').select('id').eq('pool_season_id', saisonId)
+  if (txs && txs.length > 0) {
+    const txIds = txs.map(t => t.id)
+    const { error: e1 } = await supabase.from('transaction_items').delete().in('transaction_id', txIds)
+    if (e1) return { error: e1.message }
+    const { error: e2 } = await supabase.from('transactions').delete().eq('pool_season_id', saisonId)
+    if (e2) return { error: e2.message }
+  }
+
+  // Supprimer la saison (cascade: pooler_rosters, pool_draft_picks)
+  const { error } = await supabase.from('pool_seasons').delete().eq('id', saisonId)
+  if (error) return { error: error.message }
+
+  revalidateAll()
+  return {}
+}
+
+export async function updateCapAction(
+  saisonId: number,
+  nhlCap: number,
+  capMultiplier: number,
+): Promise<{ error?: string }> {
+  if (!nhlCap || nhlCap < 1_000_000) return { error: 'Cap NHL invalide.' }
+  if (!capMultiplier || capMultiplier <= 0) return { error: 'Facteur invalide.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('pool_seasons')
+    .update({ nhl_cap: nhlCap, cap_multiplier: capMultiplier })
+    .eq('id', saisonId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/config')
+  revalidatePath('/')
+  revalidatePath('/poolers')
+  return {}
+}
