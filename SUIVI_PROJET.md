@@ -268,6 +268,14 @@ Impact:
 - le code est sauvegarde sur GitHub;
 - les prochains `git push` peuvent se faire via SSH sans repasser par l'authentification HTTPS.
 
+Configuration locale GitHub completee:
+- `GitHub CLI (gh)` installe sur la machine.
+- Authentification `gh` validee avec le compte `boucherdavid`.
+- Protocole Git confirme en `ssh`.
+- L'environnement local permet maintenant:
+  - `git push` via SSH;
+  - usage de `gh` pour consulter le repo, les PR, les issues et les workflows.
+
 ### 2026-04-09 (session 8)
 
 Toutes les migrations SQL en attente exécutées dans Supabase:
