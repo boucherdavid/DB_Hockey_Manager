@@ -242,6 +242,32 @@ Ordre d'execution recommande du pipeline complet:
 2. `import_supabase.py`
 3. `import_drafts.py`
 
+### 2026-04-13 (session 10)
+
+Mise en place du versionnement Git et de la sauvegarde distante:
+- Creation d'un depot Git local a la racine de `C:\Projet_Codex\Hockey_Pool_App`.
+- Ajout d'un `.gitignore` racine pour exclure notamment:
+  - `app/node_modules/`
+  - `app/.next/`
+  - `app/.env*`
+  - `python_script/venv/`
+  - `python_script/.env*`
+  - `python_script/diagnostics/`
+- Configuration d'un remote GitHub:
+  - `origin = git@github.com:boucherdavid/DB_Hockey_Manager.git`
+- Generation d'une cle SSH locale sans mot de passe pour GitHub:
+  - `C:\Users\david\.ssh\id_ed25519`
+  - remote Git bascule de HTTPS vers SSH
+- Premier commit cree localement:
+  - `8ce2b56` - `Initial commit`
+- Branche par defaut renommee en `main`.
+- Push force effectue vers le depot GitHub pour aligner le remote avec l'etat local courant.
+
+Impact:
+- le projet est maintenant historise localement avec Git;
+- le code est sauvegarde sur GitHub;
+- les prochains `git push` peuvent se faire via SSH sans repasser par l'authentification HTTPS.
+
 ### 2026-04-09 (session 8)
 
 Toutes les migrations SQL en attente exécutées dans Supabase:
