@@ -46,17 +46,6 @@ function parseTOI(val: unknown): number {
   return 0
 }
 
-/** "EDM" → "EDM" | "EDM,TOR" → "2 TM" | tableau → même logique */
-function teamLabel(...candidates: unknown[]): string {
-  const raw = candidates.find(v => v != null && v !== '')
-  if (raw == null || raw === '') return ''
-  // L'API peut retourner un tableau ou une chaîne séparée par des virgules
-  const list = Array.isArray(raw)
-    ? (raw as unknown[]).map(String)
-    : String(raw).split(',').map(t => t.trim())
-  const teams = list.filter(Boolean)
-  return teams.length > 1 ? `${teams.length} TM` : (teams[0] ?? '')
-}
 
 /** "Connor McDavid" → { firstName: "Connor", lastName: "McDavid" } */
 function splitName(full: string): { firstName: string; lastName: string } {
@@ -65,13 +54,13 @@ function splitName(full: string): { firstName: string; lastName: string } {
   return { firstName: full.slice(0, i), lastName: full.slice(i + 1) }
 }
 
-function buildUrl(type: 'skater' | 'goalie', sortProp: string): string {
+// isAggregate=false → une ligne par joueur par équipe → on garde le code équipe
+// puis on agrège manuellement pour les joueurs échangés en cours de saison
+function buildUrl(type: 'skater' | 'goalie'): string {
   const cayenne = `gameTypeId=${GAME_TYPE} and seasonId<=${NHL_SEASON} and seasonId>=${NHL_SEASON}`
-  const sort = JSON.stringify([{ property: sortProp, direction: 'DESC' }])
   return (
     `${REST}/${type}/summary` +
-    `?isAggregate=true&isGame=false` +
-    `&sort=${encodeURIComponent(sort)}` +
+    `?isAggregate=false&isGame=false` +
     `&start=0&limit=-1` +
     `&factCayenneExp=${encodeURIComponent('gamesPlayed>=1')}` +
     `&cayenneExp=${encodeURIComponent(cayenne)}`
@@ -82,27 +71,52 @@ type Row = Record<string, unknown>
 
 async function fetchSkaters(): Promise<SkaterStat[]> {
   try {
-    const res = await fetch(buildUrl('skater', 'points'), { cache: 'no-store' })
+    const res = await fetch(buildUrl('skater'), { cache: 'no-store' })
     if (!res.ok) return []
-    const data = await res.json()
-    const rows = data.data as Row[] ?? []
-    // DEBUG: affiche les clés du premier enregistrement dans le terminal du serveur
-    if (rows[0]) console.log('[stats-debug] skater fields:', Object.keys(rows[0]))
-    return rows.map(p => {
-      const { firstName, lastName } = splitName(String(p.skaterFullName ?? ''))
-      return {
-        id: Number(p.playerId),
-        firstName,
-        lastName,
-        teamAbbrev: teamLabel(p.teamAbbrevs, p.teamAbbrev, p.lastTeamAbbrev, p.teamCode),
-        position: String(p.positionCode ?? ''),
-        gamesPlayed: Number(p.gamesPlayed ?? 0),
-        goals: Number(p.goals ?? 0),
-        assists: Number(p.assists ?? 0),
-        points: Number(p.points ?? 0),
-        toi: parseTOI(p.timeOnIcePerGame),
-      }
-    })
+    const rows = ((await res.json()).data as Row[]) ?? []
+
+    // Grouper par playerId pour agréger les joueurs échangés
+    const byPlayer = new Map<number, Row[]>()
+    for (const p of rows) {
+      const id = Number(p.playerId)
+      if (!byPlayer.has(id)) byPlayer.set(id, [])
+      byPlayer.get(id)!.push(p)
+    }
+
+    return Array.from(byPlayer.values())
+      .map(entries => {
+        // Entrée principale = celle avec le plus de matchs joués
+        entries.sort((a, b) => Number(b.gamesPlayed ?? 0) - Number(a.gamesPlayed ?? 0))
+        const main = entries[0]!
+        const { firstName, lastName } = splitName(String(main.skaterFullName ?? ''))
+
+        const totalGP    = entries.reduce((s, e) => s + Number(e.gamesPlayed ?? 0), 0)
+        const totalGoals = entries.reduce((s, e) => s + Number(e.goals ?? 0), 0)
+        const totalAst   = entries.reduce((s, e) => s + Number(e.assists ?? 0), 0)
+        const totalPts   = entries.reduce((s, e) => s + Number(e.points ?? 0), 0)
+        // TOI pondéré par matchs joués
+        const totalTOI   = entries.reduce(
+          (s, e) => s + parseTOI(e.timeOnIcePerGame) * Number(e.gamesPlayed ?? 0), 0,
+        )
+
+        const teamAbbrev = entries.length > 1
+          ? `${entries.length} TM`
+          : String(main.teamAbbrev ?? '')
+
+        return {
+          id: Number(main.playerId),
+          firstName,
+          lastName,
+          teamAbbrev,
+          position: String(main.positionCode ?? ''),
+          gamesPlayed: totalGP,
+          goals: totalGoals,
+          assists: totalAst,
+          points: totalPts,
+          toi: totalGP > 0 ? totalTOI / totalGP : 0,
+        }
+      })
+      .sort((a, b) => b.points - a.points || b.goals - a.goals || a.lastName.localeCompare(b.lastName))
   } catch {
     return []
   }
@@ -110,27 +124,43 @@ async function fetchSkaters(): Promise<SkaterStat[]> {
 
 async function fetchGoalies(): Promise<GoalieStat[]> {
   try {
-    const res = await fetch(buildUrl('goalie', 'wins'), { cache: 'no-store' })
+    const res = await fetch(buildUrl('goalie'), { cache: 'no-store' })
     if (!res.ok) return []
-    const data = await res.json()
-    return (data.data as Row[] ?? []).map(p => {
-      const { firstName, lastName } = splitName(String(p.goalieFullName ?? ''))
-      return {
-        id: Number(p.playerId),
-        firstName,
-        lastName,
-        teamAbbrev: teamLabel(p.teamAbbrevs, p.teamAbbrev, p.lastTeamAbbrev, p.teamCode),
-        gamesStarted: Number(p.gamesStarted ?? 0),
-        wins: Number(p.wins ?? 0),
-        losses: Number(p.losses ?? 0),
-        otLosses: Number(p.otLosses ?? 0),
-        shutouts: Number(p.shutouts ?? 0),
-        goals: Number(p.goals ?? 0),
-        assists: Number(p.assists ?? 0),
-        savePct: Number(p.savePct ?? 0),
-        gaa: Number(p.goalsAgainstAverage ?? 0),
-      }
-    })
+    const rows = ((await res.json()).data as Row[]) ?? []
+
+    const byPlayer = new Map<number, Row[]>()
+    for (const p of rows) {
+      const id = Number(p.playerId)
+      if (!byPlayer.has(id)) byPlayer.set(id, [])
+      byPlayer.get(id)!.push(p)
+    }
+
+    return Array.from(byPlayer.values())
+      .map(entries => {
+        entries.sort((a, b) => Number(b.gamesStarted ?? 0) - Number(a.gamesStarted ?? 0))
+        const main = entries[0]!
+        const { firstName, lastName } = splitName(String(main.goalieFullName ?? ''))
+        const teamAbbrev = entries.length > 1
+          ? `${entries.length} TM`
+          : String(main.teamAbbrev ?? '')
+
+        return {
+          id: Number(main.playerId),
+          firstName,
+          lastName,
+          teamAbbrev,
+          gamesStarted: entries.reduce((s, e) => s + Number(e.gamesStarted ?? 0), 0),
+          wins:         entries.reduce((s, e) => s + Number(e.wins ?? 0), 0),
+          losses:       entries.reduce((s, e) => s + Number(e.losses ?? 0), 0),
+          otLosses:     entries.reduce((s, e) => s + Number(e.otLosses ?? 0), 0),
+          shutouts:     entries.reduce((s, e) => s + Number(e.shutouts ?? 0), 0),
+          goals:        entries.reduce((s, e) => s + Number(e.goals ?? 0), 0),
+          assists:      entries.reduce((s, e) => s + Number(e.assists ?? 0), 0),
+          savePct:      Number(main.savePct ?? 0),
+          gaa:          Number(main.goalsAgainstAverage ?? 0),
+        }
+      })
+      .sort((a, b) => b.wins - a.wins || b.shutouts - a.shutouts || a.lastName.localeCompare(b.lastName))
   } catch {
     return []
   }
