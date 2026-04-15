@@ -74,7 +74,6 @@ async function fetchSkaters(): Promise<SkaterStat[]> {
     const res = await fetch(buildUrl('skater'), { cache: 'no-store' })
     if (!res.ok) return []
     const rows = ((await res.json()).data as Row[]) ?? []
-    if (rows[0]) console.log('[stats-debug] skater row[0]:', JSON.stringify(rows[0]))
 
     // Grouper par playerId pour agréger les joueurs échangés
     const byPlayer = new Map<number, Row[]>()
@@ -102,7 +101,7 @@ async function fetchSkaters(): Promise<SkaterStat[]> {
 
         const teamAbbrev = entries.length > 1
           ? `${entries.length} TM`
-          : String(main.teamAbbrev ?? '')
+          : String(main.teamAbbrevs ?? '')
 
         return {
           id: Number(main.playerId),
@@ -143,7 +142,7 @@ async function fetchGoalies(): Promise<GoalieStat[]> {
         const { firstName, lastName } = splitName(String(main.goalieFullName ?? ''))
         const teamAbbrev = entries.length > 1
           ? `${entries.length} TM`
-          : String(main.teamAbbrev ?? '')
+          : String(main.teamAbbrevs ?? '')
 
         return {
           id: Number(main.playerId),
