@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { submitRosterAction, updateRookieTypeAction } from './actions'
+import TeamBadge from '@/components/TeamBadge'
 
 type Pooler = { id: string; name: string }
 type Player = {
@@ -459,7 +460,7 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 text-sm">
-                            <span className="text-gray-400 w-6 text-center">{entry.players?.teams?.code ?? DASH}</span>
+                            <TeamBadge code={entry.players?.teams?.code} size="sm" />
                             <span className="text-gray-300">|</span>
                             <span className="font-medium text-gray-800">
                               {isRookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
@@ -552,7 +553,7 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
               return (
                 <div key={player.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 group">
                   <div className="flex items-center gap-2 text-sm min-w-0">
-                    <span className="text-gray-400 w-8 text-center text-xs">{player.teams?.code ?? DASH}</span>
+                    <TeamBadge code={player.teams?.code} size="sm" />
                     <span className="font-medium text-gray-800 truncate">
                       {player.is_rookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
                       {player.last_name}, {player.first_name}

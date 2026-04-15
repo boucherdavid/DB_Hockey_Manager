@@ -1,23 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { teamColor } from '@/lib/nhl-colors'
 import type { SkaterStat, GoalieStat } from './page'
+import TeamBadge from '@/components/TeamBadge'
 
 type Tab = 'skaters' | 'goalies'
-
-function TeamBadge({ code }: { code: string }) {
-  const isMultiTeam = /^\d TM$/.test(code)
-  const colors = isMultiTeam ? { primary: '#64748b' } : teamColor(code)
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold text-white tracking-wide"
-      style={{ backgroundColor: colors.primary }}
-    >
-      {code}
-    </span>
-  )
-}
 
 function AvailDot({ available }: { available: boolean }) {
   return (

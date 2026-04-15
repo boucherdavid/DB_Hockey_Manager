@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import TeamBadge from '@/components/TeamBadge'
 
 const DASH = '\u2014'
 const STAR = '\u2605'
@@ -119,7 +120,7 @@ function RosterTable({ rows, title, season, salaryCounts, showDraft, saisonFin, 
           {player?.is_rookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
           {player?.last_name}, {player?.first_name}
         </td>
-        <td className="px-3 py-2 text-gray-500">{player?.teams?.code ?? DASH}</td>
+        <td className="px-3 py-2"><TeamBadge code={player?.teams?.code} size="sm" /></td>
         <td className="px-3 py-2 text-gray-500">{player?.position ?? DASH}</td>
         {showDraft
           ? <>

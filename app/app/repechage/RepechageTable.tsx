@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import TeamBadge from '@/components/TeamBadge'
 
 const DASH = '\u2014'
 
@@ -101,7 +102,7 @@ export default function RepechageTable({ picks }: { picks: DraftPick[] }) {
       <td className="px-4 py-2 text-gray-400 w-12 text-right tabular-nums text-xs">
         {pick.draft_overall !== null ? `#${pick.draft_overall}` : DASH}
       </td>
-      <td className="px-4 py-2 w-12 text-gray-500 text-xs">{pick.team_code ?? DASH}</td>
+      <td className="px-4 py-2 w-14"><TeamBadge code={pick.team_code} size="sm" /></td>
       <td className="px-4 py-2 font-medium text-gray-800 text-sm">
         {pick.last_name}, {pick.first_name}
       </td>

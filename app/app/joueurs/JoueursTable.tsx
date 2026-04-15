@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import type { PlayerContract, PlayerRow } from './page'
 import { teamColor } from '@/lib/nhl-colors'
+import TeamBadge from '@/components/TeamBadge'
 
 const CURRENT_SEASON = '2025-26'
 const SEASONS = ['2025-26', '2026-27', '2027-28', '2028-29', '2029-30']
@@ -288,14 +289,8 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                       {player.is_rookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
                       {player.last_name}, {player.first_name}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span
-                          className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: teamColor(player.teams?.code).primary }}
-                        />
-                        {player.teams?.code ?? DASH}
-                      </span>
+                    <td className="px-4 py-3">
+                      <TeamBadge code={player.teams?.code} />
                     </td>
                     <td className="px-4 py-3 text-gray-600">{player.position ?? DASH}</td>
                     <td className="px-4 py-3 text-gray-600">{player.age ?? DASH}</td>
@@ -384,7 +379,7 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                         <span className="text-yellow-500 mr-1">{STAR}</span>
                         {player.last_name}, {player.first_name}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{player.teams?.code ?? DASH}</td>
+                      <td className="px-4 py-3"><TeamBadge code={player.teams?.code} /></td>
                       <td className="px-4 py-3 text-gray-600">{player.position ?? DASH}</td>
                       <td className="px-4 py-3 text-gray-600">{player.draft_year ?? DASH}</td>
                       <td className="px-4 py-3 text-gray-600">{player.draft_round ?? DASH}</td>
