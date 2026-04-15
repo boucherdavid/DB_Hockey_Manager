@@ -46,11 +46,15 @@ function parseTOI(val: unknown): number {
   return 0
 }
 
-/** "EDM" → "EDM" | "EDM,TOR" → "2 TM" */
-function teamLabel(abbrevs: unknown, fallback?: unknown): string {
-  const raw = abbrevs ?? fallback
-  if (!raw) return ''
-  const teams = String(raw).split(',').map(t => t.trim()).filter(Boolean)
+/** "EDM" → "EDM" | "EDM,TOR" → "2 TM" | tableau → même logique */
+function teamLabel(...candidates: unknown[]): string {
+  const raw = candidates.find(v => v != null && v !== '')
+  if (raw == null || raw === '') return ''
+  // L'API peut retourner un tableau ou une chaîne séparée par des virgules
+  const list = Array.isArray(raw)
+    ? (raw as unknown[]).map(String)
+    : String(raw).split(',').map(t => t.trim())
+  const teams = list.filter(Boolean)
   return teams.length > 1 ? `${teams.length} TM` : (teams[0] ?? '')
 }
 
@@ -81,13 +85,16 @@ async function fetchSkaters(): Promise<SkaterStat[]> {
     const res = await fetch(buildUrl('skater', 'points'), { cache: 'no-store' })
     if (!res.ok) return []
     const data = await res.json()
-    return (data.data as Row[] ?? []).map(p => {
+    const rows = data.data as Row[] ?? []
+    // DEBUG: affiche les clés du premier enregistrement dans le terminal du serveur
+    if (rows[0]) console.log('[stats-debug] skater fields:', Object.keys(rows[0]))
+    return rows.map(p => {
       const { firstName, lastName } = splitName(String(p.skaterFullName ?? ''))
       return {
         id: Number(p.playerId),
         firstName,
         lastName,
-        teamAbbrev: teamLabel(p.teamAbbrevs, p.teamAbbrev),
+        teamAbbrev: teamLabel(p.teamAbbrevs, p.teamAbbrev, p.lastTeamAbbrev, p.teamCode),
         position: String(p.positionCode ?? ''),
         gamesPlayed: Number(p.gamesPlayed ?? 0),
         goals: Number(p.goals ?? 0),
@@ -112,7 +119,7 @@ async function fetchGoalies(): Promise<GoalieStat[]> {
         id: Number(p.playerId),
         firstName,
         lastName,
-        teamAbbrev: teamLabel(p.teamAbbrevs, p.teamAbbrev),
+        teamAbbrev: teamLabel(p.teamAbbrevs, p.teamAbbrev, p.lastTeamAbbrev, p.teamCode),
         gamesStarted: Number(p.gamesStarted ?? 0),
         wins: Number(p.wins ?? 0),
         losses: Number(p.losses ?? 0),
