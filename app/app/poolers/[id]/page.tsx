@@ -72,6 +72,42 @@ const getCurrentCap = (player: PlayerRow | null, season: string | undefined) => 
   return player.player_contracts?.find((contract) => contract.season === season)?.cap_number ?? 0
 }
 
+const getNextSeason = (season: string): string => {
+  const [start] = season.split('-')
+  const next = parseInt(start) + 1
+  return `${next}-${String(next + 1).slice(-2)}`
+}
+
+const getNextCap = (player: PlayerRow | null, nextSeason: string | undefined): number | null => {
+  if (!player || !nextSeason) return null
+  return player.player_contracts?.find(c => c.season === nextSeason)?.cap_number ?? null
+}
+
+const getYearsRemaining = (player: PlayerRow | null, currentSeason: string | undefined): number => {
+  if (!player || !currentSeason) return 0
+  return (player.player_contracts ?? []).filter(c => c.season >= currentSeason).length
+}
+
+type Trend = 'up' | 'down' | 'flat' | 'none'
+const getTrend = (current: number, next: number | null): Trend => {
+  if (!next || !current) return 'none'
+  if (next > current) return 'up'
+  if (next < current) return 'down'
+  return 'flat'
+}
+const TREND = {
+  up:   { symbol: '↑', cls: 'text-orange-500 font-bold' },
+  down: { symbol: '↓', cls: 'text-emerald-600 font-bold' },
+  flat: { symbol: '=', cls: 'text-gray-400' },
+  none: { symbol: DASH, cls: 'text-gray-300' },
+}
+
+const STATUS_CLS: Record<string, string> = {
+  ELC: 'text-amber-600',
+  RFA: 'text-blue-600',
+  UFA: 'text-gray-400',
+}
+
 const draftLabel = (player: PlayerRow | null) => {
   if (!player?.draft_year) return null
   const parts = [String(player.draft_year)]
@@ -102,10 +138,11 @@ const protectionRestante = (row: RosterRow, saisonFin: number, currentSeason?: s
 const sortByDraftYearAsc = (a: RosterRow, b: RosterRow) =>
   (a.pool_draft_year ?? 9999) - (b.pool_draft_year ?? 9999)
 
-function RosterTable({ rows, title, season, salaryCounts, showDraft, saisonFin, splitByPosition }: {
+function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft, saisonFin, splitByPosition }: {
   rows: RosterRow[]
   title: string
   season?: string
+  nextSeason?: string
   salaryCounts: boolean
   showDraft?: boolean
   saisonFin?: number
@@ -114,14 +151,19 @@ function RosterTable({ rows, title, season, salaryCounts, showDraft, saisonFin, 
   const renderRows = (rowsToRender: RosterRow[]) => rowsToRender.map((row) => {
     const player = row.players
     const capNumber = salaryCounts ? getCurrentCap(player, season) : null
+    const nextCap = getNextCap(player, nextSeason)
+    const currentRaw = getCurrentCap(player, season)
+    const trend = getTrend(currentRaw, nextCap)
+    const years = getYearsRemaining(player, season)
+
     return (
       <tr key={row.id} className="border-b hover:bg-gray-50">
         <td className="px-3 py-2 font-medium text-gray-800">
           {player?.is_rookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
           {player?.last_name}, {player?.first_name}
         </td>
-        <td className="px-3 py-2"><TeamBadge code={player?.teams?.code} size="sm" /></td>
-        <td className="px-3 py-2 text-gray-500">{player?.position ?? DASH}</td>
+        <td className="px-3 py-2 w-14"><TeamBadge code={player?.teams?.code} size="sm" /></td>
+        <td className="px-3 py-2 w-10 text-gray-500">{player?.position ?? DASH}</td>
         {showDraft
           ? <>
               <td className="px-3 py-2 text-xs">
@@ -143,7 +185,26 @@ function RosterTable({ rows, title, season, salaryCounts, showDraft, saisonFin, 
                 })()}
               </td>
             </>
-          : <td className="px-3 py-2 text-right text-gray-700">{formatCap(capNumber)}</td>
+          : <>
+              <td className="px-3 py-2 text-right text-gray-700 w-28 tabular-nums">{formatCap(capNumber)}</td>
+              <td className="px-3 py-2 text-right text-gray-400 w-28 tabular-nums">{nextCap !== null ? formatCap(nextCap) : DASH}</td>
+              <td className="px-3 py-2 text-center w-8">
+                <span className={TREND[trend].cls}>{TREND[trend].symbol}</span>
+              </td>
+              <td className="px-3 py-2 text-right w-24">
+                {years > 0
+                  ? <span className="inline-flex items-center gap-1 justify-end">
+                      <span className="tabular-nums text-gray-700">{years}&nbsp;an{years > 1 ? 's' : ''}</span>
+                      {player?.status && (
+                        <span className={`text-xs font-medium ${STATUS_CLS[player.status] ?? 'text-gray-400'}`}>
+                          {player.status}
+                        </span>
+                      )}
+                    </span>
+                  : <span className="text-gray-300">{DASH}</span>
+                }
+              </td>
+            </>
         }
       </tr>
     )
@@ -153,15 +214,20 @@ function RosterTable({ rows, title, season, salaryCounts, showDraft, saisonFin, 
     <thead>
       <tr className="bg-gray-50 border-b">
         <th className="text-left px-3 py-2 font-medium text-gray-600">Joueur</th>
-        <th className="text-left px-3 py-2 font-medium text-gray-600">Equipe</th>
-        <th className="text-left px-3 py-2 font-medium text-gray-600">Pos</th>
+        <th className="text-left px-3 py-2 font-medium text-gray-600 w-14">Équipe</th>
+        <th className="text-left px-3 py-2 font-medium text-gray-600 w-10">Pos</th>
         {showDraft
           ? <>
               <th className="text-left px-3 py-2 font-medium text-gray-600">Type</th>
               <th className="text-left px-3 py-2 font-medium text-gray-600">Rep. LNH</th>
               <th className="text-left px-3 py-2 font-medium text-gray-600">Protection</th>
             </>
-          : <th className="text-right px-3 py-2 font-medium text-gray-600">Cap {season}</th>
+          : <>
+              <th className="text-right px-3 py-2 font-medium text-gray-600 w-28">Cap {season}</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-400 w-28">Cap {nextSeason}</th>
+              <th className="text-center px-3 py-2 font-medium text-gray-400 w-8">↕</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-600 w-24">Contrat</th>
+            </>
         }
       </tr>
     </thead>
@@ -265,6 +331,7 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
   }))
 
   const saisonFin = saison ? getSaisonFin(saison.season) : 0
+  const nextSeason = saison ? getNextSeason(saison.season) : undefined
   const actifs = roster.filter((row) => row.player_type === 'actif')
   const reservistes = roster.filter((row) => row.player_type === 'reserviste')
   const ltir = roster.filter((row) => row.player_type === 'ltir')
@@ -362,14 +429,14 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
           const byCapDesc = (a: RosterRow, b: RosterRow) =>
             getCurrentCap(b.players, saison?.season) - getCurrentCap(a.players, saison?.season)
           return <>
-            <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'forward').sort(byCapDesc)} title={`Attaquants (${activeCounts.forward} / 12)`} season={saison?.season} salaryCounts={true} />
-            <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'defense').sort(byCapDesc)} title={`Défenseurs (${activeCounts.defense} / 6)`} season={saison?.season} salaryCounts={true} />
-            <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'goalie').sort(byCapDesc)} title={`Gardiens (${activeCounts.goalie} / 2)`} season={saison?.season} salaryCounts={true} />
+            <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'forward').sort(byCapDesc)} title={`Attaquants (${activeCounts.forward} / 12)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
+            <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'defense').sort(byCapDesc)} title={`Défenseurs (${activeCounts.defense} / 6)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
+            <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'goalie').sort(byCapDesc)} title={`Gardiens (${activeCounts.goalie} / 2)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
           </>
         })()}
-        <RosterTable rows={reservistes} title="Reservistes" season={saison?.season} salaryCounts={true} />
+        <RosterTable rows={reservistes} title="Reservistes" season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
         {ltir.length > 0 && (
-          <RosterTable rows={ltir} title={`Liste de blessés long terme — LTIR (${ltir.length})`} season={saison?.season} salaryCounts={false} />
+          <RosterTable rows={ltir} title={`Liste de blessés long terme — LTIR (${ltir.length})`} season={saison?.season} nextSeason={nextSeason} salaryCounts={false} />
         )}
         <RosterTable rows={[...banqueRecrues].sort(sortByDraftYearAsc)} title="Banque de recrues" season={saison?.season} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
         {activationObligatoire.length > 0 && (
