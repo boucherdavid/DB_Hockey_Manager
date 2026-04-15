@@ -165,11 +165,11 @@ export default function StatsTable({
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Équipe</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Pos</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">PJ</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Tps/M</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Tps/M</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">B</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">A</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-800 font-semibold">Pts</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Pts/MJ</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Pts/MJ</th>
               </tr>
             </thead>
             <tbody>
@@ -197,11 +197,11 @@ export default function StatsTable({
                       </td>
                       <td className="px-4 py-2.5 text-gray-500">{s.position}</td>
                       <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">{s.gamesPlayed || '—'}</td>
-                      <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">{formatTOI(s.toi)}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums hidden sm:table-cell">{formatTOI(s.toi)}</td>
                       <td className="px-4 py-2.5 text-right text-gray-700">{s.goals}</td>
                       <td className="px-4 py-2.5 text-right text-gray-700">{s.assists}</td>
                       <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{s.points}</td>
-                      <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">{ppm}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums hidden sm:table-cell">{ppm}</td>
                     </tr>
                   )
                 })
@@ -223,13 +223,13 @@ export default function StatsTable({
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Équipe</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">PJ</th>
                 <th className="text-right px-4 py-3 font-medium text-green-700">V</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">D</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">DP</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">D</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">DP</th>
                 <th className="text-right px-4 py-3 font-medium text-blue-700">BL</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">%Arr</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Moy</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">B</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">A</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">B</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">A</th>
               </tr>
             </thead>
             <tbody>
@@ -256,8 +256,8 @@ export default function StatsTable({
                       </td>
                       <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">{g.gamesStarted || '—'}</td>
                       <td className="px-4 py-2.5 text-right font-medium text-green-700">{g.wins}</td>
-                      <td className="px-4 py-2.5 text-right text-gray-600">{g.losses || '—'}</td>
-                      <td className="px-4 py-2.5 text-right text-gray-600">{g.otLosses || '—'}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-600 hidden sm:table-cell">{g.losses || '—'}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-600 hidden sm:table-cell">{g.otLosses || '—'}</td>
                       <td className="px-4 py-2.5 text-right text-blue-700">{g.shutouts}</td>
                       <td className="px-4 py-2.5 text-right text-gray-600 tabular-nums">
                         {g.savePct ? g.savePct.toFixed(3) : '—'}
@@ -265,8 +265,8 @@ export default function StatsTable({
                       <td className="px-4 py-2.5 text-right text-gray-600 tabular-nums">
                         {g.gaa ? g.gaa.toFixed(2) : '—'}
                       </td>
-                      <td className="px-4 py-2.5 text-right text-gray-700">{g.goals}</td>
-                      <td className="px-4 py-2.5 text-right text-gray-700">{g.assists}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-700 hidden sm:table-cell">{g.goals}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-700 hidden sm:table-cell">{g.assists}</td>
                     </tr>
                   )
                 })

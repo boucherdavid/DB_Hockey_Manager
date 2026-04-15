@@ -93,6 +93,17 @@ Repertoires associes:
 - `python_script/teams_offline/`
 - `python_script/diagnostics/`
 
+## Responsive (mobile)
+
+Les pages admin (RosterManager, PresaisonManager, TransactionBuilder) sont desktop-only — pas de responsive requis.
+
+Les pages de consultation publique doivent etre utilisables sur mobile. Regle: quand on touche une page de consultation, on la rend responsive en meme temps.
+- Utiliser `overflow-x-auto` sur tous les conteneurs de `<table>`.
+- Masquer les colonnes secondaires sur mobile avec `hidden sm:table-cell` (et l'en-tete correspondant).
+- Ne pas utiliser de layout en colonnes cote a cote sur mobile (preferer `flex-wrap` ou `grid-cols-1`).
+
+Pages de consultation: `/`, `/joueurs`, `/statistiques`, `/repechage`, `/poolers`, `/poolers/[id]`, `/transactions`.
+
 ## Regle de maintenance
 
 Modifier `CLAUDE.md` seulement si une information de reference change vraiment:

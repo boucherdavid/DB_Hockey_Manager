@@ -179,11 +179,13 @@ export default function RepechageTable({ picks }: { picks: DraftPick[] }) {
                 <div className="bg-slate-100 px-5 py-2 border-b">
                   <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Ronde {round}</span>
                 </div>
-                <table className="w-full text-sm">
-                  <tbody>
-                    {roundPicks.map((pick) => <PickRow key={`${pick.draft_year}-${pick.draft_overall}-${pick.player_id}`} pick={pick} />)}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {roundPicks.map((pick) => <PickRow key={`${pick.draft_year}-${pick.draft_overall}-${pick.player_id}`} pick={pick} />)}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ))}
           </div>
@@ -197,13 +199,15 @@ export default function RepechageTable({ picks }: { picks: DraftPick[] }) {
                 Ces joueurs sont sur un ELC mais leurs données de repêchage ne sont pas encore disponibles. Lancez <code>import_drafts.py</code> pour les enrichir.
               </p>
             </div>
-            <table className="w-full text-sm">
-              <tbody>
-                {filteredWithoutDraft
-                  .sort((a, b) => a.last_name.localeCompare(b.last_name, 'fr-CA'))
-                  .map((pick) => <PickRow key={pick.player_id} pick={pick} />)}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <tbody>
+                  {filteredWithoutDraft
+                    .sort((a, b) => a.last_name.localeCompare(b.last_name, 'fr-CA'))
+                    .map((pick) => <PickRow key={pick.player_id} pick={pick} />)}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

@@ -250,7 +250,9 @@ function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft,
               return (
                 <div key={bucket} className="mb-3">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 mb-1">{label} ({group.length})</p>
-                  <table className="w-full text-sm">{thead}<tbody>{renderRows(group)}</tbody></table>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">{thead}<tbody>{renderRows(group)}</tbody></table>
+                  </div>
                 </div>
               )
             })
@@ -263,7 +265,7 @@ function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft,
     <div className="mb-6">
       <h3 className="font-semibold text-gray-700 mb-2">{title} ({rows.length})</h3>
       {rows.length > 0
-        ? <table className="w-full text-sm">{thead}<tbody>{renderRows(rows)}</tbody></table>
+        ? <div className="overflow-x-auto"><table className="w-full text-sm">{thead}<tbody>{renderRows(rows)}</tbody></table></div>
         : <p className="text-gray-400 text-sm py-2">Aucun joueur</p>
       }
     </div>
