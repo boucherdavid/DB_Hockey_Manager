@@ -18,3 +18,16 @@ export type PoolerCapInfo = {
   counts: { forward: number; defense: number; goalie: number; reserviste: number }
   roster: RosterEntry[]
 }
+
+// Recrue repêchée dans actif/réserviste dont l'ELC est échu → décision requise
+export type ElcDecisionEntry = {
+  roster_id: number
+  pooler_id: string
+  poolerName: string
+  player_id: number
+  playerName: string
+  position: string | null
+  draft_year: number
+  cap_number: number
+  player_type: string // 'actif' | 'reserviste'
+}

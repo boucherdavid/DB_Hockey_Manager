@@ -13,7 +13,10 @@ export default async function AdminRostersPage() {
   const { data: pooler } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
   if (!pooler?.is_admin) redirect('/')
 
-  const [poolersResult, players, saisonResult] = await Promise.all([
+  const saisonResult = await supabase.from('pool_seasons').select('*').eq('is_active', true).single()
+  const saison = saisonResult.data
+
+  const [poolersResult, players, takenResult] = await Promise.all([
     supabase.from('poolers').select('id, name').order('name'),
     fetchAllPages(async (from, to) =>
       supabase
@@ -27,11 +30,13 @@ export default async function AdminRostersPage() {
         .order('last_name')
         .range(from, to),
     ),
-    supabase.from('pool_seasons').select('*').eq('is_active', true).single(),
+    saison
+      ? supabase.from('pooler_rosters').select('player_id').eq('pool_season_id', saison.id).eq('is_active', true)
+      : Promise.resolve({ data: [] as { player_id: number }[] }),
   ])
 
   const poolers = poolersResult.data ?? []
-  const saison = saisonResult.data
+  const allTakenPlayerIds = (takenResult.data ?? []).map((r) => r.player_id)
 
   return (
     <div>
@@ -44,6 +49,7 @@ export default async function AdminRostersPage() {
           poolers={poolers}
           players={players as any}
           saison={saison}
+          allTakenPlayerIds={allTakenPlayerIds}
         />
       </ErrorBoundary>
     </div>

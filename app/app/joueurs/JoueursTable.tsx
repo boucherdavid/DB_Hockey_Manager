@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState } from 'react'
 import type { PlayerContract, PlayerRow } from './page'
+import { teamColor } from '@/lib/nhl-colors'
 
 const CURRENT_SEASON = '2025-26'
 const SEASONS = ['2025-26', '2026-27', '2027-28', '2028-29', '2029-30']
@@ -28,11 +29,24 @@ const getSeasonCap = (contracts: PlayerContract[] | null, season: string) => {
 const hasContract = (player: PlayerRow) =>
   (player.player_contracts?.length ?? 0) > 0
 
+const POSITION_ORDER: Record<string, number> = { forward: 0, defense: 1, goalie: 2 }
+const POSITION_LABEL: Record<string, string> = { forward: 'Attaquants', defense: 'Défenseurs', goalie: 'Gardiens' }
+
+const positionBucket = (position: string | null): string => {
+  const pos = (position ?? '').toUpperCase()
+  if (pos.includes('G')) return 'goalie'
+  if (pos.includes('D')) return 'defense'
+  return 'forward'
+}
+
 const sortPlayers = (a: PlayerRow, b: PlayerRow) => {
   const teamA = a.teams?.code ?? 'ZZZ'
   const teamB = b.teams?.code ?? 'ZZZ'
   const teamCompare = teamA.localeCompare(teamB, 'fr-CA')
   if (teamCompare !== 0) return teamCompare
+
+  const posCompare = POSITION_ORDER[positionBucket(a.position)] - POSITION_ORDER[positionBucket(b.position)]
+  if (posCompare !== 0) return posCompare
 
   const capCompare = getSeasonCap(b.player_contracts, CURRENT_SEASON) - getSeasonCap(a.player_contracts, CURRENT_SEASON)
   if (capCompare !== 0) return capCompare
@@ -140,7 +154,7 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Joueurs LNH</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Contrats LNH</h1>
         <span className="text-sm text-gray-500">{filteredPlayers.length} joueurs</span>
       </div>
 
@@ -238,16 +252,34 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
               const getContract = (season: string) => contracts?.find((contract) => contract.season === season)
               const teamCode = player.teams?.code ?? 'Sans \u00e9quipe'
               const teamName = player.teams?.name ?? 'Sans \u00e9quipe'
-              const previousTeamCode = index > 0 ? filteredPlayers[index - 1].teams?.code ?? 'Sans \u00e9quipe' : null
-              const showTeamHeader = index === 0 || previousTeamCode !== teamCode
+              const bucket = positionBucket(player.position)
+              const prev = index > 0 ? filteredPlayers[index - 1] : null
+              const prevTeamCode = prev?.teams?.code ?? 'Sans \u00e9quipe'
+              const prevBucket = prev ? positionBucket(prev.position) : null
+              const showTeamHeader = index === 0 || prevTeamCode !== teamCode
+              const showPosHeader = showTeamHeader || prevBucket !== bucket
 
               return (
                 <Fragment key={player.id}>
-                  {showTeamHeader && (
-                    <tr className="border-t-4 border-slate-200 bg-slate-100">
-                      <td colSpan={totalColumns} className="px-4 py-2 text-sm font-semibold text-slate-700">
-                        {teamCode}
-                        <span className="ml-2 text-xs font-normal uppercase tracking-wide text-slate-500">{teamName}</span>
+                  {showTeamHeader && (() => {
+                    const colors = teamColor(teamCode)
+                    return (
+                      <tr className="border-t-4 border-slate-200">
+                        <td
+                          colSpan={totalColumns}
+                          className="px-4 py-2 text-sm font-semibold text-white"
+                          style={{ background: `linear-gradient(90deg, ${colors.primary} 0%, ${colors.secondary} 100%)` }}
+                        >
+                          {teamCode}
+                          <span className="ml-2 text-xs font-normal uppercase tracking-wide opacity-80">{teamName}</span>
+                        </td>
+                      </tr>
+                    )
+                  })()}
+                  {showPosHeader && (
+                    <tr className="bg-white border-t border-slate-100">
+                      <td colSpan={totalColumns} className="px-6 py-1 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                        {POSITION_LABEL[bucket]}
                       </td>
                     </tr>
                   )}
@@ -256,7 +288,15 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                       {player.is_rookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
                       {player.last_name}, {player.first_name}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{player.teams?.code ?? DASH}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: teamColor(player.teams?.code).primary }}
+                        />
+                        {player.teams?.code ?? DASH}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{player.position ?? DASH}</td>
                     <td className="px-4 py-3 text-gray-600">{player.age ?? DASH}</td>
                     <td className="px-4 py-3">

@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-04-13
+Derniere mise a jour: 2026-04-15
 
 ## Role du fichier
 
@@ -395,10 +395,49 @@ Fonctionnalités du `PresaisonManager`:
 
 Lien ajouté dans `app/app/admin/page.tsx` vers `/admin/presaison`.
 
-Migration SQL à exécuter dans Supabase (pas encore confirmée):
+Migration SQL exécutée dans Supabase:
 ```sql
 ALTER TABLE pool_seasons ADD COLUMN IF NOT EXISTS presaison_draft_order JSONB;
 ```
 
 Transition de saison — correction dans `transitionSeasonAction` (`admin/config/actions.ts`):
 - Les joueurs en `ltir` dans la saison source sont copiés comme `actif` dans la saison cible (règle métier: LTIR se remet à actif en début de saison).
+
+### 2026-04-15 (session 13)
+
+**Page Statistiques LNH** (`app/app/statistiques/`):
+- Nouveau fichier `page.tsx`: fetch des stats depuis l'API publique NHL (`api.nhle.com/stats/rest`).
+  - Patineurs triés par points, gardiens par victoires.
+  - Croisement avec les noms de la saison active pour marquer les joueurs déjà dans un pool.
+- Nouveau composant `StatsTable.tsx`: tableau client interactif, tri par colonne, filtre texte.
+- Lien "Statistiques" ajouté dans la `Navbar` (entre "Contrats LNH" et "Repêchage").
+- Nouveau fichier `app/lib/nhl-colors.ts`: palettes de couleurs primaire + secondaire pour les 32 équipes NHL.
+
+**Page Contrats LNH — refonte visuelle** (`app/app/joueurs/JoueursTable.tsx`):
+- Renommée "Joueurs LNH" → "Contrats LNH" (titre et lien Navbar).
+- En-têtes d'équipes colorées avec dégradé aux couleurs NHL (via `teamColor`).
+- Sous-groupement par position dans chaque équipe : Attaquants → Défenseurs → Gardiens.
+- Point de couleur de l'équipe dans la colonne équipe.
+- Tri ajusté : équipe → position (F/D/G) → cap DESC → nom.
+
+**RosterManager — améliorations** (`app/app/admin/rosters/`):
+- Nouvelle prop `allTakenPlayerIds` passée depuis `page.tsx` : un joueur déjà dans le roster d'un autre pooler disparaît de la liste de recherche.
+- Sous-groupement par position (Attaquants / Défenseurs / Gardiens) dans la section "Actif", triée par cap DESC.
+- Auto-détection du `rookie_type` (`'repcheche'` si `draft_year` présent, sinon `'agent_libre'`) à l'ajout d'un joueur recrue.
+- Sélecteur `rookie_type` inline sous chaque recrue dans le roster; persistance immédiate via `updateRookieTypeAction`.
+
+**Module pré-saison — Décisions ELC** (`app/app/admin/presaison/`):
+- Nouveau type `ElcDecisionEntry` dans `types.ts`.
+- `loadPresaisonDataAction` détecte les recrues repêchées placées en `actif`/`reserviste` dont le contrat ELC est échu.
+- Nouvelle action `resolveElcDecisionAction` : deux options par joueur concerné :
+  - **Garder actif** : efface `rookie_type` et `pool_draft_year` — le joueur devient actif permanent.
+  - **Mettre en banque** : change `player_type` en `'recrue'` — retour à la banque pour le début de saison.
+- Section dédiée dans `PresaisonManager.tsx` avec bandeau violet et boutons par joueur.
+- Correction terminologie interne `rookie_type` : `'draft'` → `'repcheche'`, `'elc'` → `'agent_libre'`.
+- Correction bug : `setDraftQueue` → `setQueue` dans le reset du draft.
+
+**Scripts Python** (`python_script/`):
+- Normalisation des noms dans `import_supabase.py` et `import_drafts.py` : ajout de `.replace('-', ' ')` pour gérer les noms avec tiret (ex: Marc-Édouard Vlasic).
+- `existing_map` dans `import_supabase.py` utilise maintenant les noms normalisés comme clé (évite les doublons causés par les accents + tirets).
+- `is_rookie` dans `import_supabase.py` : uniquement `status == 'ELC'`; les repêchés sans contrat ELC sont gérés exclusivement par `import_drafts.py`.
+- `import_drafts.py` : la synchronisation `is_rookie=True` exclut désormais les joueurs `RFA`/`UFA` (statut établi → plus recrue éligible).

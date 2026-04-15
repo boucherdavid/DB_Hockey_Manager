@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { loadPresaisonDataAction, saveDraftOrderAction, resetLtirToActifAction, resetPresaisonDraftAction } from './actions'
-import { FREE_AGENT_THRESHOLD, type PoolerCapInfo, type RosterEntry } from './types'
+import { loadPresaisonDataAction, saveDraftOrderAction, resetLtirToActifAction, resetPresaisonDraftAction, resolveElcDecisionAction } from './actions'
+import { FREE_AGENT_THRESHOLD, type PoolerCapInfo, type RosterEntry, type ElcDecisionEntry } from './types'
 import { submitTransactionAction, searchFreeAgentsAction } from '../transactions/actions'
 
 type Saison = { id: number; season: string; is_active: boolean }
@@ -458,6 +458,7 @@ type Data = {
   draftOrder: string[]
   poolCap: number
   season: string
+  elcDecisions: ElcDecisionEntry[]
 }
 
 export default function PresaisonManager({
@@ -490,6 +491,10 @@ export default function PresaisonManager({
   const [resettingDraft, setResettingDraft] = useState(false)
   const [resetDraftMsg, setResetDraftMsg] = useState<string | null>(null)
 
+  // ELC decisions
+  const [elcBusy, setElcBusy] = useState<number | null>(null) // roster_id en cours
+  const [elcErr, setElcErr] = useState<string | null>(null)
+
   // Full load (on season change): also resets draft order from DB
   const loadAll = useCallback(async (id: number) => {
     setLoadingInit(true)
@@ -502,6 +507,7 @@ export default function PresaisonManager({
       draftOrder: result.draftOrder!,
       poolCap: result.poolCap!,
       season: result.season!,
+      elcDecisions: result.elcDecisions ?? [],
     }
     setData(d)
     setDraftOrder(d.draftOrder)
@@ -517,6 +523,7 @@ export default function PresaisonManager({
       draftOrder: result.draftOrder!,
       poolCap: result.poolCap!,
       season: result.season!,
+      elcDecisions: result.elcDecisions ?? [],
     }
     setData(d)
     return d
@@ -652,6 +659,68 @@ export default function PresaisonManager({
       )}
 
 
+      {/* Décisions ELC — recrues repêchées dans actif/réserviste dont l'ELC est échu */}
+      {data.elcDecisions.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-5 border-l-4 border-purple-400">
+          <h2 className="font-semibold text-gray-800 mb-1">Décisions requises — Recrues hors ELC</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Ces recrues repêchées sont dans l'alignement actif ou réserviste mais leur contrat ELC est échu pour cette saison.
+            Choisissez pour chacune : la garder active (perd définitivement le statut recrue) ou la remettre en banque pour le début de saison (sujet aux règles d'activation).
+          </p>
+          {elcErr && <p className="text-xs text-red-600 mb-3">{elcErr}</p>}
+          <div className="space-y-2">
+            {data.elcDecisions.map(entry => {
+              const isBusy = elcBusy === entry.roster_id
+              const protectionEnd = entry.draft_year + 5
+              return (
+                <div key={entry.roster_id} className="flex items-center justify-between gap-4 bg-purple-50 rounded-lg px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800">
+                      {entry.playerName}
+                      <span className="ml-2 text-xs text-gray-500">{entry.position ?? DASH}</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {entry.poolerName} · {typeLabel[entry.player_type] ?? entry.player_type} · Repêché {entry.draft_year} · Protection jusqu'en {protectionEnd}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      disabled={isBusy}
+                      onClick={async () => {
+                        setElcBusy(entry.roster_id)
+                        setElcErr(null)
+                        const res = await resolveElcDecisionAction(entry.roster_id, 'move_to_banque')
+                        setElcBusy(null)
+                        if (res.error) setElcErr(res.error)
+                        else await refreshData()
+                      }}
+                      className="text-xs px-3 py-1.5 rounded-lg border border-purple-300 text-purple-700 hover:bg-purple-100 disabled:opacity-40 whitespace-nowrap"
+                    >
+                      {isBusy ? '...' : 'Mettre en banque'}
+                    </button>
+                    <button
+                      disabled={isBusy}
+                      onClick={async () => {
+                        if (!window.confirm(`Garder ${entry.playerName} actif ? Il perdra définitivement son statut de recrue et ne pourra plus retourner en banque.`)) return
+                        setElcBusy(entry.roster_id)
+                        setElcErr(null)
+                        const res = await resolveElcDecisionAction(entry.roster_id, 'keep_active')
+                        setElcBusy(null)
+                        if (res.error) setElcErr(res.error)
+                        else await refreshData()
+                      }}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 text-white hover:bg-gray-800 disabled:opacity-40 whitespace-nowrap"
+                    >
+                      {isBusy ? '...' : 'Garder actif'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Compliance panel */}
       <div className="bg-white rounded-lg shadow p-5">
         <h2 className="font-semibold text-gray-800 mb-3">Aperçu des rosters</h2>
@@ -781,7 +850,7 @@ export default function PresaisonManager({
                 setResetDraftMsg(`Erreur : ${res.error}`)
               } else {
                 setResetDraftMsg(`${res.reversed} transaction(s) annulée(s).`)
-                setDraftQueue([])
+                setQueue([])
                 await loadAll(saisonId)
               }
               setResettingDraft(false)

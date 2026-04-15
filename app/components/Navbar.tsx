@@ -55,7 +55,10 @@ export default function Navbar() {
               {`${HOCKEY_STICK} Hockey Pool`}
             </Link>
             <Link href="/joueurs" className={linkClass('/joueurs')}>
-              Joueurs LNH
+              Contrats LNH
+            </Link>
+            <Link href="/statistiques" className={linkClass('/statistiques')}>
+              {'Statistiques'}
             </Link>
             <Link href="/repechage" className={linkClass('/repechage')}>
               {'Rep\u00eachage'}

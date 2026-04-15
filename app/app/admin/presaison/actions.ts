@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import type { PoolerCapInfo, RosterEntry } from './types'
+import type { PoolerCapInfo, ElcDecisionEntry } from './types'
 
 function getPlayerBucket(position: string | null): 'forward' | 'defense' | 'goalie' {
   const pos = (position ?? '').toUpperCase()
@@ -17,6 +17,7 @@ export async function loadPresaisonDataAction(saisonId: number): Promise<{
   draftOrder?: string[]
   poolCap?: number
   season?: string
+  elcDecisions?: ElcDecisionEntry[]
 }> {
   const supabase = await createClient()
 
@@ -54,6 +55,8 @@ export async function loadPresaisonDataAction(saisonId: number): Promise<{
   // Année de début de la saison courante (ex: "2025-26" → 2025)
   const seasonStartYear = parseInt(saison.season.split('-')[0], 10)
 
+  const elcDecisions: ElcDecisionEntry[] = []
+
   for (const entry of (rosters ?? []) as any[]) {
     const info = poolerMap.get(entry.pooler_id)
     if (!info) continue
@@ -64,16 +67,37 @@ export async function loadPresaisonDataAction(saisonId: number): Promise<{
     const pos: string | null = entry.players?.position ?? null
     let type: string = entry.player_type
 
-    // Gestion des recrues : protégées vs expirées
+    // Détection : recrue repêchée dans actif/réserviste avec ELC échu → décision requise
+    if (
+      (type === 'actif' || type === 'reserviste') &&
+      entry.rookie_type === 'repcheche' &&
+      !currentContract?.is_elc
+    ) {
+      const draftYear: number = entry.pool_draft_year ?? 0
+      elcDecisions.push({
+        roster_id: entry.id,
+        pooler_id: entry.pooler_id,
+        poolerName: poolers?.find((p: any) => p.id === entry.pooler_id)?.name ?? '',
+        player_id: entry.player_id,
+        playerName: `${entry.players?.last_name}, ${entry.players?.first_name}`,
+        position: pos,
+        draft_year: draftYear,
+        cap_number: capNum,
+        player_type: type,
+      })
+      // Ces joueurs restent dans le roster normal — la décision ne bloque pas l'affichage
+    }
+
+    // Gestion des recrues en banque : protégées vs expirées
     if (type === 'recrue') {
       const rookieType: string | null = entry.rookie_type ?? null
       const draftYear: number | null = entry.pool_draft_year ?? null
 
       let isExpired = false
-      if (rookieType === 'draft' && draftYear !== null) {
+      if (rookieType === 'repcheche' && draftYear !== null) {
         // Protection : 5 saisons à partir de l'année de repêchage
         isExpired = (seasonStartYear - draftYear) >= 5
-      } else if (rookieType === 'elc') {
+      } else if (rookieType === 'agent_libre') {
         // Protection : tant qu'il y a un contrat ELC actif cette saison
         isExpired = !currentContract?.is_elc
       } else {
@@ -120,6 +144,7 @@ export async function loadPresaisonDataAction(saisonId: number): Promise<{
     draftOrder,
     poolCap: saison.pool_cap,
     season: saison.season,
+    elcDecisions,
   }
 }
 
@@ -202,6 +227,40 @@ export async function resetPresaisonDraftAction(
 
   revalidatePath('/admin/presaison')
   return { reversed: txIds.length }
+}
+
+// Résolution d'une décision ELC :
+// - keep_active  : rookie_type = null → joueur actif permanent, ne peut plus retourner en banque
+// - move_to_banque : player_type = 'recrue' → retour en banque pour le début de saison
+export async function resolveElcDecisionAction(
+  rosterId: number,
+  decision: 'keep_active' | 'move_to_banque',
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  if (decision === 'keep_active') {
+    // Efface le statut recrue : ce joueur ne pourra plus retourner en banque
+    const { error } = await supabase
+      .from('pooler_rosters')
+      .update({ rookie_type: null, pool_draft_year: null })
+      .eq('id', rosterId)
+    if (error) return { error: error.message }
+  } else {
+    // Retour en banque de recrues pour le début de saison
+    const { error } = await supabase
+      .from('pooler_rosters')
+      .update({ player_type: 'recrue' })
+      .eq('id', rosterId)
+    if (error) return { error: error.message }
+  }
+
+  revalidatePath('/admin/presaison')
+  return {}
 }
 
 export async function saveDraftOrderAction(

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { submitRosterAction } from './actions'
+import { submitRosterAction, updateRookieTypeAction } from './actions'
 
 type Pooler = { id: string; name: string }
 type Player = {
@@ -85,23 +85,17 @@ const getPlayerBucket = (position: string | null): PlayerBucket => {
   return 'forward'
 }
 
-const draftLabel = (player: Player | undefined) => {
-  if (!player?.draft_year) return null
-  const parts = [String(player.draft_year)]
-  if (player.draft_round) parts.push(`R${player.draft_round}`)
-  if (player.draft_overall) parts.push(`#${player.draft_overall}`)
-  return parts.join(' ')
-}
 
 const getCurrentCap = (player: Player | undefined, season: string | undefined) => {
   if (!player || !season) return 0
   return player.player_contracts?.find((contract) => contract.season === season)?.cap_number ?? 0
 }
 
-export default function RosterManager({ poolers, players, saison }: {
+export default function RosterManager({ poolers, players, saison, allTakenPlayerIds }: {
   poolers: Pooler[]
   players: Player[]
   saison: Saison | null
+  allTakenPlayerIds: number[]
 }) {
   const supabase = createClient()
   const tempIdCounter = useRef(-1)
@@ -149,6 +143,12 @@ export default function RosterManager({ poolers, players, saison }: {
 
   const rosterPlayerIds = useMemo(() => new Set(roster.map((r) => r.player_id)), [roster])
 
+  // IDs pris par les AUTRES poolers (exclut le roster courant en état serveur pour permettre le re-ajout en brouillon)
+  const otherPoolersTakenIds = useMemo(() => {
+    const currentServerIds = new Set(originalRoster.map((r) => r.player_id))
+    return new Set(allTakenPlayerIds.filter((id) => !currentServerIds.has(id)))
+  }, [allTakenPlayerIds, originalRoster])
+
   const teamOptions = useMemo(() => {
     const uniqueTeams = Array.from(new Set(
       players.map((player) => player.teams?.code ?? '').filter((teamCode) => teamCode !== ''),
@@ -161,6 +161,7 @@ export default function RosterManager({ poolers, players, saison }: {
     return players
       .filter((player) => {
         if (rosterPlayerIds.has(player.id)) return false
+        if (otherPoolersTakenIds.has(player.id)) return false
         const teamCode = player.teams?.code ?? ''
         if (selectedTeam !== '' && teamCode !== selectedTeam) return false
         if (normalizedSearch === '') return selectedTeam !== ''
@@ -216,15 +217,35 @@ export default function RosterManager({ poolers, players, saison }: {
       return
     }
     const tempId = tempIdCounter.current--
+    // Auto-détection du type recrue selon la présence d'un draft_year
+    const rookieType: 'repcheche' | 'agent_libre' | null = player.is_rookie
+      ? (player.draft_year ? 'repcheche' : 'agent_libre')
+      : null
     const newEntry: NormalizedRosterEntry = {
       id: tempId,
       player_id: player.id,
       player_type: playerType,
-      rookie_type: null,
-      pool_draft_year: null,
+      rookie_type: rookieType,
+      pool_draft_year: player.is_rookie && player.draft_year ? player.draft_year : null,
       players: player,
     }
     setRoster(prev => [...prev, newEntry])
+  }
+
+  const changeRookieType = (entry: NormalizedRosterEntry, newRookieType: 'repcheche' | 'agent_libre') => {
+    // pool_draft_year = toujours players.draft_year (année NHL réelle, non modifiable)
+    const poolDraftYear = newRookieType === 'repcheche' ? (entry.players.draft_year ?? null) : null
+    setRoster(prev => prev.map(r => r.id === entry.id
+      ? { ...r, rookie_type: newRookieType, pool_draft_year: poolDraftYear }
+      : r
+    ))
+    // Persistance immédiate pour les entrées existantes (id > 0)
+    if (entry.id > 0) {
+      updateRookieTypeAction(entry.id, newRookieType, poolDraftYear ?? undefined).then((res) => {
+        if (res.error) showMessage(res.error, 'error')
+        else showMessage('Type de recrue sauvegardé.', 'success')
+      })
+    }
   }
 
   const removePlayer = (rosterId: number) => {
@@ -390,46 +411,106 @@ export default function RosterManager({ poolers, players, saison }: {
           {PLAYER_TYPES.map(({ value, label }) => {
             const group = roster.filter((r) => r.player_type === value)
             if (group.length === 0) return null
+
+            const POSITION_GROUPS: { bucket: PlayerBucket; label: string }[] = [
+              { bucket: 'forward', label: 'Attaquants' },
+              { bucket: 'defense', label: 'Défenseurs' },
+              { bucket: 'goalie', label: 'Gardiens' },
+            ]
+
+            const sortedByCap = (entries: NormalizedRosterEntry[]) =>
+              [...entries].sort((a, b) => getCurrentCap(b.players, saison?.season) - getCurrentCap(a.players, saison?.season))
+
+            type Row =
+              | { type: 'subheader'; bucket: PlayerBucket; subLabel: string }
+              | { type: 'entry'; entry: NormalizedRosterEntry }
+
+            const rows: Row[] = value === 'actif'
+              ? POSITION_GROUPS.flatMap(({ bucket, label: subLabel }) => {
+                  const sub = sortedByCap(group.filter((r) => getPlayerBucket(r.players?.position ?? null) === bucket))
+                  if (sub.length === 0) return []
+                  return [
+                    { type: 'subheader' as const, bucket, subLabel },
+                    ...sub.map((entry) => ({ type: 'entry' as const, entry })),
+                  ]
+                })
+              : group.map((entry) => ({ type: 'entry' as const, entry }))
+
             return (
               <div key={value} className="mb-4">
                 <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{label}</h3>
                 <div className="space-y-1">
-                  {group.map((entry) => {
+                  {rows.map((row) => {
+                    if (row.type === 'subheader') {
+                      return (
+                        <p key={`sub-${row.bucket}`} className="text-xs text-gray-400 pl-1 pt-1 pb-0.5 italic">
+                          {row.subLabel}
+                        </p>
+                      )
+                    }
+                    const { entry } = row
                     const isTemp = entry.id < 0
                     const contractCap = entry.player_type === 'recrue' ? null : getCurrentCap(entry.players, saison?.season)
+                    const isRookie = entry.players?.is_rookie
                     return (
                       <div
                         key={entry.id}
-                        className={`flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-gray-50 group ${isTemp ? 'border-l-2 border-blue-300' : ''}`}
+                        className={`py-1.5 px-3 rounded-lg hover:bg-gray-50 group ${isTemp ? 'border-l-2 border-blue-300' : ''}`}
                       >
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="text-gray-400 w-6 text-center">{entry.players?.teams?.code ?? DASH}</span>
-                          <span className="text-gray-300">|</span>
-                          <span className="font-medium text-gray-800">
-                            {entry.players?.is_rookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
-                            {entry.players?.last_name}, {entry.players?.first_name}
-                          </span>
-                          <span className="text-gray-400">{entry.players?.position}</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-gray-400 w-6 text-center">{entry.players?.teams?.code ?? DASH}</span>
+                            <span className="text-gray-300">|</span>
+                            <span className="font-medium text-gray-800">
+                              {isRookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
+                              {entry.players?.last_name}, {entry.players?.first_name}
+                            </span>
+                            <span className="text-gray-400">{entry.players?.position}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-600">{formatCap(contractCap)}</span>
+                            <select
+                              value={entry.player_type}
+                              onChange={(e) => changeType(entry, e.target.value as 'actif' | 'recrue' | 'reserviste' | 'ltir')}
+                              className="text-xs border rounded px-1 py-0.5 text-gray-500"
+                            >
+                              {PLAYER_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                            </select>
+                            <button
+                              onClick={() => removePlayer(entry.id)}
+                              className="text-red-400 hover:text-red-600 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              {CROSS}
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {entry.player_type === 'recrue' && draftLabel(entry.players) && (
-                            <span className="text-xs text-emerald-600">{draftLabel(entry.players)}</span>
-                          )}
-                          <span className="text-sm text-gray-600">{formatCap(contractCap)}</span>
-                          <select
-                            value={entry.player_type}
-                            onChange={(e) => changeType(entry, e.target.value as 'actif' | 'recrue' | 'reserviste' | 'ltir')}
-                            className="text-xs border rounded px-1 py-0.5 text-gray-500"
-                          >
-                            {PLAYER_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                          </select>
-                          <button
-                            onClick={() => removePlayer(entry.id)}
-                            className="text-red-400 hover:text-red-600 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            {CROSS}
-                          </button>
-                        </div>
+                        {isRookie && (
+                          <div className="flex items-center gap-2 mt-0.5 pl-9">
+                            <select
+                              value={entry.rookie_type ?? ''}
+                              onChange={(e) => {
+                                if (e.target.value) changeRookieType(entry, e.target.value as 'repcheche' | 'agent_libre')
+                              }}
+                              className={`text-xs border rounded px-1 py-0.5 ${
+                                entry.rookie_type === 'repcheche' ? 'text-purple-700 bg-purple-50 border-purple-200'
+                                : entry.rookie_type === 'agent_libre' ? 'text-blue-700 bg-blue-50 border-blue-200'
+                                : 'text-orange-600 bg-orange-50 border-orange-200'
+                              }`}
+                            >
+                              {!entry.rookie_type && <option value="">— type recrue requis —</option>}
+                              <option value="repcheche">Repêché</option>
+                              <option value="agent_libre">Agent libre</option>
+                            </select>
+                            {entry.rookie_type === 'repcheche' && entry.players.draft_year && (
+                              <span className="text-xs text-purple-500">
+                                {`Repêché ${entry.players.draft_year} — protection jusqu'en ${entry.players.draft_year + 5}`}
+                              </span>
+                            )}
+                            {entry.rookie_type === 'agent_libre' && (
+                              <span className="text-xs text-blue-500">Protection ELC seulement</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )
                   })}

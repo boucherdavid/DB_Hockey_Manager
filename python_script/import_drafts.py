@@ -26,7 +26,7 @@ NAME_ALIASES: dict[tuple[str, str], tuple[str, str]] = {
 
 
 def normaliser_nom(nom):
-    return unidecode(str(nom)).lower().strip()
+    return unidecode(str(nom)).lower().strip().replace('-', ' ')
 
 
 def get_saison_fin():
@@ -173,9 +173,9 @@ def importer_repechages():
         except Exception as e:
             print(f'  [ERREUR UPDATE] id={pid}: {e}')
 
-    # Marquer is_rookie=True pour tous les joueurs en base dont draft_year est dans la fenêtre.
-    # On interroge directement la BD (et non existing_map) pour capturer les joueurs
-    # dont le draft_year vient d'être mis à jour dans ce même run.
+    # Marquer is_rookie=True pour les repêchés dans la fenêtre de protection,
+    # SAUF les joueurs établis (RFA/UFA) qui ont signé un contrat non-ELC.
+    # Les prospects sans contrat (status NULL) et les ELC restent is_rookie=True.
     print('[INFO] Synchronisation is_rookie pour repêchés existants...')
     min_draft_year = saison_fin - PROTECTION_SEASONS
     nb_rookie_sync = 0
@@ -185,6 +185,7 @@ def importer_repechages():
             .update({'is_rookie': True})
             .gte('draft_year', min_draft_year)
             .lte('draft_year', saison_fin)
+            .not_.in_('status', ['RFA', 'UFA'])
             .execute()
         )
         nb_rookie_sync = len(result.data) if result.data else 0

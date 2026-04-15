@@ -32,7 +32,7 @@ PLAYER_LINK_CACHE = {}
 
 
 def normaliser_nom(nom):
-    return unidecode(str(nom)).lower().strip()
+    return unidecode(str(nom)).lower().strip().replace('-', ' ')
 
 
 def parse_nom(name):
@@ -291,7 +291,7 @@ def upload_vers_supabase(csv_path='./PuckPedia_update.csv'):
     while True:
         batch = supabase.table('players').select('id, first_name, last_name, draft_year').range(offset, offset + 999).execute().data
         for p in batch:
-            existing_map[f"{p['first_name']}|{p['last_name']}"] = {
+            existing_map[f"{normaliser_nom(p['first_name'])}|{normaliser_nom(p['last_name'])}"] = {
                 'id': p['id'],
                 'draft_year': p.get('draft_year'),
             }
@@ -330,12 +330,13 @@ def upload_vers_supabase(csv_path='./PuckPedia_update.csv'):
             'age': age,
             'status': status,
             'is_available': True,
-            # is_rookie: ELC depuis PuckPedia, ou repêché dans la fenêtre de protection
-            # (import_drafts.py gère le cas repêché sans contrat PuckPedia)
-            'is_rookie': status == 'ELC' or bool(existing_map.get(f'{first_name}|{last_name}', {}).get('draft_year')),
+            # is_rookie: uniquement si contrat ELC actif.
+            # Les prospects repêchés sans contrat PuckPedia sont gérés par import_drafts.py.
+            # Un joueur avec draft_year mais contrat RFA/UFA n'est plus une recrue éligible.
+            'is_rookie': status == 'ELC',
         }
 
-        key = f'{first_name}|{last_name}'
+        key = f'{normaliser_nom(first_name)}|{normaliser_nom(last_name)}'
         if key in existing_map:
             players_to_update.append((existing_map[key]['id'], payload))
         else:
@@ -371,7 +372,7 @@ def upload_vers_supabase(csv_path='./PuckPedia_update.csv'):
     contracts_to_upsert = []
     for _, row in df.iterrows():
         first_name, last_name = parse_nom(row['Joueur'])
-        key = f'{first_name}|{last_name}'
+        key = f'{normaliser_nom(first_name)}|{normaliser_nom(last_name)}'
         player_id = existing_map.get(key, {}).get('id')
         if not player_id:
             continue
