@@ -102,10 +102,14 @@ def importer_repechages():
     a_mettre_a_jour = []
 
     for pick in tous_les_choix:
-        prenom = (pick.get('firstName') or '').strip()
+        prenom_raw = (pick.get('firstName') or '').strip()
         nom = (pick.get('lastName') or '').strip()
-        if not prenom or not nom:
+        if not prenom_raw or not nom:
             continue
+
+        # Certaines APIs NHL incluent un deuxième prénom dans firstName ("Logan James" → "Logan")
+        # On garde uniquement le premier token comme fallback de recherche
+        prenom_premier = prenom_raw.split()[0]
 
         draft_year = pick.get('draftYear')
         draft_round = pick.get('roundNumber')
@@ -113,12 +117,17 @@ def importer_repechages():
         position = (pick.get('position') or '').strip() or None
         tri_code = (pick.get('triCode') or '').strip().upper()
 
-        key = (normaliser_nom(prenom), normaliser_nom(nom))
-        # Appliquer l'alias si ce nom NHL correspond à une orthographe PuckPedia différente
-        key = NAME_ALIASES.get(key, key)
+        key_full  = (normaliser_nom(prenom_raw), normaliser_nom(nom))
+        key_short = (normaliser_nom(prenom_premier), normaliser_nom(nom))
 
-        if key in existing_map:
-            existant = existing_map[key]
+        # Appliquer les alias (orthographes PuckPedia différentes de l'API NHL)
+        key_full  = NAME_ALIASES.get(key_full,  key_full)
+        key_short = NAME_ALIASES.get(key_short, key_short)
+
+        # Recherche: prénom complet d'abord, puis premier prénom seulement
+        existant = existing_map.get(key_full) or existing_map.get(key_short)
+
+        if existant:
             # Ne mettre à jour les infos de draft que si pas encore renseignées
             # PuckPedia a priorité sur toutes les autres données
             if not existant.get('draft_year'):
@@ -131,8 +140,9 @@ def importer_repechages():
                 })
         else:
             # Joueur absent de PuckPedia: créer un enregistrement minimal
+            # On garde le premier prénom pour cohérence avec PuckPedia
             a_inserer.append({
-                'first_name': prenom,
+                'first_name': prenom_premier,
                 'last_name': nom,
                 'team_id': teams_map.get(tri_code),
                 'position': position,
@@ -144,7 +154,39 @@ def importer_repechages():
                 'draft_overall': draft_overall,
             })
 
-    print(f'[INFO] A inserer: {len(a_inserer)} | A mettre a jour: {len(a_mettre_a_jour)}')
+    print(f'[INFO] A inserer (avant vérif BD): {len(a_inserer)} | A mettre a jour: {len(a_mettre_a_jour)}')
+
+    # Filet de sécurité: avant d'insérer, vérifier dans la BD avec ilike (insensible à la casse)
+    # Rattrape les cas où la normalisation en mémoire a échoué (accents, espaces, etc.)
+    reels_a_inserer = []
+    for player in a_inserer:
+        try:
+            result = (
+                supabase.table('players')
+                .select('id, draft_year')
+                .ilike('first_name', player['first_name'])
+                .ilike('last_name', player['last_name'])
+                .execute()
+            )
+            if result.data:
+                existant = result.data[0]
+                print(f"  [DOUBLON DETECTE] {player['first_name']} {player['last_name']} deja en base (id={existant['id']})")
+                if not existant.get('draft_year'):
+                    a_mettre_a_jour.append({
+                        'id': existant['id'],
+                        'draft_year': player['draft_year'],
+                        'draft_round': player['draft_round'],
+                        'draft_overall': player['draft_overall'],
+                        'is_rookie': True,
+                    })
+            else:
+                reels_a_inserer.append(player)
+        except Exception as e:
+            print(f"  [WARN] Verification BD pour {player['first_name']} {player['last_name']}: {e}")
+            reels_a_inserer.append(player)
+    a_inserer = reels_a_inserer
+
+    print(f'[INFO] A inserer (apres vérif BD): {len(a_inserer)} | A mettre a jour: {len(a_mettre_a_jour)}')
 
     # Insertions
     nb_inserts = 0
