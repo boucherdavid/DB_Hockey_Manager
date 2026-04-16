@@ -142,7 +142,22 @@ def scraper_depuis_html(fichier_html, sigle):
     all_players = []
     total_detected = 0
 
+    # Sections à ignorer : rachetés et rétentions salariales sortantes
+    SECTIONS_TO_SKIP = ['buyout', 'retained']
+
     for idx, table in enumerate(tables):
+        # Détecter le titre de section précédant ce tableau
+        section_heading = ""
+        for tag in ['h1', 'h2', 'h3', 'h4']:
+            heading = table.find_previous(tag)
+            if heading:
+                section_heading = heading.get_text(strip=True).lower()
+                break
+
+        if any(keyword in section_heading for keyword in SECTIONS_TO_SKIP):
+            print(f"⏭️  Tableau {idx+1} ignoré (section : '{section_heading}')")
+            continue
+
         headers = table.find_all("th")
         year_labels = [cell.get_text(strip=True) for cell in headers if "20" in cell.get_text(strip=True) and "-" in cell.get_text(strip=True)]
         rows = table.find_all("tr")
