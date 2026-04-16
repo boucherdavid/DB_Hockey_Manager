@@ -127,7 +127,7 @@ export default function RepechageTable({ picks }: { picks: DraftPick[] }) {
           <select
             value={selectedYear}
             onChange={(e) => { setSelectedYear(e.target.value === 'all' ? 'all' : Number(e.target.value)); setSelectedRound('all') }}
-            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Toutes les années</option>
             {years.map((y) => <option key={y} value={y}>{y}</option>)}
@@ -135,7 +135,7 @@ export default function RepechageTable({ picks }: { picks: DraftPick[] }) {
           <select
             value={selectedRound}
             onChange={(e) => setSelectedRound(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Toutes les rondes</option>
             {rounds.map((r) => <option key={r} value={r}>Ronde {r}</option>)}
@@ -143,7 +143,7 @@ export default function RepechageTable({ picks }: { picks: DraftPick[] }) {
           <select
             value={filterPooler}
             onChange={(e) => setFilterPooler(e.target.value as 'all' | 'assigned' | 'unassigned')}
-            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Tous les choix</option>
             <option value="assigned">Protégés seulement</option>
@@ -154,7 +154,7 @@ export default function RepechageTable({ picks }: { picks: DraftPick[] }) {
             placeholder="Rechercher un joueur, équipe ou pooler..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 min-w-48 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 min-w-48 border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <p className="text-xs text-gray-400">

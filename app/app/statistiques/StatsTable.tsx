@@ -118,12 +118,12 @@ export default function StatsTable({
           placeholder="Nom ou équipe"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+          className="border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
         />
         <select
           value={selectedTeam}
           onChange={e => setSelectedTeam(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">Toutes les équipes</option>
           {teamOptions.map(t => (

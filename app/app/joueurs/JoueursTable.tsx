@@ -176,12 +176,12 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
             placeholder={'Nom ou \u00e9quipe'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <select
             value={selectedTeam}
             onChange={(e) => setSelectedTeam(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">{'Toutes les \u00e9quipes'}</option>
             {teamOptions.map((teamCode) => (
@@ -191,7 +191,7 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as 'all' | 'elc' | 'non-elc')}
-            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Tous les statuts</option>
             <option value="elc">ELC seulement</option>
@@ -200,7 +200,7 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
           <select
             value={salaryMode}
             onChange={(e) => setSalaryMode(e.target.value as 'all' | 'lt' | 'between' | 'gt')}
-            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Tous les salaires</option>
             <option value="lt">Plus petit que</option>
@@ -215,7 +215,7 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                 placeholder="Min"
                 value={salaryMin}
                 onChange={(e) => setSalaryMin(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             )}
             {(salaryMode === 'lt' || salaryMode === 'between') && (
@@ -225,7 +225,7 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                 placeholder="Max"
                 value={salaryMax}
                 onChange={(e) => setSalaryMax(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             )}
           </div>
