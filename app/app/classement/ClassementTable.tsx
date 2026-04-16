@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { fmtPts } from '@/lib/nhl-stats'
 import type { PoolerStanding, PlayerContrib } from './page'
 
@@ -80,8 +81,13 @@ export default function ClassementTable({ standings }: { standings: PoolerStandi
                 </tbody>
                 <tfoot>
                   <tr className="bg-blue-50 border-t">
-                    <td colSpan={7} className="px-4 py-2 text-sm text-gray-500 font-medium">
-                      Total — {pooler.players.length} joueurs
+                    <td colSpan={7} className="px-4 py-2 text-sm font-medium">
+                      <Link
+                        href={`/poolers/${pooler.poolerId}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Voir l'alignement complet →
+                      </Link>
                     </td>
                     <td className="px-2 py-2 text-center font-bold text-blue-700">
                       {fmtPts(pooler.totalPoints)}
