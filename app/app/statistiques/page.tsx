@@ -5,7 +5,6 @@ export const metadata = { title: 'Statistiques LNH' }
 export const dynamic = 'force-dynamic'
 
 const NHL_SEASON = '20252026'
-const GAME_TYPE = 2
 const REST = 'https://api.nhle.com/stats/rest/en'
 
 export type SkaterStat = {
@@ -56,8 +55,8 @@ function splitName(full: string): { firstName: string; lastName: string } {
 
 // isAggregate=false → une ligne par joueur par équipe → on garde le code équipe
 // puis on agrège manuellement pour les joueurs échangés en cours de saison
-function buildUrl(type: 'skater' | 'goalie'): string {
-  const cayenne = `gameTypeId=${GAME_TYPE} and seasonId<=${NHL_SEASON} and seasonId>=${NHL_SEASON}`
+function buildUrl(type: 'skater' | 'goalie', gameType: number): string {
+  const cayenne = `gameTypeId=${gameType} and seasonId<=${NHL_SEASON} and seasonId>=${NHL_SEASON}`
   return (
     `${REST}/${type}/summary` +
     `?isAggregate=false&isGame=false` +
@@ -69,9 +68,9 @@ function buildUrl(type: 'skater' | 'goalie'): string {
 
 type Row = Record<string, unknown>
 
-async function fetchSkaters(): Promise<SkaterStat[]> {
+async function fetchSkaters(gameType: number): Promise<SkaterStat[]> {
   try {
-    const res = await fetch(buildUrl('skater'), { cache: 'no-store' })
+    const res = await fetch(buildUrl('skater', gameType), { cache: 'no-store' })
     if (!res.ok) return []
     const rows = ((await res.json()).data as Row[]) ?? []
 
@@ -122,9 +121,9 @@ async function fetchSkaters(): Promise<SkaterStat[]> {
   }
 }
 
-async function fetchGoalies(): Promise<GoalieStat[]> {
+async function fetchGoalies(gameType: number): Promise<GoalieStat[]> {
   try {
-    const res = await fetch(buildUrl('goalie'), { cache: 'no-store' })
+    const res = await fetch(buildUrl('goalie', gameType), { cache: 'no-store' })
     if (!res.ok) return []
     const rows = ((await res.json()).data as Row[]) ?? []
 
@@ -210,17 +209,30 @@ async function fetchTakenNames(): Promise<string[]> {
   }
 }
 
-export default async function StatistiquesPage() {
+export default async function StatistiquesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saison?: string }>
+}) {
+  const { saison } = await searchParams
+  const gameType = saison === 'series' ? 3 : 2
+
   const [skaters, goalies, takenNames, rookieNames] = await Promise.all([
-    fetchSkaters(),
-    fetchGoalies(),
+    fetchSkaters(gameType),
+    fetchGoalies(gameType),
     fetchTakenNames(),
     fetchRookieNames(),
   ])
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <StatsTable skaters={skaters} goalies={goalies} takenNames={takenNames} rookieNames={rookieNames} />
+      <StatsTable
+        skaters={skaters}
+        goalies={goalies}
+        takenNames={takenNames}
+        rookieNames={rookieNames}
+        gameMode={saison === 'series' ? 'series' : 'regular'}
+      />
     </div>
   )
 }

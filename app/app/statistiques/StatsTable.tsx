@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import type { SkaterStat, GoalieStat } from './page'
 import TeamBadge from '@/components/TeamBadge'
 
@@ -39,12 +40,16 @@ export default function StatsTable({
   goalies,
   takenNames,
   rookieNames,
+  gameMode,
 }: {
   skaters: SkaterStat[]
   goalies: GoalieStat[]
   takenNames: string[]
   rookieNames: string[]
+  gameMode: 'regular' | 'series'
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
   const [tab, setTab] = useState<Tab>('skaters')
   const [search, setSearch] = useState('')
   const [selectedTeam, setSelectedTeam] = useState('')
@@ -115,9 +120,31 @@ export default function StatsTable({
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Statistiques LNH</h1>
-        <span className="text-sm text-gray-500">
-          {tab === 'skaters' ? `${filteredSkaters.length} joueurs` : `${filteredGoalies.length} gardiens`}
-        </span>
+        <div className="flex items-center gap-4">
+          <div className="flex gap-1 rounded-lg border border-slate-300 p-0.5">
+            <button
+              type="button"
+              onClick={() => router.push(pathname)}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                gameMode === 'regular' ? 'bg-blue-600 text-white font-medium' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              Saison régulière
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push(`${pathname}?saison=series`)}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                gameMode === 'series' ? 'bg-blue-600 text-white font-medium' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              Séries
+            </button>
+          </div>
+          <span className="text-sm text-gray-500">
+            {tab === 'skaters' ? `${filteredSkaters.length} joueurs` : `${filteredGoalies.length} gardiens`}
+          </span>
+        </div>
       </div>
 
       {/* Filtres */}

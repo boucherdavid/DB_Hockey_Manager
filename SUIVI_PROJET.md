@@ -442,6 +442,17 @@ Transition de saison — correction dans `transitionSeasonAction` (`admin/config
 - `is_rookie` dans `import_supabase.py` : uniquement `status == 'ELC'`; les repêchés sans contrat ELC sont gérés exclusivement par `import_drafts.py`.
 - `import_drafts.py` : la synchronisation `is_rookie=True` exclut désormais les joueurs `RFA`/`UFA` (statut établi → plus recrue éligible).
 
+### 2026-04-16 (session 15)
+
+**Toggle Saison régulière / Séries dans Statistiques LNH**:
+- `statistiques/page.tsx`: `buildUrl`, `fetchSkaters`, `fetchGoalies` acceptent maintenant un paramètre `gameType` (2 = saison régulière, 3 = séries).
+- Le `gameType` est déterminé par le search param `?saison=series` dans l'URL.
+- `statistiques/StatsTable.tsx`: toggle "Saison régulière / Séries" ajouté dans le coin supérieur droit du titre. Navigation via `useRouter` vers `?saison=series` ou sans paramètre.
+- La disponibilité (point vert) et le badge recrue (R) restent fonctionnels dans les deux modes.
+- À tester lorsque les séries débuteront.
+
+---
+
 ### 2026-04-15 (session 14)
 
 **Responsive mobile — pages de consultation**:
