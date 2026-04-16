@@ -15,6 +15,14 @@ function AvailDot({ available }: { available: boolean }) {
   )
 }
 
+function RookieBadge() {
+  return (
+    <span title="Recrue (ELC)" className="inline-block px-1 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700 leading-none">
+      R
+    </span>
+  )
+}
+
 function formatTOI(seconds: number): string {
   if (!seconds) return '—'
   const m = Math.floor(seconds / 60)
@@ -30,10 +38,12 @@ export default function StatsTable({
   skaters,
   goalies,
   takenNames,
+  rookieNames,
 }: {
   skaters: SkaterStat[]
   goalies: GoalieStat[]
   takenNames: string[]
+  rookieNames: string[]
 }) {
   const [tab, setTab] = useState<Tab>('skaters')
   const [search, setSearch] = useState('')
@@ -42,6 +52,10 @@ export default function StatsTable({
   const [positionFilter, setPositionFilter] = useState<'all' | 'forward' | 'defense'>('all')
 
   const takenSet = useMemo(() => new Set(takenNames), [takenNames])
+  const rookieSet = useMemo(() => new Set(rookieNames), [rookieNames])
+
+  const isRookie = (firstName: string, lastName: string) =>
+    rookieSet.has(normName(`${firstName} ${lastName}`))
 
   const isAvailable = (firstName: string, lastName: string) =>
     !takenSet.has(normName(`${firstName} ${lastName}`))
@@ -211,7 +225,10 @@ export default function StatsTable({
                         <AvailDot available={avail} />
                       </td>
                       <td className="px-4 py-2.5 font-medium text-gray-800">
-                        {s.lastName}, {s.firstName}
+                        <span className="inline-flex items-center gap-1.5">
+                          {s.lastName}, {s.firstName}
+                          {isRookie(s.firstName, s.lastName) && <RookieBadge />}
+                        </span>
                       </td>
                       <td className="px-4 py-2.5 text-gray-600">
                         <TeamBadge code={s.teamAbbrev} />
@@ -270,7 +287,10 @@ export default function StatsTable({
                         <AvailDot available={avail} />
                       </td>
                       <td className="px-4 py-2.5 font-medium text-gray-800">
-                        {g.lastName}, {g.firstName}
+                        <span className="inline-flex items-center gap-1.5">
+                          {g.lastName}, {g.firstName}
+                          {isRookie(g.firstName, g.lastName) && <RookieBadge />}
+                        </span>
                       </td>
                       <td className="px-4 py-2.5 text-gray-600">
                         <TeamBadge code={g.teamAbbrev} />

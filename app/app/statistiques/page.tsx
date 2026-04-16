@@ -166,9 +166,23 @@ async function fetchGoalies(): Promise<GoalieStat[]> {
   }
 }
 
-/** Noms normalisés des joueurs déjà dans un pool (saison active) */
+/** Noms normalisés */
 function normName(s: string) {
   return s.toLowerCase().replace(/-/g, ' ').trim()
+}
+
+/** Noms normalisés des joueurs sur un contrat ELC */
+async function fetchRookieNames(): Promise<string[]> {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('players')
+      .select('first_name, last_name')
+      .eq('status', 'ELC')
+    return (data ?? []).map(p => normName(`${p.first_name} ${p.last_name}`))
+  } catch {
+    return []
+  }
 }
 
 async function fetchTakenNames(): Promise<string[]> {
@@ -197,15 +211,16 @@ async function fetchTakenNames(): Promise<string[]> {
 }
 
 export default async function StatistiquesPage() {
-  const [skaters, goalies, takenNames] = await Promise.all([
+  const [skaters, goalies, takenNames, rookieNames] = await Promise.all([
     fetchSkaters(),
     fetchGoalies(),
     fetchTakenNames(),
+    fetchRookieNames(),
   ])
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <StatsTable skaters={skaters} goalies={goalies} takenNames={takenNames} />
+      <StatsTable skaters={skaters} goalies={goalies} takenNames={takenNames} rookieNames={rookieNames} />
     </div>
   )
 }
