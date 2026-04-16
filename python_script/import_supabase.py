@@ -358,9 +358,9 @@ def upload_vers_supabase(csv_path=None):
 
         if key_team in existing_map:
             player_info = existing_map[key_team]
-        elif key_name in existing_by_name and len(existing_by_name[key_name]) == 1:
-            # Un seul joueur avec ce nom en base → match sans ambiguïté
-            player_info = existing_by_name[key_name][0]
+        elif f'{fn}|{ln}|' in existing_map:
+            # Joueur en base sans équipe assignée (team_id null)
+            player_info = existing_map[f'{fn}|{ln}|']
         else:
             player_info = None
 
@@ -407,8 +407,8 @@ def upload_vers_supabase(csv_path=None):
 
         if key_team in existing_map:
             player_id = existing_map[key_team]['id']
-        elif key_name in existing_by_name and len(existing_by_name[key_name]) == 1:
-            player_id = existing_by_name[key_name][0]['id']
+        elif f'{fn}|{ln}|' in existing_map:
+            player_id = existing_map[f'{fn}|{ln}|']['id']
         else:
             player_id = None
 
