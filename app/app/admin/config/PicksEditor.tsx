@@ -62,7 +62,7 @@ export default function PicksEditor({
   const rounds = [1, 2, 3, 4]
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div>
       <div className="mb-4">
         <h2 className="font-bold text-lg text-gray-800">Choix de repêchage</h2>
         <p className="text-sm text-gray-500 mt-0.5">

@@ -2,8 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ConfigForm from './ConfigForm'
 import SeasonsManager from './SeasonsManager'
-import PicksEditor, { type Pick, type Pooler } from './PicksEditor'
-import RookieOverrideManager from './RookieOverrideManager'
+import InitTabs from './InitTabs'
+import { type Pick, type Pooler } from './PicksEditor'
 
 export default async function AdminConfigPage() {
   const supabase = await createClient()
@@ -67,15 +67,8 @@ export default async function AdminConfigPage() {
       </div>
 
       {activeSaison && (
-        <PicksEditor
+        <InitTabs
           picks={picks}
-          poolers={poolerList}
-          seasonLabel={activeSaison.season}
-        />
-      )}
-
-      {activeSaison && (
-        <RookieOverrideManager
           poolers={poolerList}
           saison={activeSaison}
         />
