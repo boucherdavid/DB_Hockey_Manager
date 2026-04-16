@@ -138,8 +138,13 @@ def build_player_group_key(row):
     if player_link:
         return player_link
 
+    # Fallback : inclure l'équipe pour éviter de fusionner deux homonymes
+    # (ex: les deux Sebastian Aho) quand le lien PuckPedia n'est pas dans le cache.
+    # Conséquence acceptée : un retained salary sans lien cache ne sera pas sommé,
+    # mais c'est moins grave que de fusionner deux joueurs différents.
     first_name, last_name = parse_nom(row.get('Joueur', ''))
-    return f'name::{normaliser_nom(first_name)}::{normaliser_nom(last_name)}'
+    team_code = str(row.get('Equipe', '')).strip().upper()
+    return f'name::{normaliser_nom(first_name)}::{normaliser_nom(last_name)}::{team_code}'
 
 
 def should_sum_retained_fragments(entries, current_team, season_cols):
@@ -288,15 +293,23 @@ def upload_vers_supabase(csv_path=None):
 
     teams_map = {t['code']: t['id'] for t in supabase.table('teams').select('id, code').execute().data}
 
-    existing_map = {}
+    # Clé primaire : nom|equipe  (distingue les homonymes comme les deux Sebastian Aho)
+    # Clé secondaire : nom seul → liste, utilisée comme fallback si non-ambigu
+    teams_id_to_code = {v: k for k, v in teams_map.items()}
+
+    existing_map = {}       # 'fn|ln|team' → {id, draft_year}
+    existing_by_name = {}   # 'fn|ln'      → [{id, draft_year, team_code}, ...]
+
     offset = 0
     while True:
-        batch = supabase.table('players').select('id, first_name, last_name, draft_year').range(offset, offset + 999).execute().data
+        batch = supabase.table('players').select('id, first_name, last_name, team_id, draft_year').range(offset, offset + 999).execute().data
         for p in batch:
-            existing_map[f"{normaliser_nom(p['first_name'])}|{normaliser_nom(p['last_name'])}"] = {
-                'id': p['id'],
-                'draft_year': p.get('draft_year'),
-            }
+            fn = normaliser_nom(p['first_name'])
+            ln = normaliser_nom(p['last_name'])
+            tc = teams_id_to_code.get(p.get('team_id'), '')
+            entry = {'id': p['id'], 'draft_year': p.get('draft_year')}
+            existing_map[f'{fn}|{ln}|{tc}'] = entry
+            existing_by_name.setdefault(f'{fn}|{ln}', []).append({'team_code': tc, **entry})
         if len(batch) < 1000:
             break
         offset += 1000
@@ -338,11 +351,23 @@ def upload_vers_supabase(csv_path=None):
             'is_rookie': status == 'ELC',
         }
 
-        key = f'{normaliser_nom(first_name)}|{normaliser_nom(last_name)}'
-        if key in existing_map:
-            players_to_update.append((existing_map[key]['id'], payload))
+        fn = normaliser_nom(first_name)
+        ln = normaliser_nom(last_name)
+        key_team = f'{fn}|{ln}|{team_code}'
+        key_name = f'{fn}|{ln}'
+
+        if key_team in existing_map:
+            player_info = existing_map[key_team]
+        elif key_name in existing_by_name and len(existing_by_name[key_name]) == 1:
+            # Un seul joueur avec ce nom en base → match sans ambiguïté
+            player_info = existing_by_name[key_name][0]
         else:
-            players_to_insert.append((key, payload))
+            player_info = None
+
+        if player_info:
+            players_to_update.append((player_info['id'], payload))
+        else:
+            players_to_insert.append((key_name, payload))
 
     print(f'[INFO] A inserer: {len(players_to_insert)} | A mettre a jour: {len(players_to_update)}')
 
@@ -374,8 +399,19 @@ def upload_vers_supabase(csv_path=None):
     contracts_to_upsert = []
     for _, row in df.iterrows():
         first_name, last_name = parse_nom(row['Joueur'])
-        key = f'{normaliser_nom(first_name)}|{normaliser_nom(last_name)}'
-        player_id = existing_map.get(key, {}).get('id')
+        team_code = str(row.get('Equipe', '')).strip().upper()
+        fn = normaliser_nom(first_name)
+        ln = normaliser_nom(last_name)
+        key_team = f'{fn}|{ln}|{team_code}'
+        key_name = f'{fn}|{ln}'
+
+        if key_team in existing_map:
+            player_id = existing_map[key_team]['id']
+        elif key_name in existing_by_name and len(existing_by_name[key_name]) == 1:
+            player_id = existing_by_name[key_name][0]['id']
+        else:
+            player_id = None
+
         if not player_id:
             continue
         # Saisons ELC détectées par le scraper (pipe-séparées)
