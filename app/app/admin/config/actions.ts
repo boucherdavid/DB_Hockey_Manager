@@ -227,6 +227,30 @@ export async function deleteSeasonAction(saisonId: number): Promise<{ error?: st
   return {}
 }
 
+export async function updatePickOwnerAction(
+  pickId: number,
+  newOwnerId: string,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { error } = await supabase
+    .from('pool_draft_picks')
+    .update({ current_owner_id: newOwnerId })
+    .eq('id', pickId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/config')
+  revalidatePath('/poolers')
+  revalidatePath('/repechage')
+  return {}
+}
+
 export async function updateCapAction(
   saisonId: number,
   nhlCap: number,
