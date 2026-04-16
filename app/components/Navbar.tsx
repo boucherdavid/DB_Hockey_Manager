@@ -23,36 +23,30 @@ function CloseIcon() {
   )
 }
 
-export default function Navbar() {
+export default function Navbar({
+  initialUserName,
+  initialIsAdmin,
+}: {
+  initialUserName: string | null
+  initialIsAdmin: boolean
+}) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
-  const [userName, setUserName] = useState<string | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [userName, setUserName] = useState<string | null>(initialUserName)
+  const [isAdmin, setIsAdmin] = useState(initialIsAdmin)
   const [menuOpen, setMenuOpen] = useState(false)
-
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: pooler } = await supabase
-          .from('poolers')
-          .select('name, is_admin')
-          .eq('id', user.id)
-          .single()
-        if (pooler) {
-          setUserName(pooler.name)
-          setIsAdmin(pooler.is_admin)
-        }
-      }
-    }
-    getUser()
-  }, [supabase])
 
   // Ferme le menu mobile lors d'un changement de route
   useEffect(() => {
     setMenuOpen(false)
   }, [pathname])
+
+  // Met à jour l'état local si les props changent (ex: après login/logout côté serveur)
+  useEffect(() => {
+    setUserName(initialUserName)
+    setIsAdmin(initialIsAdmin)
+  }, [initialUserName, initialIsAdmin])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
