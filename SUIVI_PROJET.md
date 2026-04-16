@@ -441,3 +441,30 @@ Transition de saison — correction dans `transitionSeasonAction` (`admin/config
 - `existing_map` dans `import_supabase.py` utilise maintenant les noms normalisés comme clé (évite les doublons causés par les accents + tirets).
 - `is_rookie` dans `import_supabase.py` : uniquement `status == 'ELC'`; les repêchés sans contrat ELC sont gérés exclusivement par `import_drafts.py`.
 - `import_drafts.py` : la synchronisation `is_rookie=True` exclut désormais les joueurs `RFA`/`UFA` (statut établi → plus recrue éligible).
+
+### 2026-04-15 (session 14)
+
+**Responsive mobile — pages de consultation**:
+- `Navbar.tsx`: menu hamburger sur mobile, liens desktop cachés (`hidden md:flex`), fermeture automatique au changement de route.
+- `poolers/[id]/page.tsx`: `overflow-x-auto` sur tous les conteneurs de tables `RosterTable`.
+- `repechage/RepechageTable.tsx`: `overflow-x-auto` sur les tables de rondes et ELC.
+- `statistiques/StatsTable.tsx`: colonnes secondaires masquées sur mobile (`hidden sm:table-cell`) — Tps/M, Pts/MJ pour patineurs; D, DP, B, A pour gardiens.
+- Règle responsive documentée dans `CLAUDE.md`: pages admin desktop-only, pages consultation responsive.
+
+**Déploiement Vercel**:
+- App déployée sur `https://db-hockeypool-manager.vercel.app/`.
+- Toutes les pages protégées derrière une connexion obligatoire via `proxy.ts` (Next.js 16).
+- `proxy.ts`: redirection vers `/login` si non connecté, redirection vers `/` si connecté sur `/login`.
+- `layout.tsx`: fetch de l'utilisateur côté serveur, état auth passé en props à `Navbar` (élimine le flash "Connexion" au premier chargement).
+- Navbar: déconnexion via `window.location.href` pour forcer un rechargement complet et vider les cookies de session.
+
+**Améliorations UI — Statistiques et Contrats LNH**:
+- `StatsTable.tsx`: filtre Attaquants / Défenseurs / Tous ajouté pour l'onglet Patineurs.
+- `JoueursTable.tsx`: bandeaux de position (Attaquants/Défenseurs/Gardiens) en pleine largeur avec couleur secondaire de l'équipe (repli sur primaire si trop pâle). Point de disponibilité déplacé à gauche du nom du joueur; colonne "Dispo" supprimée.
+- Inputs et selects des filtres: ajout de `text-gray-800 bg-white` pour lisibilité sur mobile.
+
+**Pipeline Python — corrections et automatisation**:
+- `scrape_puckpedia.py`: les sections "Buyout & Cap Charges" sont ignorées au scraping (joueurs rachetés non actifs). Les sections "Retained Salary" sont conservées pour reconstituer le cap hit complet des joueurs échangés avec rétention.
+- `import_supabase.py`: `csv_path` rendu relatif à `BASE_DIR` (fix GitHub Actions).
+- Nouveau script `run_pipeline.py`: lance scrape → import_supabase → import_drafts en séquence. Option `--no-scrape` pour import seul.
+- Nouveau workflow `.github/workflows/import.yml`: import automatique chaque lundi 6h UTC + déclenchement manuel. Requiert les secrets `SUPABASE_URL` et `SUPABASE_SERVICE_KEY` dans GitHub.
