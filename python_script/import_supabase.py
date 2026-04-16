@@ -261,7 +261,9 @@ def parse_cap(val):
         return None, None
 
 
-def upload_vers_supabase(csv_path='./PuckPedia_update.csv'):
+def upload_vers_supabase(csv_path=None):
+    if csv_path is None:
+        csv_path = os.path.join(BASE_DIR, 'PuckPedia_update.csv')
     print('\n[INFO] Connexion a Supabase...')
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
