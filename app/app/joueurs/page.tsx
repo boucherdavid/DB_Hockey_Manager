@@ -32,7 +32,27 @@ export type PlayerRow = {
 export default async function JoueursPage() {
   const supabase = await createClient()
 
-  const players = await fetchAllPages<PlayerRow>(async (from, to) =>
+  // Saison active
+  const { data: saison } = await supabase
+    .from('pool_seasons')
+    .select('id')
+    .eq('is_active', true)
+    .single()
+
+  // Joueurs déjà dans un roster actif cette saison (actif, reserviste, ltir, recrue)
+  const takenSet = new Set<number>()
+  if (saison) {
+    const { data: rosters } = await supabase
+      .from('pooler_rosters')
+      .select('player_id')
+      .eq('pool_season_id', saison.id)
+      .eq('is_active', true)
+    for (const row of rosters ?? []) {
+      if (row.player_id) takenSet.add(row.player_id)
+    }
+  }
+
+  const rawPlayers = await fetchAllPages<Omit<PlayerRow, 'is_available'> & { id: number }>(async (from, to) =>
     supabase
       .from('players')
       .select(`
@@ -42,6 +62,12 @@ export default async function JoueursPage() {
       `)
       .range(from, to),
   )
+
+  const players: PlayerRow[] = rawPlayers.map(p => ({
+    ...p,
+    id: String(p.id),
+    is_available: !takenSet.has(p.id),
+  }))
 
   return <JoueursTable players={players} />
 }
