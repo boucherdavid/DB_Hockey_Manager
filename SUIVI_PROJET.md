@@ -453,6 +453,62 @@ Transition de saison — correction dans `transitionSeasonAction` (`admin/config
 
 ---
 
+### 2026-04-16 (session 16)
+
+**Chantier INIT — finalisation**:
+- Nouveau composant `app/app/admin/config/InitTabs.tsx`: regroupe `PicksEditor` et `RookieOverrideManager` dans un panneau à onglets ("Choix de repêchage" / "Banque de recrues").
+- Les deux composants enfants perdent leur propre `bg-white rounded-lg shadow`; le wrapper est maintenant dans `InitTabs`.
+- `page.tsx` mis à jour pour utiliser `InitTabs` à la place des deux composants séparés.
+
+**Décisions d'architecture — validées en session**:
+
+Pool des séries (Chantier E) et Bracket (Chantier F) ajoutés à la feuille de route:
+- **Pool des séries**: 3 attaquants, 2 défenseurs, 1 gardien par ronde; cap ~25 M$; self-service pooler; réassignation obligatoire si équipe éliminée; points via scoring_config.
+- **Bracket**: picks entre chaque ronde (équipes pas connues d'avance); 2 pts bon gagnant + 1 pt bon nombre de matchs; bris d'égalité sur le total de buts par ronde.
+
+Scoring configurable (transversal):
+- Le scoring s'applique à la saison régulière ET aux séries via la même table `scoring_config`.
+- Stats: `goal`, `assist`, `goalie_win`, `goalie_otl`; scope: `regular | playoffs | both`.
+
+Stats joueurs — architecture snapshots retenue:
+- Jamais de game-by-game logs en BD.
+- Table `player_stat_snapshots` (player_id, date, goals, assists, goalie_wins, goalie_otl): snapshot cumulatif NHL capturé automatiquement à chaque activation/désactivation admin.
+- Points pooler = snapshot_désactivation − snapshot_activation.
+- Fin de saison = sync finale pour tous les joueurs actifs.
+- Cette mécanique est nécessaire pour gérer correctement les transactions intra-saison dans le classement.
+
+Séquence de travail avant transition:
+1. Scoring config ✓ (cette session)
+2. Chantier B — Classement + NHL API + snapshots
+3. Saisie des transactions historiques 2025-26
+4. Validation classement vs outil Excel
+5. Chantier TRANSITION
+
+**Scoring config — implémentation**:
+- Migration SQL: `supabase_migrations/scoring_config.sql` (à exécuter dans Supabase).
+- Valeurs par défaut: but=1 pt, passe=1 pt, victoire gardien=2 pts, défaite prol./fusillade=1 pt.
+- Nouveau composant `app/app/admin/config/ScoringConfig.tsx`: formulaire d'édition des points par stat.
+- Nouvelle action `updateScoringAction` dans `actions.ts`.
+- `page.tsx`: query `scoring_config` ajoutée, `ScoringConfig` affiché sous `ConfigForm` dans la colonne droite.
+
+**Migration à exécuter dans Supabase**:
+```sql
+-- Fichier: supabase_migrations/scoring_config.sql
+CREATE TABLE scoring_config (
+  id SERIAL PRIMARY KEY,
+  stat_key VARCHAR(30) UNIQUE NOT NULL,
+  label VARCHAR(100) NOT NULL,
+  points DECIMAL(5,2) NOT NULL DEFAULT 1,
+  scope VARCHAR(20) NOT NULL DEFAULT 'both'
+    CHECK (scope IN ('regular', 'playoffs', 'both'))
+);
+INSERT INTO scoring_config (stat_key, label, points, scope) VALUES
+  ('goal', 'But', 1, 'both'),
+  ('assist', 'Passe', 1, 'both'),
+  ('goalie_win', 'Victoire (gardien)', 2, 'both'),
+  ('goalie_otl', 'Défaite en prol./fusillade (gardien)', 1, 'both');
+```
+
 ### 2026-04-15 (session 14)
 
 **Responsive mobile — pages de consultation**:
