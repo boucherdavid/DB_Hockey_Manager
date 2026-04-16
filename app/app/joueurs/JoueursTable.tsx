@@ -9,7 +9,7 @@ const CURRENT_SEASON = '2025-26'
 const SEASONS = ['2025-26', '2026-27', '2027-28', '2028-29', '2029-30']
 const DASH = '\u2014'
 const STAR = '\u2605'
-const DOT = '\u25CF'
+
 
 const formatCap = (amount: number | null) => {
   if (!amount) return DASH
@@ -150,7 +150,7 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
       .sort(sortProspects)
   }, [prospects, search])
 
-  const totalColumns = 6 + SEASONS.length
+  const totalColumns = 5 + SEASONS.length
 
   return (
     <div>
@@ -244,7 +244,6 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
               {SEASONS.map((season) => (
                 <th key={season} className="text-right px-4 py-3 font-medium text-gray-600">{season}</th>
               ))}
-              <th className="text-center px-4 py-3 font-medium text-gray-600">Dispo</th>
             </tr>
           </thead>
           <tbody>
@@ -300,8 +299,14 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                   })()}
                   <tr className="border-b hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-800">
-                      {player.is_rookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
-                      {player.last_name}, {player.first_name}
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          title={player.is_available ? 'Disponible' : 'Dans un pool'}
+                          className={`inline-block w-2 h-2 rounded-full shrink-0 ${player.is_available ? 'bg-green-500' : 'bg-slate-300'}`}
+                        />
+                        {player.is_rookie && <span className="text-yellow-500">{STAR}</span>}
+                        {player.last_name}, {player.first_name}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <TeamBadge code={player.teams?.code} />
@@ -334,12 +339,6 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                         </td>
                       )
                     })}
-                    <td className="px-4 py-3 text-center">
-                      {player.is_available
-                        ? <span className="text-green-500 text-base">{DOT}</span>
-                        : <span className="text-red-400 text-base">{DOT}</span>
-                      }
-                    </td>
                   </tr>
                 </Fragment>
               )
