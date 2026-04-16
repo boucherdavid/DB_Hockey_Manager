@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import ConfigForm from './ConfigForm'
 import SeasonsManager from './SeasonsManager'
 import PicksEditor, { type Pick, type Pooler } from './PicksEditor'
+import RookieOverrideManager from './RookieOverrideManager'
 
 export default async function AdminConfigPage() {
   const supabase = await createClient()
@@ -70,6 +71,13 @@ export default async function AdminConfigPage() {
           picks={picks}
           poolers={poolerList}
           seasonLabel={activeSaison.season}
+        />
+      )}
+
+      {activeSaison && (
+        <RookieOverrideManager
+          poolers={poolerList}
+          saison={activeSaison}
         />
       )}
     </div>

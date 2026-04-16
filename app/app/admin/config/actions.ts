@@ -227,6 +227,72 @@ export async function deleteSeasonAction(saisonId: number): Promise<{ error?: st
   return {}
 }
 
+export async function addRookieOverrideAction(
+  poolerId: string,
+  playerId: number,
+  seasonId: number,
+  rookieType: 'repcheche' | 'agent_libre',
+  poolDraftYear?: number,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  // Vérifier que le joueur n'est pas déjà dans la banque de ce pooler cette saison
+  const { data: existing } = await supabase
+    .from('pooler_rosters')
+    .select('id')
+    .eq('pooler_id', poolerId)
+    .eq('player_id', playerId)
+    .eq('pool_season_id', seasonId)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (existing) return { error: 'Ce joueur est déjà dans le roster de ce pooler.' }
+
+  const { error } = await supabase.from('pooler_rosters').insert({
+    pooler_id: poolerId,
+    player_id: playerId,
+    pool_season_id: seasonId,
+    player_type: 'recrue',
+    rookie_type: rookieType,
+    pool_draft_year: rookieType === 'repcheche' ? (poolDraftYear ?? null) : null,
+    is_active: true,
+  })
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/config')
+  revalidatePath(`/poolers`)
+  revalidatePath('/admin/recrues')
+  return {}
+}
+
+export async function removeRookieOverrideAction(
+  entryId: number,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { error } = await supabase
+    .from('pooler_rosters')
+    .update({ is_active: false })
+    .eq('id', entryId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/config')
+  revalidatePath('/poolers')
+  revalidatePath('/admin/recrues')
+  return {}
+}
+
 export async function updatePickOwnerAction(
   pickId: number,
   newOwnerId: string,
