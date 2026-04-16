@@ -39,6 +39,7 @@ export default function StatsTable({
   const [search, setSearch] = useState('')
   const [selectedTeam, setSelectedTeam] = useState('')
   const [availOnly, setAvailOnly] = useState(false)
+  const [positionFilter, setPositionFilter] = useState<'all' | 'forward' | 'defense'>('all')
 
   const takenSet = useMemo(() => new Set(takenNames), [takenNames])
 
@@ -59,6 +60,8 @@ export default function StatsTable({
       .filter(s => {
         if (availOnly && !isAvailable(s.firstName, s.lastName)) return false
         if (selectedTeam && s.teamAbbrev !== selectedTeam) return false
+        if (positionFilter === 'defense' && s.position !== 'D') return false
+        if (positionFilter === 'forward' && s.position === 'D') return false
         if (q) {
           const name = `${s.firstName} ${s.lastName}`.toLowerCase()
           const rev = `${s.lastName} ${s.firstName}`.toLowerCase()
@@ -68,7 +71,7 @@ export default function StatsTable({
       })
       .sort((a, b) => b.points - a.points || b.goals - a.goals || a.lastName.localeCompare(b.lastName))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skaters, search, selectedTeam, availOnly, takenSet])
+  }, [skaters, search, selectedTeam, availOnly, positionFilter, takenSet])
 
   const filteredGoalies = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -92,7 +95,7 @@ export default function StatsTable({
       tab === t ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
     }`
 
-  const hasFilters = search || selectedTeam || availOnly
+  const hasFilters = search || selectedTeam || availOnly || positionFilter !== 'all'
 
   return (
     <div>
@@ -142,10 +145,28 @@ export default function StatsTable({
           <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
           Disponibles
         </button>
+        {tab === 'skaters' && (
+          <div className="flex gap-1">
+            {(['all', 'forward', 'defense'] as const).map(pos => (
+              <button
+                key={pos}
+                type="button"
+                onClick={() => setPositionFilter(pos)}
+                className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                  positionFilter === pos
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {pos === 'all' ? 'Tous' : pos === 'forward' ? 'Attaquants' : 'Défenseurs'}
+              </button>
+            ))}
+          </div>
+        )}
         {hasFilters && (
           <button
             type="button"
-            onClick={() => { setSearch(''); setSelectedTeam(''); setAvailOnly(false) }}
+            onClick={() => { setSearch(''); setSelectedTeam(''); setAvailOnly(false); setPositionFilter('all') }}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
           >
             Effacer

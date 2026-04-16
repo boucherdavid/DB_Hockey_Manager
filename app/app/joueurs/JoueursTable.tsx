@@ -277,13 +277,27 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                       </tr>
                     )
                   })()}
-                  {showPosHeader && (
-                    <tr className="bg-white border-t border-slate-100">
-                      <td colSpan={totalColumns} className="px-6 py-1 text-xs font-semibold uppercase tracking-widest text-slate-400">
-                        {POSITION_LABEL[bucket]}
-                      </td>
-                    </tr>
-                  )}
+                  {showPosHeader && (() => {
+                    const colors = teamColor(teamCode)
+                    // Si la couleur secondaire est trop pâle, on utilise la primaire
+                    const hex = colors.secondary.replace('#', '')
+                    const r = parseInt(hex.slice(0, 2), 16)
+                    const g = parseInt(hex.slice(2, 4), 16)
+                    const b = parseInt(hex.slice(4, 6), 16)
+                    const isLight = (r * 299 + g * 587 + b * 114) / 1000 > 180
+                    const bgColor = isLight ? colors.primary : colors.secondary
+                    return (
+                      <tr>
+                        <td
+                          colSpan={totalColumns}
+                          className="px-6 py-1.5 text-xs font-semibold uppercase tracking-wider text-white"
+                          style={{ backgroundColor: bgColor }}
+                        >
+                          {POSITION_LABEL[bucket]}
+                        </td>
+                      </tr>
+                    )
+                  })()}
                   <tr className="border-b hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-800">
                       {player.is_rookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
