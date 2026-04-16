@@ -184,6 +184,12 @@ function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft,
                   return <span className={expired ? 'text-red-500 font-medium' : 'text-gray-600'}>{p}</span>
                 })()}
               </td>
+              <td className="px-3 py-2 text-right w-28 tabular-nums text-gray-400 text-xs">
+                {(() => {
+                  const cap = getCurrentCap(player, season)
+                  return cap > 0 ? formatCap(cap) : DASH
+                })()}
+              </td>
             </>
           : <>
               <td className="px-3 py-2 text-right text-gray-700 w-28 tabular-nums">{formatCap(capNumber)}</td>
@@ -221,6 +227,7 @@ function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft,
               <th className="text-left px-3 py-2 font-medium text-gray-600">Type</th>
               <th className="text-left px-3 py-2 font-medium text-gray-600">Rep. LNH</th>
               <th className="text-left px-3 py-2 font-medium text-gray-600">Protection</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-400 w-28">Cap LNH</th>
             </>
           : <>
               <th className="text-right px-3 py-2 font-medium text-gray-600 w-28">Cap {season}</th>
