@@ -142,8 +142,10 @@ def scraper_depuis_html(fichier_html, sigle):
     all_players = []
     total_detected = 0
 
-    # Sections à ignorer : rachetés et rétentions salariales sortantes
-    SECTIONS_TO_SKIP = ['buyout', 'retained']
+    # Sections à ignorer : rachetés seulement
+    # Les "Retained Salary" sont conservés car ils sont nécessaires pour
+    # reconstituer le cap hit complet des joueurs échangés avec rétention.
+    SECTIONS_TO_SKIP = ['buyout']
 
     for idx, table in enumerate(tables):
         # Détecter le titre de section précédant ce tableau
