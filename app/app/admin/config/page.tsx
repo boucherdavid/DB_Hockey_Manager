@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import ConfigForm from './ConfigForm'
 import SeasonsManager from './SeasonsManager'
 import InitTabs from './InitTabs'
+import ScoringConfig from './ScoringConfig'
 import { type Pick, type Pooler } from './PicksEditor'
 
 export default async function AdminConfigPage() {
@@ -23,6 +24,11 @@ export default async function AdminConfigPage() {
     .order('season', { ascending: false })
 
   const activeSaison = (saisons ?? []).find(s => s.is_active) ?? null
+
+  const { data: scoringRows } = await supabase
+    .from('scoring_config')
+    .select('id, stat_key, label, points, scope')
+    .order('id')
 
   // Charger les poolers et les picks de la saison active
   const [{ data: poolers }, { data: rawPicks }] = await Promise.all([
@@ -58,11 +64,14 @@ export default async function AdminConfigPage() {
         <div className="space-y-6">
           <SeasonsManager saisons={saisons ?? []} />
         </div>
-        <div>
+        <div className="space-y-6">
           {activeSaison
             ? <ConfigForm saison={activeSaison} />
             : <div className="bg-white rounded-lg shadow p-6 text-gray-400">Aucune saison active.</div>
           }
+          {scoringRows && scoringRows.length > 0 && (
+            <ScoringConfig rows={scoringRows} />
+          )}
         </div>
       </div>
 

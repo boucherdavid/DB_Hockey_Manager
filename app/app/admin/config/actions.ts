@@ -317,6 +317,29 @@ export async function updatePickOwnerAction(
   return {}
 }
 
+export async function updateScoringAction(
+  updates: { id: number; points: number }[],
+): Promise<{ error?: string }> {
+  if (updates.some(u => u.points < 0)) return { error: 'Les points ne peuvent pas être négatifs.' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  for (const u of updates) {
+    const { error } = await supabase
+      .from('scoring_config')
+      .update({ points: u.points })
+      .eq('id', u.id)
+    if (error) return { error: error.message }
+  }
+
+  revalidatePath('/admin/config')
+  return {}
+}
+
 export async function updateCapAction(
   saisonId: number,
   nhlCap: number,
