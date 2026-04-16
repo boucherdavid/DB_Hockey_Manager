@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -31,7 +31,7 @@ export default function Navbar({
   initialIsAdmin: boolean
 }) {
   const pathname = usePathname()
-  const router = useRouter()
+
   const supabase = createClient()
   const [userName, setUserName] = useState<string | null>(initialUserName)
   const [isAdmin, setIsAdmin] = useState(initialIsAdmin)
@@ -50,9 +50,7 @@ export default function Navbar({
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    setUserName(null)
-    setIsAdmin(false)
-    router.push('/login')
+    window.location.href = '/login'
   }
 
   const linkClass = (href: string) =>
