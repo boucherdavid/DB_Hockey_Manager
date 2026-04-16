@@ -240,7 +240,7 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
               <th className="text-left px-4 py-3 font-medium text-gray-600">{'\u00c9quipe'}</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Pos</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">{'\u00c2ge'}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{'Exp\u00e9rience'}</th>
               {SEASONS.map((season) => (
                 <th key={season} className="text-right px-4 py-3 font-medium text-gray-600">{season}</th>
               ))}
@@ -304,7 +304,6 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                           title={player.is_available ? 'Disponible' : 'Dans un pool'}
                           className={`inline-block w-2 h-2 rounded-full shrink-0 ${player.is_available ? 'bg-green-500' : 'bg-slate-300'}`}
                         />
-                        {player.is_rookie && <span className="text-yellow-500">{STAR}</span>}
                         {player.last_name}, {player.first_name}
                       </span>
                     </td>
@@ -314,11 +313,10 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                     <td className="px-4 py-3 text-gray-600">{player.position ?? DASH}</td>
                     <td className="px-4 py-3 text-gray-600">{player.age ?? DASH}</td>
                     <td className="px-4 py-3">
-                      {player.status && (
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColor(player.status)}`}>
-                          {player.status}
-                        </span>
-                      )}
+                      {player.status === 'ELC'
+                        ? <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Recrue</span>
+                        : <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">{'V\u00e9t\u00e9ran'}</span>
+                      }
                     </td>
                     {SEASONS.map((season) => {
                       const contract = getContract(season)
