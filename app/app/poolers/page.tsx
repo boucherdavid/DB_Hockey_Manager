@@ -96,10 +96,13 @@ export default async function PoolersPage() {
     .map(([poolerId, { name, players }]) => ({
       poolerId,
       poolerName: name,
-      totalPoints: players.reduce((s, p) => s + p.poolPoints, 0),
+      totalPoints: players
+        .filter(p => p.playerType === 'actif')
+        .reduce((s, p) => s + p.poolPoints, 0),
       players,
     }))
     .sort((a, b) => b.totalPoints - a.totalPoints || a.poolerName.localeCompare(b.poolerName))
+
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
