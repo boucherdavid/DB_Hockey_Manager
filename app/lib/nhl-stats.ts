@@ -25,6 +25,7 @@ export type NhlGoalieStat = {
   gamesStarted: number
   wins: number
   otLosses: number
+  shutouts: number
   goals: number
   assists: number
 }
@@ -115,10 +116,11 @@ export async function fetchNhlGoalies(gameType = 2): Promise<Map<string, NhlGoal
         lastName,
         teamAbbrev: entries.length > 1 ? `${entries.length} TM` : String(main.teamAbbrevs ?? ''),
         gamesStarted: entries.reduce((s, e) => s + Number(e.gamesStarted ?? 0), 0),
-        wins: entries.reduce((s, e) => s + Number(e.wins ?? 0), 0),
-        otLosses: entries.reduce((s, e) => s + Number(e.otLosses ?? 0), 0),
-        goals: entries.reduce((s, e) => s + Number(e.goals ?? 0), 0),
-        assists: entries.reduce((s, e) => s + Number(e.assists ?? 0), 0),
+        wins:         entries.reduce((s, e) => s + Number(e.wins ?? 0), 0),
+        otLosses:     entries.reduce((s, e) => s + Number(e.otLosses ?? 0), 0),
+        shutouts:     entries.reduce((s, e) => s + Number(e.shutouts ?? 0), 0),
+        goals:        entries.reduce((s, e) => s + Number(e.goals ?? 0), 0),
+        assists:      entries.reduce((s, e) => s + Number(e.assists ?? 0), 0),
       })
     }
     return result

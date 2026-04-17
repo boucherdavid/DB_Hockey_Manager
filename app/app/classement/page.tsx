@@ -16,6 +16,7 @@ export type PlayerContrib = {
   assists: number
   goalieWins: number
   goalieOtl: number
+  goalieShutouts: number
   poolPoints: number
 }
 
@@ -65,10 +66,11 @@ export default async function ClassementPage() {
   const scoring: Record<string, number> = {}
   for (const r of scoringRows ?? []) scoring[r.stat_key] = Number(r.points)
   const pts = {
-    goal:       scoring.goal       ?? 1,
-    assist:     scoring.assist     ?? 1,
-    goalie_win: scoring.goalie_win ?? 2,
-    goalie_otl: scoring.goalie_otl ?? 1,
+    goal:           scoring.goal           ?? 1,
+    assist:         scoring.assist         ?? 1,
+    goalie_win:     scoring.goalie_win     ?? 2,
+    goalie_otl:     scoring.goalie_otl     ?? 1,
+    goalie_shutout: scoring.goalie_shutout ?? 2,
   }
 
   // Grouper par pooler
@@ -87,10 +89,11 @@ export default async function ClassementPage() {
     let contrib: PlayerContrib
     if (isGoalie) {
       const stat = goaliesMap.get(key)
-      const wins    = stat?.wins      ?? 0
-      const otl     = stat?.otLosses  ?? 0
-      const goals   = stat?.goals     ?? 0
-      const assists = stat?.assists   ?? 0
+      const wins     = stat?.wins      ?? 0
+      const otl      = stat?.otLosses  ?? 0
+      const shutouts = stat?.shutouts  ?? 0
+      const goals    = stat?.goals     ?? 0
+      const assists  = stat?.assists   ?? 0
       contrib = {
         firstName: player.first_name,
         lastName:  player.last_name,
@@ -101,7 +104,13 @@ export default async function ClassementPage() {
         goals, assists,
         goalieWins: wins,
         goalieOtl:  otl,
-        poolPoints: wins * pts.goalie_win + otl * pts.goalie_otl + goals * pts.goal + assists * pts.assist,
+        goalieShutouts: shutouts,
+        poolPoints:
+          wins * pts.goalie_win +
+          otl  * pts.goalie_otl +
+          shutouts * pts.goalie_shutout +
+          goals * pts.goal +
+          assists * pts.assist,
       }
     } else {
       const stat = skatersMap.get(key)
@@ -117,6 +126,7 @@ export default async function ClassementPage() {
         goals, assists,
         goalieWins: 0,
         goalieOtl:  0,
+        goalieShutouts: 0,
         poolPoints: goals * pts.goal + assists * pts.assist,
       }
     }

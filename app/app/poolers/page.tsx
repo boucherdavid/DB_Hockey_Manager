@@ -44,10 +44,11 @@ export default async function PoolersPage() {
   const scoring: Record<string, number> = {}
   for (const r of scoringRows ?? []) scoring[r.stat_key] = Number(r.points)
   const pts = {
-    goal:       scoring.goal       ?? 1,
-    assist:     scoring.assist     ?? 1,
-    goalie_win: scoring.goalie_win ?? 2,
-    goalie_otl: scoring.goalie_otl ?? 1,
+    goal:           scoring.goal           ?? 1,
+    assist:         scoring.assist         ?? 1,
+    goalie_win:     scoring.goalie_win     ?? 2,
+    goalie_otl:     scoring.goalie_otl     ?? 1,
+    goalie_shutout: scoring.goalie_shutout ?? 2,
   }
 
   const poolerMap = new Map<string, { name: string; players: PoolerStanding['players'] }>()
@@ -63,22 +64,28 @@ export default async function PoolersPage() {
     const key = normName(`${player.first_name} ${player.last_name}`)
 
     if (isGoalie) {
-      const stat = goaliesMap.get(key)
-      const wins = stat?.wins ?? 0
-      const otl  = stat?.otLosses ?? 0
-      const goals = stat?.goals ?? 0
-      const assists = stat?.assists ?? 0
+      const stat     = goaliesMap.get(key)
+      const wins     = stat?.wins     ?? 0
+      const otl      = stat?.otLosses ?? 0
+      const shutouts = stat?.shutouts ?? 0
+      const goals    = stat?.goals    ?? 0
+      const assists  = stat?.assists  ?? 0
       poolerMap.get(pooler.id)!.players.push({
         firstName: player.first_name, lastName: player.last_name,
         position: 'G', playerType: row.player_type,
         teamAbbrev: stat?.teamAbbrev ?? '—',
         gamesPlayed: stat?.gamesStarted ?? 0,
-        goals, assists, goalieWins: wins, goalieOtl: otl,
-        poolPoints: wins * pts.goalie_win + otl * pts.goalie_otl + goals * pts.goal + assists * pts.assist,
+        goals, assists, goalieWins: wins, goalieOtl: otl, goalieShutouts: shutouts,
+        poolPoints:
+          wins * pts.goalie_win +
+          otl  * pts.goalie_otl +
+          shutouts * pts.goalie_shutout +
+          goals * pts.goal +
+          assists * pts.assist,
       })
     } else {
-      const stat = skatersMap.get(key)
-      const goals = stat?.goals ?? 0
+      const stat    = skatersMap.get(key)
+      const goals   = stat?.goals   ?? 0
       const assists = stat?.assists ?? 0
       poolerMap.get(pooler.id)!.players.push({
         firstName: player.first_name, lastName: player.last_name,
@@ -86,7 +93,7 @@ export default async function PoolersPage() {
         playerType: row.player_type,
         teamAbbrev: stat?.teamAbbrev ?? '—',
         gamesPlayed: stat?.gamesPlayed ?? 0,
-        goals, assists, goalieWins: 0, goalieOtl: 0,
+        goals, assists, goalieWins: 0, goalieOtl: 0, goalieShutouts: 0,
         poolPoints: goals * pts.goal + assists * pts.assist,
       })
     }

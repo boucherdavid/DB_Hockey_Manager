@@ -45,15 +45,17 @@ function PlayerRow({ p }: { p: PlayerContrib }) {
       <td className="px-2 py-2 text-center text-gray-500">{p.gamesPlayed || '—'}</td>
       {isGoalie ? (
         <>
-          <td className="px-2 py-2 text-center text-gray-400">—</td>
-          <td className="px-2 py-2 text-center text-gray-400">—</td>
+          <td className="px-2 py-2 text-center text-gray-500">{p.goals || '—'}</td>
+          <td className="px-2 py-2 text-center text-gray-500">{p.assists || '—'}</td>
           <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{p.goalieWins}</td>
           <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{p.goalieOtl}</td>
+          <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{p.goalieShutouts || '—'}</td>
         </>
       ) : (
         <>
           <td className="px-2 py-2 text-center text-gray-500">{p.goals}</td>
           <td className="px-2 py-2 text-center text-gray-500">{p.assists}</td>
+          <td className="px-2 py-2 text-center text-gray-400 hidden sm:table-cell">—</td>
           <td className="px-2 py-2 text-center text-gray-400 hidden sm:table-cell">—</td>
           <td className="px-2 py-2 text-center text-gray-400 hidden sm:table-cell">—</td>
         </>
@@ -68,7 +70,7 @@ function PlayerRow({ p }: { p: PlayerContrib }) {
 function GroupHeader({ label }: { label: string }) {
   return (
     <tr className="bg-gray-100">
-      <td colSpan={8} className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+      <td colSpan={9} className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
         {label}
       </td>
     </tr>
@@ -125,6 +127,7 @@ export default function ClassementTable({ standings }: { standings: PoolerStandi
                       <th className="px-2 py-2">A</th>
                       <th className="px-2 py-2 hidden sm:table-cell">V</th>
                       <th className="px-2 py-2 hidden sm:table-cell">DP</th>
+                      <th className="px-2 py-2 hidden sm:table-cell">BL</th>
                       <th className="px-2 py-2 text-blue-500">Pts</th>
                     </tr>
                   </thead>
@@ -143,7 +146,7 @@ export default function ClassementTable({ standings }: { standings: PoolerStandi
                   </tbody>
                   <tfoot>
                     <tr className="bg-blue-50 border-t">
-                      <td colSpan={7} className="px-4 py-2 text-sm font-medium">
+                      <td colSpan={8} className="px-4 py-2 text-sm font-medium">
                         <Link href={`/poolers/${pooler.poolerId}`} className="text-blue-600 hover:underline">
                           Voir l'alignement complet →
                         </Link>
