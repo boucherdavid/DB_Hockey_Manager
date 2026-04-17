@@ -1,11 +1,18 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import Navbar from '@/components/Navbar'
+import ServiceWorkerProvider from '@/components/ServiceWorkerProvider'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = {
   title: 'Hockey Pool',
   description: 'Gestion de pool de hockey long terme',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Pool Hockey',
+  },
 }
 
 export default async function RootLayout({
@@ -34,6 +41,7 @@ export default async function RootLayout({
   return (
     <html lang="fr">
       <body className="bg-gray-50 min-h-screen">
+        <ServiceWorkerProvider />
         <Navbar initialUserName={userName} initialIsAdmin={isAdmin} />
         <main className="max-w-7xl mx-auto px-4 py-6">
           {children}
