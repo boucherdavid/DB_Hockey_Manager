@@ -36,6 +36,23 @@ export default function Navbar({
   const [userName, setUserName] = useState<string | null>(initialUserName)
   const [isAdmin, setIsAdmin] = useState(initialIsAdmin)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null)
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault()
+      setInstallPrompt(e)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  const handleInstall = async () => {
+    if (!installPrompt) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (installPrompt as any).prompt()
+    setInstallPrompt(null)
+  }
 
   // Ferme le menu mobile lors d'un changement de route
   useEffect(() => {
@@ -107,6 +124,14 @@ export default function Navbar({
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
+            {installPrompt && (
+              <button
+                onClick={handleInstall}
+                className="text-blue-200 hover:text-white text-sm border border-blue-500 rounded px-2 py-1"
+              >
+                Installer
+              </button>
+            )}
             {/* Authentification */}
             {userName ? (
               <>
