@@ -1,11 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-
-const HOCKEY_STICK = '\uD83C\uDFD2'
 
 function HamburgerIcon() {
   return (
@@ -73,15 +72,15 @@ export default function Navbar({
   const linkClass = (href: string) =>
     `px-3 py-2 rounded text-sm font-medium transition-colors ${
       pathname === href
-        ? 'bg-blue-700 text-white'
-        : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+        ? 'bg-pool-navy-light text-white'
+        : 'text-pool-light hover:bg-pool-navy-light hover:text-white'
     }`
 
   const mobileLinkClass = (href: string) =>
     `block px-3 py-2 rounded text-sm font-medium transition-colors ${
       pathname === href
-        ? 'bg-blue-700 text-white'
-        : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+        ? 'bg-pool-navy-light text-white'
+        : 'text-pool-light hover:bg-pool-navy-light hover:text-white'
     }`
 
   const navLinks = (
@@ -109,13 +108,14 @@ export default function Navbar({
   )
 
   return (
-    <nav className="bg-blue-800 shadow">
+    <nav className="bg-pool-navy shadow">
       <div className="max-w-7xl mx-auto px-4">
         {/* Barre principale */}
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-1 min-w-0">
-            <Link href="/" className="text-white font-bold text-lg mr-4 shrink-0">
-              {`${HOCKEY_STICK} Hockey Pool`}
+            <Link href="/" className="flex items-center gap-2 text-white font-bold text-sm mr-4 shrink-0 hover:opacity-80 transition-opacity">
+              <Image src="/icons/icon-192x192.png" alt="Logo" width={32} height={32} className="rounded" />
+              <span className="hidden sm:inline">{"Page d\u2019accueil"}</span>
             </Link>
             {/* Liens desktop — cachés sur mobile */}
             <div className="hidden md:flex items-center gap-1">
@@ -127,7 +127,7 @@ export default function Navbar({
             {installPrompt && (
               <button
                 onClick={handleInstall}
-                className="text-blue-200 hover:text-white text-sm border border-blue-500 rounded px-2 py-1"
+                className="text-pool-silver hover:text-white text-sm border border-pool-silver rounded px-2 py-1 transition-colors"
               >
                 Installer
               </button>
@@ -135,19 +135,19 @@ export default function Navbar({
             {/* Authentification */}
             {userName ? (
               <>
-                <span className="text-blue-200 text-sm hidden sm:inline">{userName}</span>
-                <button onClick={handleLogout} className="text-blue-200 hover:text-white text-sm">
+                <span className="text-pool-silver text-sm hidden sm:inline">{userName}</span>
+                <button onClick={handleLogout} className="text-pool-silver hover:text-white text-sm transition-colors">
                   {'D\u00e9connexion'}
                 </button>
               </>
             ) : (
-              <Link href="/login" className="text-blue-200 hover:text-white text-sm">
+              <Link href="/login" className="text-pool-silver hover:text-white text-sm transition-colors">
                 Connexion
               </Link>
             )}
             {/* Bouton hamburger — visible uniquement sur mobile */}
             <button
-              className="md:hidden text-white p-1 rounded hover:bg-blue-700 transition-colors"
+              className="md:hidden text-white p-1 rounded hover:bg-pool-navy-light transition-colors"
               onClick={() => setMenuOpen(v => !v)}
               aria-label={menuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
             >
@@ -158,11 +158,11 @@ export default function Navbar({
 
         {/* Menu mobile déroulant */}
         {menuOpen && (
-          <div className="md:hidden border-t border-blue-700 py-2 flex flex-col gap-1">
+          <div className="md:hidden border-t border-pool-navy-light py-2 flex flex-col gap-1">
             {mobileNavLinks}
             {userName && (
-              <div className="mt-2 pt-2 border-t border-blue-700">
-                <span className="block px-3 py-1 text-blue-300 text-sm">{userName}</span>
+              <div className="mt-2 pt-2 border-t border-pool-navy-light">
+                <span className="block px-3 py-1 text-pool-silver text-sm">{userName}</span>
               </div>
             )}
           </div>

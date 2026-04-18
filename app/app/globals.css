@@ -10,6 +10,12 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Palette du logo DBHM */
+  --color-pool-navy:       #172437;
+  --color-pool-navy-light: #1e3350;
+  --color-pool-silver:     #acb4bc;
+  --color-pool-light:      #e7e5e6;
 }
 
 @media (prefers-color-scheme: dark) {
