@@ -8,6 +8,11 @@ on:
   schedule:
     - cron: '0 6 * * 1'
 
+  # Déclenchement automatique à chaque push de CSV d'équipe
+  push:
+    paths:
+      - 'python_script/teams_offline/**.csv'
+
 jobs:
   import:
     name: Import joueurs, contrats et repêchage
