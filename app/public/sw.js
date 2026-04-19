@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hockey-pool-v1'
+const CACHE_NAME = 'hockey-pool-v2'
 const STATIC_ASSETS = ['/', '/offline']
 
 self.addEventListener('install', (event) => {
@@ -9,7 +9,6 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  // Supprimer les anciens caches
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
@@ -19,9 +18,11 @@ self.addEventListener('activate', (event) => {
 })
 
 self.addEventListener('fetch', (event) => {
-  // Ne pas intercepter les requêtes Supabase, API NHL ou admin
   const url = event.request.url
+
+  // Ne pas intercepter les requêtes Supabase, API NHL, admin ou non-GET
   if (
+    event.request.method !== 'GET' ||
     url.includes('supabase') ||
     url.includes('nhle.com') ||
     url.includes('/api/') ||
@@ -31,6 +32,9 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached
+      return fetch(event.request).catch(() => caches.match('/offline'))
+    })
   )
 })
