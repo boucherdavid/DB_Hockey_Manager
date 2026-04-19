@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import RepechageTable from './RepechageTable'
 
+export const dynamic = 'force-dynamic'
+
 const PROTECTION_SEASONS = 5
 const NHL_RECORDS_URL = 'https://records.nhl.com/site/api/draft'
 
@@ -74,6 +76,17 @@ export default async function RepechagePage() {
   const normName = (s: string) =>
     (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, ' ').trim()
 
+  // Récupérer les noms des joueurs en roster via requête directe (plus fiable que le join)
+  const rosterPlayerIds = [...new Set(
+    (rosterEntries ?? []).map((e: any) => e.player_id as number).filter(Boolean)
+  )]
+  const { data: rosterPlayerData } = rosterPlayerIds.length > 0
+    ? await supabase.from('players').select('id, first_name, last_name').in('id', rosterPlayerIds)
+    : { data: [] }
+  const rosterPlayerNames = new Map<number, { first_name: string; last_name: string }>(
+    (rosterPlayerData ?? []).map((p: any) => [p.id as number, { first_name: p.first_name, last_name: p.last_name }])
+  )
+
   // Maps pour les joueurs dans la banque de recrues
   const poolerByPlayerId = new Map<number, string>()
   const poolerByNormName = new Map<string, number>() // nom normalisé → player_id
@@ -83,7 +96,7 @@ export default async function RepechagePage() {
     const poolerName = (entry as any).poolers?.name as string
     if (pid && poolerName) {
       poolerByPlayerId.set(pid, poolerName)
-      const player = (entry as any).players
+      const player = (entry as any).players ?? rosterPlayerNames.get(pid)
       if (player) {
         const key = `${normName(player.first_name)} ${normName(player.last_name)}`
         poolerByNormName.set(key, pid)

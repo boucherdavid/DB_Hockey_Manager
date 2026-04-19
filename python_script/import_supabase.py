@@ -528,6 +528,9 @@ def upload_vers_supabase(csv_path=None):
         except Exception as e:
             print(f'[ERREUR CONTRAT] Batch {i//BATCH_SIZE + 1}: {e}')
 
+    # Second passage de dédup : nettoie les doublons créés par les inserts ci-dessus
+    deduplicate_players(supabase)
+
     print('\n[OK] Import termine!')
     print(f'     Joueurs inseres   : {nb_inserts}')
     print(f'     Joueurs mis a jour: {nb_updates}')
