@@ -367,7 +367,7 @@ def upload_vers_supabase(csv_path=None):
         if player_info:
             players_to_update.append((player_info['id'], payload))
         else:
-            players_to_insert.append((key_name, payload))
+            players_to_insert.append((key_team, payload))
 
     print(f'[INFO] A inserer: {len(players_to_insert)} | A mettre a jour: {len(players_to_update)}')
 
