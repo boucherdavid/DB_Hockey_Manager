@@ -99,10 +99,12 @@ export default async function RepechagePage() {
       const dbKey = `${p.draftYear}|${p.overallPickNumber}`
       let dbPlayerId = dbPickMap.get(dbKey) ?? null
 
-      // Fallback par nom si la clé draft_year|overall ne correspond pas (draft info manquante en DB)
-      if (!dbPlayerId) {
+      // Si le joueur trouvé par draft_year|overall n'est pas dans un roster actif,
+      // essayer par nom (cas de doublon : draft info sur le mauvais enregistrement)
+      if (!dbPlayerId || !poolerByPlayerId.has(dbPlayerId)) {
         const nameKey = `${normName(p.firstName)} ${normName(p.lastName)}`
-        dbPlayerId = poolerByNormName.get(nameKey) ?? null
+        const namePlayerId = poolerByNormName.get(nameKey) ?? null
+        if (namePlayerId) dbPlayerId = namePlayerId
       }
 
       if (dbPlayerId) matchedPlayerIds.add(dbPlayerId)
