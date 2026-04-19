@@ -97,6 +97,7 @@ export default function Navbar({
       <Link href="/poolers" className={linkClass('/poolers')}>Classement</Link>
       <Link href="/transactions" className={linkClass('/transactions')}>Transactions</Link>
       {userName && <Link href="/dashboard" className={linkClass('/dashboard')}>Mon alignement</Link>}
+      {userName && <Link href="/signaler" className={linkClass('/signaler')}>Signaler</Link>}
       {isAdmin && <Link href="/admin" className={linkClass('/admin')}>Admin</Link>}
     </>
   )
@@ -109,6 +110,7 @@ export default function Navbar({
       <Link href="/poolers" className={mobileLinkClass('/poolers')}>Classement</Link>
       <Link href="/transactions" className={mobileLinkClass('/transactions')}>Transactions</Link>
       {userName && <Link href="/dashboard" className={mobileLinkClass('/dashboard')}>Mon alignement</Link>}
+      {userName && <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler</Link>}
       {isAdmin && <Link href="/admin" className={mobileLinkClass('/admin')}>Admin</Link>}
     </>
   )

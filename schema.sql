@@ -361,3 +361,25 @@ CREATE POLICY "Lecture changements propres" ON roster_changes FOR SELECT USING (
 -- Un pooler peut voir et modifier son propre profil
 CREATE POLICY "Pooler gère son profil" ON poolers FOR ALL
   USING (id = auth.uid() OR EXISTS (SELECT 1 FROM poolers WHERE id = auth.uid() AND is_admin = true));
+
+-- Retours des poolers (bugs, suggestions)
+CREATE TABLE feedback (
+  id SERIAL PRIMARY KEY,
+  pooler_id UUID REFERENCES poolers(id) ON DELETE SET NULL,
+  type VARCHAR(20) NOT NULL CHECK (type IN ('bug', 'suggestion', 'autre')),
+  description TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'nouveau' CHECK (status IN ('nouveau', 'lu', 'résolu')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+
+-- Un pooler peut soumettre et voir ses propres retours
+CREATE POLICY "Pooler soumet feedback" ON feedback FOR INSERT
+  WITH CHECK (pooler_id = auth.uid());
+CREATE POLICY "Pooler voit son feedback" ON feedback FOR SELECT
+  USING (pooler_id = auth.uid() OR EXISTS (SELECT 1 FROM poolers WHERE id = auth.uid() AND is_admin = true));
+
+-- Seul l'admin peut tout voir et modifier
+CREATE POLICY "Admin gère feedback" ON feedback FOR ALL
+  USING (EXISTS (SELECT 1 FROM poolers WHERE id = auth.uid() AND is_admin = true));
