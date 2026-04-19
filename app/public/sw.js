@@ -1,9 +1,9 @@
-const CACHE_NAME = 'hockey-pool-v2'
-const STATIC_ASSETS = ['/', '/offline']
+const CACHE_NAME = 'hockey-pool-v3'
 
 self.addEventListener('install', (event) => {
+  // On cache uniquement la page offline — pas '/' qui requiert une auth
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME).then((cache) => cache.add('/offline'))
   )
   self.skipWaiting()
 })
@@ -20,7 +20,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url
 
-  // Ne pas intercepter les requêtes Supabase, API NHL, admin ou non-GET
+  // Ne pas intercepter : non-GET, Supabase, API, admin
   if (
     event.request.method !== 'GET' ||
     url.includes('supabase') ||
@@ -31,6 +31,16 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Pages HTML : network-first (contenu authentifié, jamais mis en cache)
+  const isNavigation = event.request.mode === 'navigate'
+  if (isNavigation) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/offline'))
+    )
+    return
+  }
+
+  // Assets statiques : cache-first
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached
