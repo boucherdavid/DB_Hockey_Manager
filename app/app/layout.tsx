@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import Navbar from '@/components/Navbar'
+import InstallBanner from '@/components/InstallBanner'
 import ServiceWorkerProvider from '@/components/ServiceWorkerProvider'
 import { createClient } from '@/lib/supabase/server'
 
@@ -59,6 +60,7 @@ export default async function RootLayout({
       <body className="bg-gray-50 min-h-screen">
         <ServiceWorkerProvider />
         <Navbar initialUserName={userName} initialIsAdmin={isAdmin} />
+        <InstallBanner />
         <main className="max-w-7xl mx-auto px-4 py-6">
           {children}
         </main>
