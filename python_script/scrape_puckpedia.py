@@ -213,6 +213,17 @@ def scraper_depuis_html(fichier_html, sigle):
                 if "goalie" in raw_text or "goaltender" in raw_text or "g " in raw_text or raw_text.endswith(" g"):
                     position = "G"
 
+            # 🎓 Détection ELC depuis la cellule du nom du joueur
+            first_cell_html = str(cells[0])
+            is_elc_player = (
+                'data-content="Entry Level Contract"' in first_cell_html
+                or "pp-elc" in first_cell_html
+                or 'title="Entry Level Contract"' in first_cell_html
+                or 'alt="ELC"' in first_cell_html
+                or 'class="elc"' in first_cell_html
+                or "entry level" in first_cell_html.lower()
+            )
+
             # 💰 Extraction des salaires + détection ELC par cellule
             salaries = {}
             statut = ""
@@ -230,16 +241,26 @@ def scraper_depuis_html(fichier_html, sigle):
                     except:
                         salaries[year] = val if val else "FA"
 
-                    # 🎓 Détection ELC par cellule
+                    # 🎓 Détection ELC par cellule (plusieurs variantes HTML)
                     cell_html = str(cell)
-                    if 'data-content="Entry Level Contract"' in cell_html:
+                    if (
+                        'data-content="Entry Level Contract"' in cell_html
+                        or "pp-elc" in cell_html
+                        or 'title="Entry Level Contract"' in cell_html
+                        or "entry level" in cell_html.lower()
+                    ):
                         elc_saisons.append(year)
+                        is_elc_player = True
                 else:
                     salaries[year] = "FA"
 
             # Statut global ELC si au moins une saison est ELC
-            if elc_saisons:
+            if is_elc_player or elc_saisons:
                 statut = "ELC"
+                # Si ELC détecté au niveau joueur mais pas par cellule,
+                # marquer toutes les saisons avec salaire non-nul comme ELC
+                if is_elc_player and not elc_saisons:
+                    elc_saisons = [y for y in year_labels if isinstance(salaries.get(y), int) and salaries[y] > 0]
 
             # 🔍 Détection UFA/RFA
             for i, year in enumerate(year_labels):

@@ -337,6 +337,25 @@ def upload_vers_supabase(csv_path=None):
             if first_val in ['UFA', 'RFA']:
                 status = first_val
 
+        # Heuristique ELC : si le scraper n'a rien détecté, inférer à partir
+        # du salaire (≤ 975 000$) + âge (≤ 25) + contrat se terminant en RFA.
+        # Couvre les cas où PuckPedia change son HTML entre deux scrapes.
+        if not status and age and age <= 25:
+            cap_vals = [row.get(s, '') for s in season_cols]
+            numeric_vals = []
+            terminal_status = None
+            for v in cap_vals:
+                sv = str(v).strip().upper()
+                if sv in ('RFA', 'UFA'):
+                    terminal_status = sv
+                    break
+                try:
+                    numeric_vals.append(int(float(sv.replace('$', '').replace(',', ''))))
+                except Exception:
+                    pass
+            if numeric_vals and terminal_status == 'RFA' and max(numeric_vals) <= 975000:
+                status = 'ELC'
+
         payload = {
             'first_name': first_name,
             'last_name': last_name,
