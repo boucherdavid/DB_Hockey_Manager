@@ -266,6 +266,13 @@ def parse_cap(val):
         return None, None
 
 
+def _merge(supabase, keep_id, dup_id):
+    supabase.table('pooler_rosters').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
+    supabase.table('roster_changes').update({'player_in_id': keep_id}).eq('player_in_id', dup_id).execute()
+    supabase.table('roster_changes').update({'player_out_id': keep_id}).eq('player_out_id', dup_id).execute()
+    supabase.table('players').delete().eq('id', dup_id).execute()
+
+
 def deduplicate_players(supabase):
     """Détecte et fusionne les doublons joueurs (même nom normalisé + même équipe).
     Conserve l'enregistrement avec le plus petit ID (le plus ancien), migre les
@@ -281,29 +288,46 @@ def deduplicate_players(supabase):
             break
         offset += 1000
 
-    # Grouper par clé normalisée nom+équipe
-    groups = {}
+    # Grouper par nom normalisé seulement
+    by_name = {}
     for p in all_players:
         fn = normaliser_nom(p['first_name'])
         ln = normaliser_nom(p['last_name'])
-        tid = p['team_id'] or 0
-        key = f'{fn}|{ln}|{tid}'
-        groups.setdefault(key, []).append(p['id'])
+        by_name.setdefault(f'{fn}|{ln}', []).append(p)
 
     nb_fusions = 0
-    for key, ids in groups.items():
-        if len(ids) < 2:
+    for name_key, players in by_name.items():
+        if len(players) < 2:
             continue
-        ids_sorted = sorted(ids)
-        keep_id = ids_sorted[0]
-        to_delete = ids_sorted[1:]
-        print(f'[DEDUP] Doublon détecté ({key}): conserver {keep_id}, supprimer {to_delete}')
-        for dup_id in to_delete:
-            supabase.table('pooler_rosters').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
-            supabase.table('roster_changes').update({'player_in_id': keep_id}).eq('player_in_id', dup_id).execute()
-            supabase.table('roster_changes').update({'player_out_id': keep_id}).eq('player_out_id', dup_id).execute()
-            supabase.table('players').delete().eq('id', dup_id).execute()
-            nb_fusions += 1
+
+        # Regrouper par team_id (None compte comme équipe distincte)
+        by_team = {}
+        for p in players:
+            tid = p['team_id']
+            by_team.setdefault(tid, []).append(p['id'])
+
+        # Cas 1 : plusieurs entrées pour la même équipe → doublons directs
+        for tid, ids in by_team.items():
+            if len(ids) < 2:
+                continue
+            ids_sorted = sorted(ids)
+            keep_id = ids_sorted[0]
+            for dup_id in ids_sorted[1:]:
+                print(f'[DEDUP] Doublon même équipe ({name_key}|{tid}): conserver {keep_id}, supprimer {dup_id}')
+                _merge(supabase, keep_id, dup_id)
+                nb_fusions += 1
+
+        # Cas 2 : une entrée sans équipe (team_id=None) + une avec équipe → fusionner
+        if None in by_team:
+            null_ids = sorted(by_team[None])
+            real_teams = {tid: sorted(ids) for tid, ids in by_team.items() if tid is not None}
+            if len(real_teams) == 1:
+                # Un seul joueur réel avec équipe → les entrées sans équipe sont des doublons
+                real_id = list(real_teams.values())[0][0]
+                for dup_id in null_ids:
+                    print(f'[DEDUP] Doublon sans équipe ({name_key}): conserver {real_id}, supprimer {dup_id}')
+                    _merge(supabase, real_id, dup_id)
+                    nb_fusions += 1
 
     if nb_fusions:
         print(f'[DEDUP] {nb_fusions} doublon(s) supprimé(s).')
