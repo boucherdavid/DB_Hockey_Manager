@@ -38,6 +38,12 @@ export default function Navbar({
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null)
 
   useEffect(() => {
+    // Récupère l'événement capturé avant hydratation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).__pwaPrompt) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setInstallPrompt((window as any).__pwaPrompt)
+    }
     const handler = (e: Event) => {
       e.preventDefault()
       setInstallPrompt(e)

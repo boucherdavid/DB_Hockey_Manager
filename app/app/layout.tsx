@@ -47,6 +47,15 @@ export default async function RootLayout({
 
   return (
     <html lang="fr">
+      <head>
+        {/* Capture beforeinstallprompt avant l'hydratation React */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            window.__pwaPrompt = e;
+          });
+        `}} />
+      </head>
       <body className="bg-gray-50 min-h-screen">
         <ServiceWorkerProvider />
         <Navbar initialUserName={userName} initialIsAdmin={isAdmin} />
