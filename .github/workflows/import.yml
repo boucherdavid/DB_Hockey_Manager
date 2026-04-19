@@ -1,5 +1,8 @@
 name: Import données pool
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   # Déclenchement manuel depuis l'onglet Actions sur GitHub
   workflow_dispatch:
