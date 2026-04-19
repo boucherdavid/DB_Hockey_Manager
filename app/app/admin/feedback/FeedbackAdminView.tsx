@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+
 const TYPE_LABELS: Record<string, string> = {
   bug: 'Problème',
   suggestion: 'Suggestion',
@@ -28,14 +30,15 @@ function getPoolerName(poolers: Feedback['poolers']): string {
 }
 
 export default function FeedbackAdminView({ feedbacks }: { feedbacks: Feedback[] }) {
-  const exportMarkdown = () => {
+  const [copied, setCopied] = useState(false)
+
+  const buildMarkdown = () => {
     const lines: string[] = [
       '# Retours des poolers',
       '',
       `_Exporté le ${new Date().toLocaleDateString('fr-CA')}_`,
       '',
     ]
-
     for (const f of feedbacks) {
       const date = new Date(f.created_at).toLocaleDateString('fr-CA')
       const poolerName = getPoolerName(f.poolers)
@@ -46,8 +49,11 @@ export default function FeedbackAdminView({ feedbacks }: { feedbacks: Feedback[]
       lines.push('---')
       lines.push('')
     }
+    return lines.join('\n')
+  }
 
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+  const exportMarkdown = () => {
+    const blob = new Blob([buildMarkdown()], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -60,14 +66,28 @@ export default function FeedbackAdminView({ feedbacks }: { feedbacks: Feedback[]
     return <p className="text-gray-400 text-sm">Aucun retour pour l&apos;instant.</p>
   }
 
+  const copyMarkdown = async () => {
+    await navigator.clipboard.writeText(buildMarkdown())
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <div>
-      <button
-        onClick={exportMarkdown}
-        className="mb-6 px-4 py-2 bg-pool-navy text-white text-sm font-medium rounded-lg hover:bg-pool-navy-light transition-colors"
-      >
-        Exporter en .md
-      </button>
+      <div className="flex gap-3 mb-6">
+        <button
+          onClick={exportMarkdown}
+          className="px-4 py-2 bg-pool-navy text-white text-sm font-medium rounded-lg hover:bg-pool-navy-light transition-colors"
+        >
+          Exporter en .md
+        </button>
+        <button
+          onClick={copyMarkdown}
+          className="px-4 py-2 border border-pool-navy text-pool-navy text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          {copied ? 'Copié ✓' : 'Copier le contenu'}
+        </button>
+      </div>
 
       <div className="flex flex-col gap-4">
         {feedbacks.map(f => (
