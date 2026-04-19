@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Hockey Pool',
-    short_name: 'Pool Hockey',
+    name: 'DB Hockey Manager',
+    short_name: 'DB Hockey',
     description: 'Gestion de pool de hockey long terme',
     start_url: '/',
     display: 'standalone',

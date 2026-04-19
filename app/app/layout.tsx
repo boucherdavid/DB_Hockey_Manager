@@ -6,7 +6,7 @@ import ServiceWorkerProvider from '@/components/ServiceWorkerProvider'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = {
-  title: 'Hockey Pool',
+  title: 'DB Hockey Manager',
   description: 'Gestion de pool de hockey long terme',
   manifest: '/manifest.webmanifest',
   icons: {
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Pool Hockey',
+    title: 'DB Hockey Manager',
   },
 }
 
