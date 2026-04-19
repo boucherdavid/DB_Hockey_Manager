@@ -266,6 +266,50 @@ def parse_cap(val):
         return None, None
 
 
+def deduplicate_players(supabase):
+    """Détecte et fusionne les doublons joueurs (même nom normalisé + même équipe).
+    Conserve l'enregistrement avec le plus petit ID (le plus ancien), migre les
+    références pooler_rosters et roster_changes, puis supprime le doublon."""
+    print('\n[DEDUP] Recherche de doublons joueurs...')
+
+    all_players = []
+    offset = 0
+    while True:
+        batch = supabase.table('players').select('id, first_name, last_name, team_id').range(offset, offset + 999).execute().data
+        all_players.extend(batch)
+        if len(batch) < 1000:
+            break
+        offset += 1000
+
+    # Grouper par clé normalisée nom+équipe
+    groups = {}
+    for p in all_players:
+        fn = normaliser_nom(p['first_name'])
+        ln = normaliser_nom(p['last_name'])
+        tid = p['team_id'] or 0
+        key = f'{fn}|{ln}|{tid}'
+        groups.setdefault(key, []).append(p['id'])
+
+    nb_fusions = 0
+    for key, ids in groups.items():
+        if len(ids) < 2:
+            continue
+        ids_sorted = sorted(ids)
+        keep_id = ids_sorted[0]
+        to_delete = ids_sorted[1:]
+        print(f'[DEDUP] Doublon détecté ({key}): conserver {keep_id}, supprimer {to_delete}')
+        for dup_id in to_delete:
+            supabase.table('pooler_rosters').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
+            supabase.table('roster_changes').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
+            supabase.table('players').delete().eq('id', dup_id).execute()
+            nb_fusions += 1
+
+    if nb_fusions:
+        print(f'[DEDUP] {nb_fusions} doublon(s) supprimé(s).')
+    else:
+        print('[DEDUP] Aucun doublon trouvé.')
+
+
 def upload_vers_supabase(csv_path=None):
     if csv_path is None:
         csv_path = os.path.join(BASE_DIR, 'PuckPedia_update.csv')
@@ -292,6 +336,8 @@ def upload_vers_supabase(csv_path=None):
     print(f'[INFO] {len(df)} joueurs apres fusion')
 
     teams_map = {t['code']: t['id'] for t in supabase.table('teams').select('id, code').execute().data}
+
+    deduplicate_players(supabase)
 
     # Clé primaire : nom|equipe  (distingue les homonymes comme les deux Sebastian Aho)
     # Clé secondaire : nom seul → liste, utilisée comme fallback si non-ambigu
