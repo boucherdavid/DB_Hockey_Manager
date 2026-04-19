@@ -300,7 +300,8 @@ def deduplicate_players(supabase):
         print(f'[DEDUP] Doublon détecté ({key}): conserver {keep_id}, supprimer {to_delete}')
         for dup_id in to_delete:
             supabase.table('pooler_rosters').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
-            supabase.table('roster_changes').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
+            supabase.table('roster_changes').update({'player_in_id': keep_id}).eq('player_in_id', dup_id).execute()
+            supabase.table('roster_changes').update({'player_out_id': keep_id}).eq('player_out_id', dup_id).execute()
             supabase.table('players').delete().eq('id', dup_id).execute()
             nb_fusions += 1
 
