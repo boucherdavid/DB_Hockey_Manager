@@ -167,7 +167,7 @@ async function fetchGoalies(gameType: number): Promise<GoalieStat[]> {
 
 /** Noms normalisés */
 function normName(s: string) {
-  return s.toLowerCase().replace(/-/g, ' ').trim()
+  return (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, ' ').trim()
 }
 
 /** Noms normalisés des joueurs sur un contrat ELC */

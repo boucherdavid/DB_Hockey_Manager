@@ -46,11 +46,11 @@ export default async function RepechagePage() {
     .eq('is_active', true)
     .single()
 
-  // Banque de recrues active : player_id → pooler name
+  // Banque de recrues active : player_id → pooler name + infos joueur pour fallback
   const { data: rosterEntries } = saison
     ? await supabase
         .from('pooler_rosters')
-        .select('player_id, poolers(name)')
+        .select('player_id, players(first_name, last_name, position), poolers(name)')
         .eq('pool_season_id', saison.id)
         .eq('player_type', 'recrue')
         .eq('is_active', true)
@@ -63,7 +63,7 @@ export default async function RepechagePage() {
     .not('draft_year', 'is', null)
     .range(0, 1999)
 
-  // Map (draft_year, draft_overall) → player_id pour la correspondance
+  // Map (draft_year, draft_overall) → player_id pour la correspondance principale
   const dbPickMap = new Map<string, number>(
     (dbPlayers ?? []).map((p: any) => [
       `${p.draft_year}|${p.draft_overall}`,
@@ -71,18 +71,42 @@ export default async function RepechagePage() {
     ]),
   )
 
-  const poolerByPlayerId = new Map<number, string>(
-    (rosterEntries ?? []).map((entry: any) => [
-      entry.player_id as number,
-      entry.poolers?.name as string,
-    ]),
-  )
+  const normName = (s: string) =>
+    (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, ' ').trim()
+
+  // Maps pour les joueurs dans la banque de recrues
+  const poolerByPlayerId = new Map<number, string>()
+  const poolerByNormName = new Map<string, number>() // nom normalisé → player_id
+
+  for (const entry of rosterEntries ?? []) {
+    const pid = entry.player_id as number
+    const poolerName = (entry as any).poolers?.name as string
+    if (pid && poolerName) {
+      poolerByPlayerId.set(pid, poolerName)
+      const player = (entry as any).players
+      if (player) {
+        const key = `${normName(player.first_name)} ${normName(player.last_name)}`
+        poolerByNormName.set(key, pid)
+      }
+    }
+  }
+
+  const matchedPlayerIds = new Set<number>()
 
   const picks = allPicks
     .filter((p) => p.firstName && p.lastName)
     .map((p) => {
       const dbKey = `${p.draftYear}|${p.overallPickNumber}`
-      const dbPlayerId = dbPickMap.get(dbKey) ?? null
+      let dbPlayerId = dbPickMap.get(dbKey) ?? null
+
+      // Fallback par nom si la clé draft_year|overall ne correspond pas (draft info manquante en DB)
+      if (!dbPlayerId) {
+        const nameKey = `${normName(p.firstName)} ${normName(p.lastName)}`
+        dbPlayerId = poolerByNormName.get(nameKey) ?? null
+      }
+
+      if (dbPlayerId) matchedPlayerIds.add(dbPlayerId)
+
       return {
         player_id: dbPlayerId ?? p.playerId,
         first_name: p.firstName,
@@ -96,6 +120,29 @@ export default async function RepechagePage() {
         pooler_name: dbPlayerId ? (poolerByPlayerId.get(dbPlayerId) ?? null) : null,
       }
     })
+
+  // Ajouter les recrues assignées introuvables dans l'API NHL (draft info absente des deux côtés)
+  for (const entry of rosterEntries ?? []) {
+    const pid = entry.player_id as number
+    if (!matchedPlayerIds.has(pid)) {
+      const player = (entry as any).players
+      const poolerName = (entry as any).poolers?.name as string
+      if (player && poolerName) {
+        picks.push({
+          player_id: pid,
+          first_name: player.first_name,
+          last_name: player.last_name,
+          position: player.position ?? null,
+          draft_year: null,
+          draft_round: null,
+          draft_overall: null,
+          team_code: null,
+          status: null,
+          pooler_name: poolerName,
+        })
+      }
+    }
+  }
 
   return (
     <div>

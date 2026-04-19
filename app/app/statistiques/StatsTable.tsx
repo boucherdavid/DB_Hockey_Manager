@@ -32,7 +32,7 @@ function formatTOI(seconds: number): string {
 }
 
 function normName(s: string) {
-  return s.toLowerCase().replace(/-/g, ' ').trim()
+  return (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, ' ').trim()
 }
 
 export default function StatsTable({
