@@ -194,6 +194,12 @@ function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft,
                   return cap > 0 ? formatCap(cap) : DASH
                 })()}
               </td>
+              <td className="px-3 py-2 text-right w-28 tabular-nums text-gray-400 text-xs">
+                {(() => {
+                  const cap = nextSeason ? getNextCap(player, nextSeason) : null
+                  return cap && cap > 0 ? formatCap(cap) : DASH
+                })()}
+              </td>
             </>
           : <>
               <td className="px-3 py-2 text-right text-gray-700 w-28 tabular-nums">{formatCap(capNumber)}</td>
@@ -231,7 +237,8 @@ function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft,
               <th className="text-left px-3 py-2 font-medium text-gray-600">Type</th>
               <th className="text-left px-3 py-2 font-medium text-gray-600">Rep. LNH</th>
               <th className="text-left px-3 py-2 font-medium text-gray-600">Protection</th>
-              <th className="text-right px-3 py-2 font-medium text-gray-400 w-28">Cap LNH</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-400 w-28">Cap {season}</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-400 w-28">Cap {nextSeason}</th>
             </>
           : <>
               <th className="text-right px-3 py-2 font-medium text-gray-600 w-28">Cap {season}</th>
@@ -369,6 +376,15 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
   const capTotal = saison?.pool_cap ?? 0
   const capPct = capTotal > 0 ? (capUtilise / capTotal) * 100 : 0
 
+  const nextNhlCapVal = (saison as Record<string, unknown> | null)?.next_nhl_cap as number | null ?? null
+  const nextPoolCap = nextNhlCapVal && saison?.cap_multiplier
+    ? Math.ceil((nextNhlCapVal * saison.cap_multiplier) / 1_000_000) * 1_000_000
+    : null
+  const capNextSaison = [...actifs, ...reservistes].reduce((sum, row) => {
+    return sum + (getNextCap(row.players, nextSeason) ?? 0)
+  }, 0)
+  const capNextPct = nextPoolCap && nextPoolCap > 0 ? (capNextSaison / nextPoolCap) * 100 : 0
+
   return (
     <div>
       <div className="mb-6">
@@ -393,13 +409,34 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
         <p className="text-xs text-gray-400 text-right">
           Disponible: {formatCap(capTotal - capUtilise)}
         </p>
+        {nextPoolCap !== null && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="font-medium text-gray-600">Masse salariale {nextSeason}</span>
+              <span className="font-semibold">
+                <span className={capNextPct > 100 ? 'text-red-600 font-bold' : 'text-gray-700'}>{formatCap(capNextSaison)}</span>
+                <span className="text-gray-400"> / {formatCap(nextPoolCap)}</span>
+                {capNextPct > 100 && <span className="ml-2 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-semibold">⚠ Dépassement</span>}
+              </span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full transition-all ${capNextPct > 100 ? 'bg-red-400' : capNextPct > 90 ? 'bg-orange-400' : 'bg-indigo-400'}`}
+                style={{ width: `${Math.min(capNextPct, 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-400 text-right mt-1">
+              Disponible: {formatCap(nextPoolCap - capNextSaison)}
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
           <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">Actifs: {actifs.length} / 20</div>
           <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">Attaquants: {activeCounts.forward} / 12</div>
           <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">Defenseurs: {activeCounts.defense} / 6</div>
           <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">Gardiens: {activeCounts.goalie} / 2</div>
         </div>
-        <p className="text-xs text-gray-500">La banque de recrues ne compte pas dans la masse salariale. Les joueurs actifs et reservistes comptent toujours dans la masse salariale, meme s'ils sont recrues.</p>
+        <p className="text-xs text-gray-500">La banque de recrues et les joueurs LTIR ne comptent pas dans la masse salariale. Les joueurs actifs et réservistes comptent toujours, même s&apos;ils sont recrues.</p>
       </div>
 
       {picks.length > 0 && (
@@ -449,14 +486,14 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
         })()}
         <RosterTable rows={reservistes} title="Reservistes" season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
         {ltir.length > 0 && (
-          <RosterTable rows={ltir} title={`Liste de blessés long terme — LTIR (${ltir.length})`} season={saison?.season} nextSeason={nextSeason} salaryCounts={false} />
+          <RosterTable rows={ltir} title={`Liste de blessés long terme — LTIR (${ltir.length})`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
         )}
-        <RosterTable rows={[...banqueRecrues].sort(sortByDraftYearAsc)} title="Banque de recrues" season={saison?.season} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
+        <RosterTable rows={[...banqueRecrues].sort(sortByDraftYearAsc)} title="Banque de recrues" season={saison?.season} nextSeason={nextSeason} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
         {activationObligatoire.length > 0 && (
           <div className="mt-4 border-l-4 border-red-400 pl-4">
             <h3 className="font-semibold text-red-600 mb-1">Activation obligatoire ({activationObligatoire.length})</h3>
             <p className="text-xs text-gray-400 mb-2">La période de protection est terminée. Ces recrues doivent être activées en début de saison.</p>
-            <RosterTable rows={[...activationObligatoire].sort(sortByDraftYearAsc)} title="" season={saison?.season} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
+            <RosterTable rows={[...activationObligatoire].sort(sortByDraftYearAsc)} title="" season={saison?.season} nextSeason={nextSeason} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
           </div>
         )}
       </div>

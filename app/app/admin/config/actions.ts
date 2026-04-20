@@ -344,14 +344,17 @@ export async function updateCapAction(
   saisonId: number,
   nhlCap: number,
   capMultiplier: number,
+  nextNhlCap?: number | null,
 ): Promise<{ error?: string }> {
   if (!nhlCap || nhlCap < 1_000_000) return { error: 'Cap NHL invalide.' }
   if (!capMultiplier || capMultiplier <= 0) return { error: 'Facteur invalide.' }
 
   const supabase = await createClient()
+  const updates: Record<string, unknown> = { nhl_cap: nhlCap, cap_multiplier: capMultiplier }
+  if (nextNhlCap !== undefined) updates.next_nhl_cap = nextNhlCap ?? null
   const { error } = await supabase
     .from('pool_seasons')
-    .update({ nhl_cap: nhlCap, cap_multiplier: capMultiplier })
+    .update(updates)
     .eq('id', saisonId)
 
   if (error) return { error: error.message }
