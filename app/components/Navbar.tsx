@@ -95,6 +95,7 @@ export default function Navbar({
       <Link href="/statistiques" className={linkClass('/statistiques')}>Statistiques</Link>
       <Link href="/repechage" className={linkClass('/repechage')}>{'Rep\u00eachage'}</Link>
       <Link href="/poolers" className={linkClass('/poolers')}>Classement</Link>
+      <Link href="/series" className={linkClass('/series')}>{'S\u00e9ries'}</Link>
       <Link href="/transactions" className={linkClass('/transactions')}>Transactions</Link>
       {userName && <Link href="/dashboard" className={linkClass('/dashboard')}>Mon alignement</Link>}
       {userName && <Link href="/signaler" className={linkClass('/signaler')}>Signaler</Link>}
@@ -108,6 +109,7 @@ export default function Navbar({
       <Link href="/statistiques" className={mobileLinkClass('/statistiques')}>Statistiques</Link>
       <Link href="/repechage" className={mobileLinkClass('/repechage')}>{'Rep\u00eachage'}</Link>
       <Link href="/poolers" className={mobileLinkClass('/poolers')}>Classement</Link>
+      <Link href="/series" className={mobileLinkClass('/series')}>{'S\u00e9ries'}</Link>
       <Link href="/transactions" className={mobileLinkClass('/transactions')}>Transactions</Link>
       {userName && <Link href="/dashboard" className={mobileLinkClass('/dashboard')}>Mon alignement</Link>}
       {userName && <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler</Link>}

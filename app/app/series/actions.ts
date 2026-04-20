@@ -1,0 +1,170 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+import { fetchNhlSkaters, fetchNhlGoalies, normName } from '@/lib/nhl-stats'
+
+const REVALIDATE = () => {
+  revalidatePath('/series')
+  revalidatePath('/series/picks')
+  revalidatePath('/admin/series')
+}
+
+// ---------- Admin : gestion de la saison playoffs ----------
+
+export async function createPlayoffSeasonAction(
+  season: string,
+  capPerRound: number,
+): Promise<{ error?: string }> {
+  if (!/^\d{4}-\d{2}$/.test(season)) return { error: 'Format invalide. Ex: 2025-26' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { error } = await supabase
+    .from('playoff_seasons')
+    .insert({ season, cap_per_round: capPerRound, current_round: 1, is_active: false })
+
+  if (error) return { error: error.message }
+  REVALIDATE()
+  return {}
+}
+
+export async function activatePlayoffSeasonAction(id: number): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  await supabase.from('playoff_seasons').update({ is_active: false }).neq('id', 0)
+  const { error } = await supabase.from('playoff_seasons').update({ is_active: true }).eq('id', id)
+  if (error) return { error: error.message }
+
+  REVALIDATE()
+  return {}
+}
+
+export async function advanceRoundAction(id: number): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { data: ps } = await supabase.from('playoff_seasons').select('current_round').eq('id', id).single()
+  if (!ps) return { error: 'Saison introuvable.' }
+  if (ps.current_round >= 4) return { error: 'Déjà à la finale.' }
+
+  const { error } = await supabase
+    .from('playoff_seasons')
+    .update({ current_round: ps.current_round + 1 })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+  REVALIDATE()
+  return {}
+}
+
+// ---------- Pooler : gestion des picks ----------
+
+export type PickInput = {
+  playerId: number
+  firstName: string
+  lastName: string
+  position: string
+}
+
+export async function savePicksAction(
+  playoffSeasonId: number,
+  picks: PickInput[],
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+
+  // Vérifier que le joueur est bien un pooler
+  const { data: pooler } = await supabase
+    .from('poolers')
+    .select('id')
+    .eq('id', user.id)
+    .single()
+  if (!pooler) return { error: 'Compte non lié à un pooler.' }
+
+  const { data: ps } = await supabase
+    .from('playoff_seasons')
+    .select('current_round, is_active')
+    .eq('id', playoffSeasonId)
+    .single()
+  if (!ps) return { error: 'Saison playoff introuvable.' }
+  if (!ps.is_active) return { error: 'Cette saison playoffs n\'est pas active.' }
+
+  // Validation : 3F/2D/1G
+  const fwd = picks.filter(p => !['D', 'LD', 'RD', 'G'].includes(p.position))
+  const def = picks.filter(p => ['D', 'LD', 'RD'].includes(p.position))
+  const gol = picks.filter(p => p.position === 'G')
+  if (fwd.length !== 3) return { error: 'Exactement 3 attaquants requis.' }
+  if (def.length !== 2) return { error: 'Exactement 2 défenseurs requis.' }
+  if (gol.length !== 1) return { error: 'Exactement 1 gardien requis.' }
+
+  // Récupérer les stats playoff actuelles pour les snapshots
+  const [skatersMap, goaliesMap] = await Promise.all([
+    fetchNhlSkaters(3),
+    fetchNhlGoalies(3),
+  ])
+
+  const getSkaterSnap = (firstName: string, lastName: string) => {
+    const key = normName(`${firstName} ${lastName}`)
+    const s = skatersMap.get(key)
+    return { snap_goals: s?.goals ?? 0, snap_assists: s?.assists ?? 0 }
+  }
+
+  const getGoalieSnap = (firstName: string, lastName: string) => {
+    const key = normName(`${firstName} ${lastName}`)
+    const g = goaliesMap.get(key)
+    return {
+      snap_goals: g?.goals ?? 0,
+      snap_assists: g?.assists ?? 0,
+      snap_goalie_wins: g?.wins ?? 0,
+      snap_goalie_otl: g?.otLosses ?? 0,
+      snap_goalie_shutouts: g?.shutouts ?? 0,
+    }
+  }
+
+  // Désactiver tous les picks actifs du pooler pour cette saison
+  const { error: deactivateErr } = await supabase
+    .from('playoff_rosters')
+    .update({ is_active: false, removed_at: new Date().toISOString() })
+    .eq('playoff_season_id', playoffSeasonId)
+    .eq('pooler_id', user.id)
+    .eq('is_active', true)
+
+  if (deactivateErr) return { error: deactivateErr.message }
+
+  // Insérer les nouveaux picks avec snapshots
+  const isGoalie = (pos: string) => pos === 'G'
+
+  const newRows = picks.map(p => {
+    const snap = isGoalie(p.position)
+      ? getGoalieSnap(p.firstName, p.lastName)
+      : { ...getSkaterSnap(p.firstName, p.lastName), snap_goalie_wins: 0, snap_goalie_otl: 0, snap_goalie_shutouts: 0 }
+
+    return {
+      playoff_season_id: playoffSeasonId,
+      pooler_id: user.id,
+      player_id: p.playerId,
+      round_added: ps.current_round,
+      is_active: true,
+      ...snap,
+    }
+  })
+
+  const { error: insertErr } = await supabase.from('playoff_rosters').insert(newRows)
+  if (insertErr) return { error: insertErr.message }
+
+  REVALIDATE()
+  return {}
+}
