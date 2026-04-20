@@ -435,7 +435,17 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
                     ...sub.map((entry) => ({ type: 'entry' as const, entry })),
                   ]
                 })
-              : group.map((entry) => ({ type: 'entry' as const, entry }))
+              : [...group]
+                  .sort((a, b) => {
+                    if (a.player_type === 'recrue' && b.player_type === 'recrue') {
+                      const yearDiff = (a.pool_draft_year ?? 9999) - (b.pool_draft_year ?? 9999)
+                      if (yearDiff !== 0) return yearDiff
+                      return (a.players?.last_name ?? '').localeCompare(b.players?.last_name ?? '', 'fr-CA')
+                        || (a.players?.first_name ?? '').localeCompare(b.players?.first_name ?? '', 'fr-CA')
+                    }
+                    return 0
+                  })
+                  .map((entry) => ({ type: 'entry' as const, entry }))
 
             return (
               <div key={value} className="mb-4">

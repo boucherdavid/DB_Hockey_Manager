@@ -45,13 +45,10 @@ const isEntryProtected = (entry: BankEntry, saisonFin: number): boolean => {
 }
 
 const sortRookies = (a: Rookie, b: Rookie) => {
-  const yearB = b.draft_year ?? 0
-  const yearA = a.draft_year ?? 0
-  if (yearB !== yearA) return yearB - yearA
-  const roundA = a.draft_round ?? 99
-  const roundB = b.draft_round ?? 99
-  if (roundA !== roundB) return roundA - roundB
-  return (a.draft_overall ?? 999) - (b.draft_overall ?? 999)
+  const yearDiff = (a.draft_year ?? 9999) - (b.draft_year ?? 9999)
+  if (yearDiff !== 0) return yearDiff
+  return (a.last_name ?? '').localeCompare(b.last_name ?? '', 'fr-CA')
+    || (a.first_name ?? '').localeCompare(b.first_name ?? '', 'fr-CA')
 }
 
 const draftLabel = (r: Rookie) => {
