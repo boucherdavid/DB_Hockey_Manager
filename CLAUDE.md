@@ -9,10 +9,12 @@ Application web pour gerer un pool de hockey long terme a la place d'un fichier 
 
 Regles metier de base:
 - 8 poolers
-- un alignement par pooler et par saison
-- cap du pool = 125 % du cap NHL officiel
+- un alignement par pooler et par saison: 12 attaquants, 6 defenseurs, 2 gardiens (actifs); minimum 2 reservistes
+- cap du pool = cap NHL x facteur (configurable, typiquement 1.24-1.25), arrondi au million superieur
+- la banque de recrues et les joueurs LTIR ne comptent pas dans la masse salariale
 - transactions gerees cote admin
-- historique conserve dans `roster_changes`
+- historique conserve dans `transactions` et `transaction_items`
+- protection recrue: 5 saisons pour les repechages, duree ELC pour les agents libres
 
 ## Stack
 
@@ -60,10 +62,15 @@ Tables principales:
 - `poolers`
 - `pooler_rosters`
 - `roster_changes`
+- `pool_draft_picks`
+- `transactions`
+- `transaction_items`
+- `scoring_config`
 
 Conventions utiles:
 - statuts joueurs: `ELC`, `RFA`, `UFA`
-- types de roster: `actif`, `recrue`, `agent_libre`
+- types de roster: `actif`, `reserviste`, `recrue`, `ltir`
+- types de recrue (`rookie_type`): `repeche`, `agent_libre`
 
 ## Routes applicatives
 
@@ -71,22 +78,33 @@ Routes utilisateur:
 - `/`
 - `/login`
 - `/joueurs`
+- `/statistiques`
+- `/repechage`
 - `/poolers`
 - `/poolers/[id]`
-- `/dashboard`
+- `/transactions`
+- `/classement`
 
 Routes admin:
 - `/admin`
 - `/admin/joueurs`
-- `/admin/joueurs/nouveau`
-- `/admin/joueurs/[id]`
 - `/admin/poolers`
 - `/admin/rosters`
+- `/admin/recrues`
+- `/admin/transactions`
+- `/admin/presaison`
+- `/admin/config`
 
 ## Pipeline Python
 
-- `python_script/scrape_puckpedia.py`: recupere les donnees PuckPedia et produit les CSV
-- `python_script/import_supabase.py`: importe joueurs et contrats dans Supabase
+Ordre d'execution:
+1. `python_script/scrape_puckpedia.py`: recupere les donnees PuckPedia et produit les CSV
+2. `python_script/import_supabase.py`: importe joueurs et contrats dans Supabase
+3. `python_script/import_drafts.py`: importe les repechages des 5 dernieres annees (NHL API)
+
+Raccourci: `python_script/run_pipeline.py` enchaîne les 3 etapes. Option `--no-scrape` pour sauter le scraping.
+
+Automatisation: `.github/workflows/import.yml` — chaque lundi 6h UTC + declenchement manuel.
 
 Repertoires associes:
 - `python_script/source/`

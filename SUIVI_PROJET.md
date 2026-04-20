@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-04-15
+Derniere mise a jour: 2026-04-20
 
 ## Role du fichier
 
@@ -508,6 +508,60 @@ INSERT INTO scoring_config (stat_key, label, points, scope) VALUES
   ('goalie_win', 'Victoire (gardien)', 2, 'both'),
   ('goalie_otl', 'Défaite en prol./fusillade (gardien)', 1, 'both');
 ```
+
+### 2026-04-20 (sessions 17-18)
+
+**Corrections diverses et chantier cap N+1**
+
+**Correctifs techniques**:
+- `app/lib/nhl-stats.ts`: `normName` enrichi avec décomposition NFD + suppression des diacritiques — corrige les points manquants pour les joueurs avec accents (ex: Stützle dans la base sans accent).
+- `app/app/statistiques/page.tsx` et `StatsTable.tsx`: même normalisation appliquée pour le croisement noms NHL API ↔ base.
+- `python_script/import_supabase.py`: deuxième appel `deduplicate_players()` ajouté APRÈS tous les inserts — corrige les doublons créés lors de l'import (ex: Simashev).
+- `.github/workflows/import.yml`: `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` ajouté au niveau workflow — supprime l'avertissement de dépréciation Node.js 20.
+
+**Typo `repcheche` → `repeche`** (renommage complet):
+- Fichiers code corrigés: `actions.ts`, `RookieOverrideManager.tsx`, `BanqueRecruesManager.tsx`, `RosterManager.tsx`, `poolers/[id]/page.tsx`, `schema.sql` et tous les `actions.ts` concernés.
+- Migration SQL exécutée dans Supabase:
+  ```sql
+  ALTER TABLE pooler_rosters DROP CONSTRAINT IF EXISTS pooler_rosters_rookie_type_check;
+  UPDATE pooler_rosters SET rookie_type = 'repeche' WHERE rookie_type = 'repcheche';
+  ALTER TABLE pooler_rosters ADD CONSTRAINT pooler_rosters_rookie_type_check CHECK (rookie_type IN ('repeche', 'agent_libre'));
+  ```
+
+**Page Repêchage — correction "Non protégé"**:
+- Requête filtrée sur `rookie_type IS NOT NULL` (au lieu de `player_type = 'recrue'`) pour inclure les recrues actives (ex: Schaefer promu `actif`).
+- Fallback nom ajouté: si le joueur trouvé par `draft_year/overall` n'est pas dans un roster, on tente la correspondance par nom normalisé.
+- `export const dynamic = 'force-dynamic'` ajouté pour éviter le cache Next.js.
+
+**PWA — bannière d'installation**:
+- `InstallBanner.tsx`: texte corrigé de "Hockey Pool" à "DB Hockey Manager".
+
+**Page Classement** (`app/app/classement/`):
+- Nouveau composant `SummaryTable`: tableau récapitulatif toujours visible (rang, pooler cliquable, PTS, B, A, V, DP, BL).
+- Noms des poolers cliquables vers `/poolers/[id]` dans la table résumé ET dans l'accordéon.
+- `type Mode = 'saison'` en place comme base pour les futurs modes (mensuel, journée, série).
+
+**Page alignement pooler** (`app/app/poolers/[id]/page.tsx`):
+- `getYearsRemaining`: filtre `cap_number > 0` pour exclure les lignes RFA/UFA du compte d'années.
+- Recrues triées par année de repêchage ASC puis alphabétique dans toutes les vues (alignement, RosterManager, BanqueRecruesManager).
+- Joueurs LTIR: `salaryCounts={true}` — le salaire est affiché mais n'est pas comptabilisé dans la masse.
+- Note de bas de page mise à jour pour mentionner LTIR.
+
+**Chantier cap N+1** — nouveau champ plafond saison suivante:
+
+Migration SQL à exécuter dans Supabase (si pas encore fait):
+```sql
+ALTER TABLE pool_seasons ADD COLUMN IF NOT EXISTS next_nhl_cap DECIMAL(12,2);
+```
+
+Fichiers modifiés:
+- `app/app/admin/config/actions.ts`: `updateCapAction` accepte maintenant `nextNhlCap?` en 4e paramètre.
+- `app/app/admin/config/page.tsx`: `next_nhl_cap` ajouté à la requête select.
+- `app/app/admin/config/ConfigForm.tsx`: redesign complet en 2 colonnes (saison active | saison suivante). Chaque colonne affiche plafond NHL (input), facteur effectif (% du cap NHL), et cap du pool calculé. La colonne N+1 met à jour son aperçu en temps réel quand le facteur change.
+- `app/app/poolers/[id]/page.tsx`:
+  - Colonne "Cap N+1" ajoutée dans la table Banque de recrues (et Activation obligatoire).
+  - Barre de masse salariale N+1 affichée sous la barre courante si `next_nhl_cap` est configuré.
+  - Badge "⚠ Dépassement" visible si la somme des salaires N+1 (actifs + réservistes) dépasse le cap N+1 du pool.
 
 ### 2026-04-15 (session 14)
 
