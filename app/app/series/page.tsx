@@ -20,7 +20,7 @@ export default async function SeriesPage() {
 
   const { data: ps } = await supabase
     .from('playoff_seasons')
-    .select('id, season, current_round, cap_per_round')
+    .select('id, season, current_round, cap_per_round, scoring_start_at')
     .eq('is_active', true)
     .single()
 
@@ -29,6 +29,54 @@ export default async function SeriesPage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-800 mb-4">Pool des séries</h1>
         <p className="text-gray-500">Aucune saison playoffs active pour l&apos;instant.</p>
+      </div>
+    )
+  }
+
+  // Avant le démarrage : afficher un écran d'attente
+  if (!ps.scoring_start_at) {
+    const { data: picks } = await supabase
+      .from('playoff_rosters')
+      .select('pooler_id, poolers(name)')
+      .eq('playoff_season_id', ps.id)
+      .eq('is_active', true)
+
+    const submitted = new Map<string, string>()
+    for (const p of picks ?? []) {
+      const pooler = p.poolers as unknown as { name: string } | null
+      if (!submitted.has(p.pooler_id) && pooler) submitted.set(p.pooler_id, pooler.name)
+    }
+
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-gray-800 mb-1">Pool des séries {ps.season}</h1>
+        <p className="text-sm text-gray-500 mb-6">
+          Ronde {ps.current_round} — {['Quart de finale','Demi-finale','Finale de conférence','Finale de la Coupe Stanley'][ps.current_round - 1] ?? `Ronde ${ps.current_round}`}
+        </p>
+        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-xl">⏳</div>
+            <div>
+              <p className="font-semibold text-gray-800">En attente du démarrage</p>
+              <p className="text-sm text-gray-500">Le classement sera visible une fois la comptabilisation démarrée par l&apos;admin.</p>
+            </div>
+          </div>
+          {submitted.size > 0 && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">{submitted.size} pooler{submitted.size > 1 ? 's ont' : ' a'} soumis ses picks :</p>
+              <div className="flex flex-wrap gap-2">
+                {Array.from(submitted.values()).map(name => (
+                  <span key={name} className="text-xs bg-green-100 text-green-700 rounded-full px-3 py-1">{name}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {user && (
+            <Link href="/series/picks" className="inline-block bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700">
+              Soumettre / modifier mes picks
+            </Link>
+          )}
+        </div>
       </div>
     )
   }

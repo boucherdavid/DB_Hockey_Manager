@@ -99,6 +99,7 @@ export default function Navbar({
       <Link href="/transactions" className={linkClass('/transactions')}>Transactions</Link>
       {userName && <Link href="/dashboard" className={linkClass('/dashboard')}>Mon alignement</Link>}
       {userName && <Link href="/signaler" className={linkClass('/signaler')}>Signaler</Link>}
+      {userName && <Link href="/compte" className={linkClass('/compte')}>Mon compte</Link>}
       {isAdmin && <Link href="/admin" className={linkClass('/admin')}>Admin</Link>}
     </>
   )
@@ -113,6 +114,7 @@ export default function Navbar({
       <Link href="/transactions" className={mobileLinkClass('/transactions')}>Transactions</Link>
       {userName && <Link href="/dashboard" className={mobileLinkClass('/dashboard')}>Mon alignement</Link>}
       {userName && <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler</Link>}
+      {userName && <Link href="/compte" className={mobileLinkClass('/compte')}>Mon compte</Link>}
       {isAdmin && <Link href="/admin" className={mobileLinkClass('/admin')}>Admin</Link>}
     </>
   )

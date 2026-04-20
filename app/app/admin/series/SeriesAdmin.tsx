@@ -5,6 +5,7 @@ import {
   createPlayoffSeasonAction,
   activatePlayoffSeasonAction,
   advanceRoundAction,
+  startScoringAction,
 } from '@/app/series/actions'
 
 const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
@@ -15,15 +16,32 @@ export type PlayoffSeason = {
   current_round: number
   is_active: boolean
   cap_per_round: number
+  scoring_start_at: string | null
 }
 
-export default function SeriesAdmin({ seasons }: { seasons: PlayoffSeason[] }) {
+export type PicksCount = {
+  playoff_season_id: number
+  pooler_count: number
+  total_poolers: number
+}
+
+export default function SeriesAdmin({
+  seasons,
+  picksCounts,
+}: {
+  seasons: PlayoffSeason[]
+  picksCounts: PicksCount[]
+}) {
   const [newSeason, setNewSeason] = useState('')
   const [cap, setCap] = useState('25000000')
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
-  async function handleCreate(e: React.FormEvent) {
+  function getPicksCount(id: number) {
+    return picksCounts.find(p => p.playoff_season_id === id)
+  }
+
+  async function handleCreate(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     setBusy(true)
     setMsg(null)
@@ -35,6 +53,7 @@ export default function SeriesAdmin({ seasons }: { seasons: PlayoffSeason[] }) {
 
   async function handleActivate(id: number) {
     setBusy(true)
+    setMsg(null)
     const res = await activatePlayoffSeasonAction(id)
     setBusy(false)
     if (res.error) setMsg({ type: 'err', text: res.error })
@@ -44,10 +63,29 @@ export default function SeriesAdmin({ seasons }: { seasons: PlayoffSeason[] }) {
   async function handleAdvance(id: number) {
     if (!confirm('Avancer à la prochaine ronde ? Les poolers pourront modifier leurs picks.')) return
     setBusy(true)
+    setMsg(null)
     const res = await advanceRoundAction(id)
     setBusy(false)
     if (res.error) setMsg({ type: 'err', text: res.error })
     else setMsg({ type: 'ok', text: 'Ronde avancée.' })
+  }
+
+  async function handleStartScoring(id: number, picksCount: PicksCount | undefined) {
+    const total = picksCount?.total_poolers ?? 0
+    const submitted = picksCount?.pooler_count ?? 0
+    const missing = total - submitted
+
+    const confirmMsg = missing > 0
+      ? `${submitted}/${total} poolers ont soumis leurs picks. ${missing} n'ont pas encore de picks. Démarrer quand même ?`
+      : `Tous les poolers ont soumis leurs picks. Démarrer la comptabilisation ?`
+
+    if (!confirm(confirmMsg)) return
+    setBusy(true)
+    setMsg(null)
+    const res = await startScoringAction(id)
+    setBusy(false)
+    if (res.error) setMsg({ type: 'err', text: res.error })
+    else setMsg({ type: 'ok', text: `Comptabilisation démarrée. ${res.updated} picks verrouillés.` })
   }
 
   return (
@@ -59,46 +97,71 @@ export default function SeriesAdmin({ seasons }: { seasons: PlayoffSeason[] }) {
             <h2 className="text-white font-bold text-sm uppercase tracking-wide">Saisons playoffs</h2>
           </div>
           <div className="divide-y">
-            {seasons.map(ps => (
-              <div key={ps.id} className="flex items-center gap-4 px-5 py-4">
-                <div className="flex-1">
-                  <span className="font-semibold text-gray-800">{ps.season}</span>
-                  {ps.is_active && (
-                    <span className="ml-2 text-xs bg-green-100 text-green-700 rounded px-2 py-0.5">Active</span>
-                  )}
-                  <div className="text-sm text-gray-500 mt-0.5">
-                    Ronde {ps.current_round} — {ROUND_LABEL[ps.current_round - 1] ?? `Ronde ${ps.current_round}`}
-                    &nbsp;·&nbsp;
-                    Cap {(ps.cap_per_round / 1_000_000).toFixed(1)} M$
+            {seasons.map(ps => {
+              const pc = getPicksCount(ps.id)
+              return (
+                <div key={ps.id} className="px-5 py-4 space-y-3">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-800">{ps.season}</span>
+                        {ps.is_active && (
+                          <span className="text-xs bg-green-100 text-green-700 rounded px-2 py-0.5">Active</span>
+                        )}
+                        {ps.scoring_start_at && (
+                          <span className="text-xs bg-blue-100 text-blue-700 rounded px-2 py-0.5">Comptabilisation en cours</span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-0.5">
+                        Ronde {ps.current_round} — {ROUND_LABEL[ps.current_round - 1] ?? `Ronde ${ps.current_round}`}
+                        &nbsp;·&nbsp;Cap {(ps.cap_per_round / 1_000_000).toFixed(1)} M$
+                      </div>
+                      {pc && (
+                        <div className="text-sm mt-1">
+                          <span className={pc.pooler_count === pc.total_poolers ? 'text-green-600 font-medium' : 'text-orange-600'}>
+                            {pc.pooler_count}/{pc.total_poolers} poolers ont soumis leurs picks
+                          </span>
+                        </div>
+                      )}
+                      {ps.scoring_start_at && (
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          Démarrée le {new Date(ps.scoring_start_at).toLocaleString('fr-CA')}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 shrink-0 items-end">
+                      {!ps.is_active && (
+                        <button onClick={() => handleActivate(ps.id)} disabled={busy}
+                          className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50">
+                          Activer
+                        </button>
+                      )}
+                      {ps.is_active && !ps.scoring_start_at && (
+                        <button onClick={() => handleStartScoring(ps.id, pc)} disabled={busy}
+                          className="text-sm bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 disabled:opacity-50">
+                          Démarrer la comptabilisation
+                        </button>
+                      )}
+                      {ps.is_active && ps.current_round < 4 && (
+                        <button onClick={() => handleAdvance(ps.id)} disabled={busy}
+                          className="text-sm bg-orange-500 text-white px-3 py-1.5 rounded hover:bg-orange-600 disabled:opacity-50">
+                          Ronde suivante →
+                        </button>
+                      )}
+                      {ps.is_active && ps.current_round >= 4 && (
+                        <span className="text-sm text-gray-400 italic">Finale en cours</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  {!ps.is_active && (
-                    <button
-                      onClick={() => handleActivate(ps.id)}
-                      disabled={busy}
-                      className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      Activer
-                    </button>
-                  )}
-                  {ps.is_active && ps.current_round < 4 && (
-                    <button
-                      onClick={() => handleAdvance(ps.id)}
-                      disabled={busy}
-                      className="text-sm bg-orange-500 text-white px-3 py-1.5 rounded hover:bg-orange-600 disabled:opacity-50"
-                    >
-                      Ronde suivante →
-                    </button>
-                  )}
-                  {ps.is_active && ps.current_round >= 4 && (
-                    <span className="text-sm text-gray-400 italic">Finale en cours</span>
-                  )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
+      )}
+
+      {msg && (
+        <p className={`text-sm px-1 ${msg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{msg.text}</p>
       )}
 
       {/* Créer une nouvelle saison */}
@@ -108,37 +171,21 @@ export default function SeriesAdmin({ seasons }: { seasons: PlayoffSeason[] }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Saison (ex: 2025-26)</label>
-              <input
-                type="text"
-                value={newSeason}
-                onChange={e => setNewSeason(e.target.value)}
-                placeholder="2025-26"
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
+              <input type="text" value={newSeason} onChange={e => setNewSeason(e.target.value)}
+                placeholder="2025-26" required
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Cap par ronde ($)</label>
-              <input
-                type="number"
-                value={cap}
-                onChange={e => setCap(e.target.value)}
-                min={1_000_000}
-                step={500_000}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <input type="number" value={cap} onChange={e => setCap(e.target.value)}
+                min={1_000_000} step={500_000}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
-          <button
-            type="submit"
-            disabled={busy}
-            className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-          >
+          <button type="submit" disabled={busy}
+            className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
             {busy ? 'En cours...' : 'Créer'}
           </button>
-          {msg && (
-            <p className={`text-sm ${msg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{msg.text}</p>
-          )}
         </form>
       </div>
     </div>

@@ -10,6 +10,77 @@ const REVALIDATE = () => {
   revalidatePath('/admin/series')
 }
 
+// ---------- Admin : démarrer la comptabilisation ----------
+
+export async function startScoringAction(playoffSeasonId: number): Promise<{ error?: string; updated?: number }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { data: ps } = await supabase
+    .from('playoff_seasons')
+    .select('scoring_start_at')
+    .eq('id', playoffSeasonId)
+    .single()
+  if (!ps) return { error: 'Saison introuvable.' }
+  if (ps.scoring_start_at) return { error: 'La comptabilisation est déjà démarrée.' }
+
+  // Récupérer tous les picks actifs
+  const { data: picks } = await supabase
+    .from('playoff_rosters')
+    .select('id, player_id, players(first_name, last_name, position)')
+    .eq('playoff_season_id', playoffSeasonId)
+    .eq('is_active', true)
+
+  if (!picks || picks.length === 0) return { error: 'Aucun pick actif trouvé.' }
+
+  // Fetch stats playoff actuelles
+  const [skatersMap, goaliesMap] = await Promise.all([
+    fetchNhlSkaters(3),
+    fetchNhlGoalies(3),
+  ])
+
+  // Mettre à jour chaque pick avec le snapshot actuel
+  let updated = 0
+  for (const pick of picks) {
+    const p = pick.players as unknown as { first_name: string; last_name: string; position: string } | null
+    if (!p) continue
+
+    const key = normName(`${p.first_name} ${p.last_name}`)
+    const isG = p.position === 'G'
+
+    const snap = isG
+      ? {
+          snap_goals:           goaliesMap.get(key)?.goals    ?? 0,
+          snap_assists:         goaliesMap.get(key)?.assists   ?? 0,
+          snap_goalie_wins:     goaliesMap.get(key)?.wins      ?? 0,
+          snap_goalie_otl:      goaliesMap.get(key)?.otLosses  ?? 0,
+          snap_goalie_shutouts: goaliesMap.get(key)?.shutouts  ?? 0,
+        }
+      : {
+          snap_goals:           skatersMap.get(key)?.goals   ?? 0,
+          snap_assists:         skatersMap.get(key)?.assists  ?? 0,
+          snap_goalie_wins:     0,
+          snap_goalie_otl:      0,
+          snap_goalie_shutouts: 0,
+        }
+
+    await supabase.from('playoff_rosters').update(snap).eq('id', pick.id)
+    updated++
+  }
+
+  // Enregistrer la date de départ
+  await supabase
+    .from('playoff_seasons')
+    .update({ scoring_start_at: new Date().toISOString() })
+    .eq('id', playoffSeasonId)
+
+  REVALIDATE()
+  return { updated }
+}
+
 // ---------- Admin : gestion de la saison playoffs ----------
 
 export async function createPlayoffSeasonAction(
