@@ -25,7 +25,7 @@ type RosterEntry = {
   id: number
   player_id: number
   player_type: string
-  rookie_type?: 'repcheche' | 'agent_libre' | null
+  rookie_type?: 'repeche' | 'agent_libre' | null
   pool_draft_year?: number | null
   players: Player
 }
@@ -219,8 +219,8 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
     }
     const tempId = tempIdCounter.current--
     // Auto-détection du type recrue selon la présence d'un draft_year
-    const rookieType: 'repcheche' | 'agent_libre' | null = player.is_rookie
-      ? (player.draft_year ? 'repcheche' : 'agent_libre')
+    const rookieType: 'repeche' | 'agent_libre' | null = player.is_rookie
+      ? (player.draft_year ? 'repeche' : 'agent_libre')
       : null
     const newEntry: NormalizedRosterEntry = {
       id: tempId,
@@ -233,9 +233,9 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
     setRoster(prev => [...prev, newEntry])
   }
 
-  const changeRookieType = (entry: NormalizedRosterEntry, newRookieType: 'repcheche' | 'agent_libre') => {
+  const changeRookieType = (entry: NormalizedRosterEntry, newRookieType: 'repeche' | 'agent_libre') => {
     // pool_draft_year = toujours players.draft_year (année NHL réelle, non modifiable)
-    const poolDraftYear = newRookieType === 'repcheche' ? (entry.players.draft_year ?? null) : null
+    const poolDraftYear = newRookieType === 'repeche' ? (entry.players.draft_year ?? null) : null
     setRoster(prev => prev.map(r => r.id === entry.id
       ? { ...r, rookie_type: newRookieType, pool_draft_year: poolDraftYear }
       : r
@@ -490,19 +490,19 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
                             <select
                               value={entry.rookie_type ?? ''}
                               onChange={(e) => {
-                                if (e.target.value) changeRookieType(entry, e.target.value as 'repcheche' | 'agent_libre')
+                                if (e.target.value) changeRookieType(entry, e.target.value as 'repeche' | 'agent_libre')
                               }}
                               className={`text-xs border rounded px-1 py-0.5 ${
-                                entry.rookie_type === 'repcheche' ? 'text-purple-700 bg-purple-50 border-purple-200'
+                                entry.rookie_type === 'repeche' ? 'text-purple-700 bg-purple-50 border-purple-200'
                                 : entry.rookie_type === 'agent_libre' ? 'text-blue-700 bg-blue-50 border-blue-200'
                                 : 'text-orange-600 bg-orange-50 border-orange-200'
                               }`}
                             >
                               {!entry.rookie_type && <option value="">— type recrue requis —</option>}
-                              <option value="repcheche">Repêché</option>
+                              <option value="repeche">Repêché</option>
                               <option value="agent_libre">Agent libre</option>
                             </select>
-                            {entry.rookie_type === 'repcheche' && entry.players.draft_year && (
+                            {entry.rookie_type === 'repeche' && entry.players.draft_year && (
                               <span className="text-xs text-purple-500">
                                 {`Repêché ${entry.players.draft_year} — protection jusqu'en ${entry.players.draft_year + 5}`}
                               </span>

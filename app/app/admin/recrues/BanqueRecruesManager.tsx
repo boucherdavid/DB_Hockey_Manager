@@ -27,17 +27,17 @@ type Rookie = {
 type BankEntry = {
   id: number
   player_id: number
-  rookie_type: 'repcheche' | 'agent_libre' | null
+  rookie_type: 'repeche' | 'agent_libre' | null
   pool_draft_year: number | null
   players: Rookie
 }
 type Saison = { id: number; season: string }
-type RookieCategory = 'repcheche' | 'agent_libre'
+type RookieCategory = 'repeche' | 'agent_libre'
 
 const isEntryProtected = (entry: BankEntry, saisonFin: number): boolean => {
   // Non classifié → protégé par défaut (à reclassifier par l'admin)
   if (!entry.rookie_type) return true
-  if (entry.rookie_type === 'repcheche') {
+  if (entry.rookie_type === 'repeche') {
     return (entry.pool_draft_year ?? 0) + PROTECTION_SEASONS >= saisonFin
   }
   // agent_libre : protégé tant que ELC
@@ -71,7 +71,7 @@ function BankRow({ entry, onRemove, onEdit, loading, expired = false }: {
   loading: boolean
   expired?: boolean
 }) {
-  const typeLabel = entry.rookie_type === 'repcheche'
+  const typeLabel = entry.rookie_type === 'repeche'
     ? <span className="inline-block bg-emerald-50 text-emerald-700 rounded px-1.5 py-0.5 text-xs font-medium">
         Repêché {entry.pool_draft_year ?? ''}
       </span>
@@ -90,7 +90,7 @@ function BankRow({ entry, onRemove, onEdit, loading, expired = false }: {
         </span>
         <span className="text-gray-400 text-xs shrink-0">{entry.players.position ?? DASH}</span>
         {typeLabel}
-        {entry.rookie_type === 'repcheche' && draftLabel(entry.players) && (
+        {entry.rookie_type === 'repeche' && draftLabel(entry.players) && (
           <span className="text-gray-400 text-xs shrink-0">{draftLabel(entry.players)}</span>
         )}
       </div>
@@ -116,7 +116,7 @@ function TypePanel({ rookie, initialType, onConfirm, onCancel, loading }: {
   onCancel: () => void
   loading: boolean
 }) {
-  const [type, setType] = useState<RookieCategory>(initialType ?? 'repcheche')
+  const [type, setType] = useState<RookieCategory>(initialType ?? 'repeche')
 
   return (
     <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
@@ -125,10 +125,10 @@ function TypePanel({ rookie, initialType, onConfirm, onCancel, loading }: {
       </p>
       <div className="flex gap-3 mb-3">
         <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="radio" name="type" value="repcheche"
-            checked={type === 'repcheche'} onChange={() => setType('repcheche')} />
+          <input type="radio" name="type" value="repeche"
+            checked={type === 'repeche'} onChange={() => setType('repeche')} />
           <span>Repêché du pool</span>
-          {type === 'repcheche' && rookie.draft_year && (
+          {type === 'repeche' && rookie.draft_year && (
             <span className="text-gray-400 text-xs">({rookie.draft_year}, protection jusqu'en {rookie.draft_year + PROTECTION_SEASONS - 1}-{String(rookie.draft_year + PROTECTION_SEASONS).slice(2)})</span>
           )}
         </label>
@@ -230,7 +230,7 @@ export default function BanqueRecruesManager({
   const confirmAdd = async (type: RookieCategory) => {
     if (!saison || !pendingRookie) return
     setLoading(true)
-    const poolDraftYear = type === 'repcheche' ? (pendingRookie.draft_year ?? undefined) : undefined
+    const poolDraftYear = type === 'repeche' ? (pendingRookie.draft_year ?? undefined) : undefined
     const result = await addPlayerAction(selectedPooler, pendingRookie.id, saison.id, 'recrue', type, poolDraftYear)
     if (result.error) {
       setMessage(`Erreur: ${result.error}`)
@@ -258,7 +258,7 @@ export default function BanqueRecruesManager({
     } else {
       setBank((prev) => prev.map((e) =>
         e.id === entryId
-          ? { ...e, rookie_type: type, pool_draft_year: type === 'repcheche' ? draftYear : null }
+          ? { ...e, rookie_type: type, pool_draft_year: type === 'repeche' ? draftYear : null }
           : e,
       ))
       setEditingEntryId(null)

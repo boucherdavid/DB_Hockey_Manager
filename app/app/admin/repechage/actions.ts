@@ -63,7 +63,7 @@ export async function submitDraftAction(
         .update({
           is_active: true,
           player_type: 'recrue',
-          rookie_type: 'repcheche',
+          rookie_type: 'repeche',
           pool_draft_year: poolDraftYear,
           draft_pick_id: sel.pick_id,
           removed_at: null,
@@ -77,7 +77,7 @@ export async function submitDraftAction(
         pool_season_id: saisonId,
         player_type: 'recrue',
         is_active: true,
-        rookie_type: 'repcheche',
+        rookie_type: 'repeche',
         pool_draft_year: poolDraftYear,
         draft_pick_id: sel.pick_id,
       })

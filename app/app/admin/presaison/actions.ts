@@ -70,7 +70,7 @@ export async function loadPresaisonDataAction(saisonId: number): Promise<{
     // Détection : recrue repêchée dans actif/réserviste avec ELC échu → décision requise
     if (
       (type === 'actif' || type === 'reserviste') &&
-      entry.rookie_type === 'repcheche' &&
+      entry.rookie_type === 'repeche' &&
       !currentContract?.is_elc
     ) {
       const draftYear: number = entry.pool_draft_year ?? 0
@@ -94,7 +94,7 @@ export async function loadPresaisonDataAction(saisonId: number): Promise<{
       const draftYear: number | null = entry.pool_draft_year ?? null
 
       let isExpired = false
-      if (rookieType === 'repcheche' && draftYear !== null) {
+      if (rookieType === 'repeche' && draftYear !== null) {
         // Protection : 5 saisons à partir de l'année de repêchage
         isExpired = (seasonStartYear - draftYear) >= 5
       } else if (rookieType === 'agent_libre') {

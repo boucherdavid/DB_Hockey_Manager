@@ -44,7 +44,7 @@ export async function addPlayerAction(
   playerId: number,
   saisonId: number,
   playerType: 'actif' | 'recrue' | 'reserviste' | 'ltir',
-  rookieType?: 'repcheche' | 'agent_libre',
+  rookieType?: 'repeche' | 'agent_libre',
   poolDraftYear?: number,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
@@ -69,7 +69,7 @@ export async function addPlayerAction(
   }
 
   const rookieFields = rookieType
-    ? { rookie_type: rookieType, pool_draft_year: rookieType === 'repcheche' ? poolDraftYear : null }
+    ? { rookie_type: rookieType, pool_draft_year: rookieType === 'repeche' ? poolDraftYear : null }
     : {}
 
   // Si une entrée inactive existe déjà (soft-delete), la réactiver plutôt qu'insérer
@@ -103,7 +103,7 @@ export async function addPlayerAction(
 
 export async function updateRookieTypeAction(
   rosterId: number,
-  rookieType: 'repcheche' | 'agent_libre',
+  rookieType: 'repeche' | 'agent_libre',
   poolDraftYear?: number,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
@@ -111,7 +111,7 @@ export async function updateRookieTypeAction(
     .from('pooler_rosters')
     .update({
       rookie_type: rookieType,
-      pool_draft_year: rookieType === 'repcheche' ? (poolDraftYear ?? null) : null,
+      pool_draft_year: rookieType === 'repeche' ? (poolDraftYear ?? null) : null,
     })
     .eq('id', rosterId)
   return error ? { error: error.message } : {}
@@ -181,7 +181,7 @@ export async function changeTypeAction(
 type AddEntry = {
   player_id: number
   player_type: 'actif' | 'recrue' | 'reserviste' | 'ltir'
-  rookie_type?: 'repcheche' | 'agent_libre'
+  rookie_type?: 'repeche' | 'agent_libre'
   pool_draft_year?: number
 }
 
@@ -269,7 +269,7 @@ export async function submitRosterAction(
 
   for (const entry of toAdd) {
     const rookieFields = entry.rookie_type
-      ? { rookie_type: entry.rookie_type, pool_draft_year: entry.rookie_type === 'repcheche' ? (entry.pool_draft_year ?? null) : null }
+      ? { rookie_type: entry.rookie_type, pool_draft_year: entry.rookie_type === 'repeche' ? (entry.pool_draft_year ?? null) : null }
       : {}
 
     const { data: existing } = await supabase

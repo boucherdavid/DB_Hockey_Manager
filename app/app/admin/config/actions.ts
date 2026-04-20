@@ -231,7 +231,7 @@ export async function addRookieOverrideAction(
   poolerId: string,
   playerId: number,
   seasonId: number,
-  rookieType: 'repcheche' | 'agent_libre',
+  rookieType: 'repeche' | 'agent_libre',
   poolDraftYear?: number,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
@@ -258,7 +258,7 @@ export async function addRookieOverrideAction(
     pool_season_id: seasonId,
     player_type: 'recrue',
     rookie_type: rookieType,
-    pool_draft_year: rookieType === 'repcheche' ? (poolDraftYear ?? null) : null,
+    pool_draft_year: rookieType === 'repeche' ? (poolDraftYear ?? null) : null,
     is_active: true,
   })
 

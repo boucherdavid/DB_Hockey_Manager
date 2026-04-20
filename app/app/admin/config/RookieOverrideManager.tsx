@@ -14,7 +14,7 @@ type Saison = { id: number; season: string }
 type BankEntry = {
   id: number
   player_id: number
-  rookie_type: 'repcheche' | 'agent_libre' | null
+  rookie_type: 'repeche' | 'agent_libre' | null
   pool_draft_year: number | null
   players: {
     first_name: string
@@ -36,7 +36,7 @@ type PlayerResult = {
   teams: { code: string } | null
 }
 
-type RookieType = 'repcheche' | 'agent_libre'
+type RookieType = 'repeche' | 'agent_libre'
 
 export default function RookieOverrideManager({
   poolers,
@@ -56,7 +56,7 @@ export default function RookieOverrideManager({
 
   // Ajout en attente de confirmation du type
   const [pending, setPending] = useState<PlayerResult | null>(null)
-  const [rookieType, setRookieType] = useState<RookieType>('repcheche')
+  const [rookieType, setRookieType] = useState<RookieType>('repeche')
   const [poolDraftYear, setPoolDraftYear] = useState('')
 
   const saisonFin = saison ? parseInt(saison.season.split('-')[0], 10) + 1 : 0
@@ -104,7 +104,7 @@ export default function RookieOverrideManager({
   const handleAdd = async () => {
     if (!pending || !saison) return
     setLoading(true)
-    const year = rookieType === 'repcheche' && poolDraftYear ? parseInt(poolDraftYear) : undefined
+    const year = rookieType === 'repeche' && poolDraftYear ? parseInt(poolDraftYear) : undefined
     const result = await addRookieOverrideAction(selectedPooler, pending.id, saison.id, rookieType, year)
     setLoading(false)
     if (result.error) {
@@ -131,7 +131,7 @@ export default function RookieOverrideManager({
   }
 
   const protectionLabel = (entry: BankEntry): string => {
-    if (entry.rookie_type === 'repcheche' && entry.pool_draft_year) {
+    if (entry.rookie_type === 'repeche' && entry.pool_draft_year) {
       const restant = entry.pool_draft_year + PROTECTION_SEASONS - saisonFin
       if (restant < 0) return 'Expirée'
       if (restant === 0) return 'Dernière saison'
@@ -203,7 +203,7 @@ export default function RookieOverrideManager({
                         </span>
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-500">
-                        {entry.rookie_type === 'repcheche'
+                        {entry.rookie_type === 'repeche'
                           ? `Repêché ${entry.pool_draft_year ?? ''}`
                           : 'Agent libre'}
                       </td>
@@ -249,7 +249,7 @@ export default function RookieOverrideManager({
                   <div
                     key={player.id}
                     className={`flex items-center justify-between px-3 py-2 text-sm border-b last:border-0 ${inBank ? 'bg-gray-50 opacity-50' : 'hover:bg-blue-50 cursor-pointer'}`}
-                    onClick={() => { if (!inBank) { setPending(player); setRookieType('repcheche'); setPoolDraftYear(String(player.draft_year ?? '')) } }}
+                    onClick={() => { if (!inBank) { setPending(player); setRookieType('repeche'); setPoolDraftYear(String(player.draft_year ?? '')) } }}
                   >
                     <span>
                       <span className="font-medium text-gray-800">{player.last_name}, {player.first_name}</span>
@@ -273,8 +273,8 @@ export default function RookieOverrideManager({
                 <label className="block text-xs font-medium text-gray-600">Type de protection</label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-1.5 cursor-pointer text-sm">
-                    <input type="radio" name="rookieType" value="repcheche"
-                      checked={rookieType === 'repcheche'} onChange={() => setRookieType('repcheche')} />
+                    <input type="radio" name="rookieType" value="repeche"
+                      checked={rookieType === 'repeche'} onChange={() => setRookieType('repeche')} />
                     Repêché du pool
                   </label>
                   <label className="flex items-center gap-1.5 cursor-pointer text-sm">
@@ -283,7 +283,7 @@ export default function RookieOverrideManager({
                     Agent libre (ELC)
                   </label>
                 </div>
-                {rookieType === 'repcheche' && (
+                {rookieType === 'repeche' && (
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">
                       Année de repêchage du pool
@@ -309,7 +309,7 @@ export default function RookieOverrideManager({
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={handleAdd}
-                  disabled={loading || (rookieType === 'repcheche' && !poolDraftYear)}
+                  disabled={loading || (rookieType === 'repeche' && !poolDraftYear)}
                   className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40"
                 >
                   {loading ? 'Ajout…' : 'Confirmer'}

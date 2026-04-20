@@ -11,7 +11,7 @@ const getSaisonFin = (season: string): number =>
 
 const isProtected = (row: RosterRow, saisonFin: number): boolean => {
   if (!row.rookie_type) return true
-  if (row.rookie_type === 'repcheche') {
+  if (row.rookie_type === 'repeche') {
     return (row.pool_draft_year ?? 0) + PROTECTION_SEASONS >= saisonFin
   }
   // agent_libre : protégé tant que ELC
@@ -43,7 +43,7 @@ type DraftPickRow = {
 type RosterRow = {
   id: number
   player_type: string
-  rookie_type: 'repcheche' | 'agent_libre' | null
+  rookie_type: 'repeche' | 'agent_libre' | null
   pool_draft_year: number | null
   players: PlayerRow | null
 }
@@ -117,7 +117,7 @@ const draftLabel = (player: PlayerRow | null) => {
 }
 
 const protectionRestante = (row: RosterRow, saisonFin: number, currentSeason?: string): string => {
-  if (row.rookie_type === 'repcheche' && row.pool_draft_year) {
+  if (row.rookie_type === 'repeche' && row.pool_draft_year) {
     const restant = row.pool_draft_year + PROTECTION_SEASONS - saisonFin
     if (restant < 0) return 'Expirée'
     if (restant === 0) return 'Dernière saison'
@@ -167,7 +167,7 @@ function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft,
         {showDraft
           ? <>
               <td className="px-3 py-2 text-xs">
-                {row.rookie_type === 'repcheche'
+                {row.rookie_type === 'repeche'
                   ? <span className="inline-block bg-emerald-50 text-emerald-700 rounded px-1.5 py-0.5 font-medium">
                       Repêché {row.pool_draft_year ?? ''}
                     </span>

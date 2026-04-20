@@ -167,7 +167,7 @@ CREATE TABLE transaction_items (
 --
 -- ALTER TABLE pooler_rosters
 --   ADD COLUMN IF NOT EXISTS rookie_type VARCHAR(20)
---     CHECK (rookie_type IN ('repcheche', 'agent_libre'));
+--     CHECK (rookie_type IN ('repeche', 'agent_libre'));
 -- ALTER TABLE pooler_rosters
 --   ADD COLUMN IF NOT EXISTS pool_draft_year INTEGER;
 
