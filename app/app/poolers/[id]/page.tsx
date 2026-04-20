@@ -85,7 +85,7 @@ const getNextCap = (player: PlayerRow | null, nextSeason: string | undefined): n
 
 const getYearsRemaining = (player: PlayerRow | null, currentSeason: string | undefined): number => {
   if (!player || !currentSeason) return 0
-  return (player.player_contracts ?? []).filter(c => c.season >= currentSeason).length
+  return (player.player_contracts ?? []).filter(c => c.season >= currentSeason && c.cap_number > 0).length
 }
 
 type Trend = 'up' | 'down' | 'flat' | 'none'
