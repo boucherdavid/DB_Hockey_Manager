@@ -7,8 +7,13 @@ export default function InstallBanner() {
   const [prompt, setPrompt] = useState<Event | null>(null)
 
   useEffect(() => {
-    // Ne pas afficher si déjà en mode standalone (app installée)
-    if (window.matchMedia('(display-mode: standalone)').matches) return
+    // Ne pas afficher si déjà en mode standalone (Chrome/Android/desktop)
+    // ou sur iOS quand l'app est ajoutée à l'écran d'accueil (navigator.standalone)
+    if (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window.navigator as any).standalone === true
+    ) return
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const deferred = (window as any).__pwaPrompt
