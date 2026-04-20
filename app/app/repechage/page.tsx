@@ -48,14 +48,14 @@ export default async function RepechagePage() {
     .eq('is_active', true)
     .single()
 
-  // Banque de recrues active : player_id → pooler name + infos joueur pour fallback
+  // Recrues actives : player_type='recrue' (banque) OU actif/autre avec rookie_type défini
   const { data: rosterEntries } = saison
     ? await supabase
         .from('pooler_rosters')
         .select('player_id, players(first_name, last_name, position), poolers(name)')
         .eq('pool_season_id', saison.id)
-        .eq('player_type', 'recrue')
         .eq('is_active', true)
+        .not('rookie_type', 'is', null)
     : { data: [] }
 
   // Players en DB avec draft info pour enrichir les picks API
