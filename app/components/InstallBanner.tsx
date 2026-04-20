@@ -46,7 +46,7 @@ export default function InstallBanner() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icons/icon-192x192.png" alt="Logo" className="w-8 h-8 rounded shrink-0" />
         <div className="min-w-0">
-          <p className="text-white text-sm font-medium">Installer Hockey Pool</p>
+          <p className="text-white text-sm font-medium">Installer DB Hockey Manager</p>
           {prompt ? (
             <p className="text-pool-silver text-xs">Accès rapide depuis votre écran d&apos;accueil</p>
           ) : (
