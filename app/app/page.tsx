@@ -3,21 +3,22 @@ import Link from 'next/link'
 
 export default async function Home() {
   const supabase = await createClient()
-  const { data: saison } = await supabase
-    .from('pool_seasons')
-    .select('*')
-    .eq('is_active', true)
-    .single()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: poolers } = await supabase
-    .from('poolers')
-    .select('id, name')
-    .order('name')
+  const [{ data: saison }, { data: poolers }, { data: me }] = await Promise.all([
+    supabase.from('pool_seasons').select('*').eq('is_active', true).single(),
+    supabase.from('poolers').select('id, name').order('name'),
+    user
+      ? supabase.from('poolers').select('name').eq('id', user.id).single()
+      : Promise.resolve({ data: null }),
+  ])
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Hockey Pool</h1>
+        <h1 className="text-3xl font-bold text-gray-800">
+          {me ? <>Bienvenue {me.name} sur DB Hockey Manager</> : 'DB Hockey Manager'}
+        </h1>
         {saison && (
           <p className="text-gray-500 mt-1">
             Saison {saison.season} — Cap pool:{' '}
