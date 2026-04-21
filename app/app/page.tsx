@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
-// ---------- helpers schedule ----------
+// ---------- schedule ----------
 
 type TodayGame = {
   id: number
@@ -68,7 +68,7 @@ const GAME_STATE_LABEL: Record<string, string> = {
   LIVE: 'En cours', CRIT: 'En cours', FINAL: 'Terminé', OFF: 'Terminé',
 }
 
-// ---------- helper positions ----------
+// ---------- position helpers ----------
 
 function posGroup(pos: string): 'A' | 'D' | 'G' {
   if (pos === 'G') return 'G'
@@ -76,7 +76,7 @@ function posGroup(pos: string): 'A' | 'D' | 'G' {
   return 'A'
 }
 
-function fmtActifs(players: Array<{ position: string }>): string {
+function fmtDetail(players: Array<{ position: string }>): string {
   const counts = { A: 0, D: 0, G: 0 }
   for (const p of players) counts[posGroup(p.position)]++
   return (['A', 'D', 'G'] as const)
@@ -85,7 +85,17 @@ function fmtActifs(players: Array<{ position: string }>): string {
     .join(' · ')
 }
 
-// ---------- playoff standings (home, compact) ----------
+// ---------- types activité ----------
+
+type PoolerActivity = {
+  poolerId: string
+  poolerName: string
+  count: number
+  detail: string
+  isMe: boolean
+}
+
+// ---------- playoff standings (compact) ----------
 
 type PlayoffRow = { poolerId: string; poolerName: string; totalPoints: number }
 
@@ -143,61 +153,142 @@ async function buildPlayoffStandingsCompact(supabase: any, psId: number): Promis
 
 const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
 
-// ---------- sous-composants inline ----------
+// ---------- composants inline ----------
 
-function ScheduleWidget({
+function ActivityTable({
+  activity,
   todayDate,
-  todayGames,
-  myPlayingPlayers,
+  hasGames,
 }: {
+  activity: PoolerActivity[]
   todayDate: string
-  todayGames: TodayGame[]
-  myPlayingPlayers: Array<{ lastName: string; position: string }>
+  hasGames: boolean
 }) {
-  const actifLabel = fmtActifs(myPlayingPlayers)
+  if (!hasGames) return null
 
   return (
-    <div className="space-y-2">
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="bg-slate-700 px-5 py-3">
-          <h2 className="text-white font-bold text-sm uppercase tracking-wide">
-            {todayDate ? `Matchs — ${fmtDateFr(todayDate)}` : 'Matchs du jour'}
-          </h2>
-        </div>
-        {todayGames.length === 0 ? (
-          <p className="px-5 py-4 text-sm text-gray-400">Aucun match aujourd&apos;hui.</p>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {todayGames.map(g => {
-              const stateLabel = GAME_STATE_LABEL[g.gameState]
-              return (
-                <li key={g.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-gray-800">
-                    {g.awayAbbrev} <span className="text-gray-400 font-normal">@</span> {g.homeAbbrev}
-                  </span>
-                  <span className={`text-xs shrink-0 ${stateLabel ? 'text-green-600 font-medium' : 'text-gray-400'}`}>
-                    {stateLabel ?? fmtGameTime(g.startTimeUTC)}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        )}
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-slate-700 px-5 py-3">
+        <h2 className="text-white font-bold text-sm uppercase tracking-wide">
+          Joueurs en action — {todayDate ? fmtDateFr(todayDate) : 'ce soir'}
+        </h2>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs text-gray-400 uppercase tracking-wide">
+            <tr>
+              <th className="px-4 py-2 text-left">Pooler</th>
+              <th className="px-2 py-2 text-center w-12">Nb</th>
+              <th className="px-4 py-2 text-left">Détail</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {activity.map(p => (
+              <tr key={p.poolerId} className={p.isMe ? 'bg-blue-50' : 'hover:bg-gray-50'}>
+                <td className="px-4 py-2.5 font-medium text-gray-800">
+                  {p.poolerName}
+                  {p.isMe && <span className="ml-1.5 text-xs text-blue-500">(toi)</span>}
+                </td>
+                <td className="px-2 py-2.5 text-center font-bold text-gray-700">
+                  {p.count > 0 ? p.count : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="px-4 py-2.5 text-xs font-medium text-gray-500">
+                  {p.detail || <span className="text-gray-300">—</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function ScheduleList({
+  todayDate,
+  games,
+}: {
+  todayDate: string
+  games: TodayGame[]
+}) {
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-slate-700 px-5 py-3">
+        <h2 className="text-white font-bold text-sm uppercase tracking-wide">
+          {todayDate ? `Matchs — ${fmtDateFr(todayDate)}` : 'Matchs du jour'}
+        </h2>
+      </div>
+      {games.length === 0 ? (
+        <p className="px-5 py-4 text-sm text-gray-400">Aucun match aujourd&apos;hui.</p>
+      ) : (
+        <ul className="divide-y divide-gray-100">
+          {games.map(g => {
+            const stateLabel = GAME_STATE_LABEL[g.gameState]
+            return (
+              <li key={g.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-gray-800">
+                  {g.awayAbbrev} <span className="text-gray-400 font-normal">@</span> {g.homeAbbrev}
+                </span>
+                <span className={`text-xs shrink-0 ${stateLabel ? 'text-green-600 font-medium' : 'text-gray-400'}`}>
+                  {stateLabel ?? fmtGameTime(g.startTimeUTC)}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+// ---------- header ----------
+
+function Header({
+  name, saison, ps, mode, hasActiveSaison, hasActiveSeries,
+}: {
+  name: string | null
+  saison: { season: string; pool_cap: number } | null
+  ps: { season: string; current_round: number } | null
+  mode: 'saison' | 'series'
+  hasActiveSaison: boolean
+  hasActiveSeries: boolean
+}) {
+  const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
+  const roundLabel = ps ? (ROUND_LABEL[ps.current_round - 1] ?? `Ronde ${ps.current_round}`) : ''
+
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+      <div className="flex-1">
+        <h1 className="text-3xl font-bold text-gray-800">
+          {name ? <>Bienvenue {name} sur DB Hockey Manager</> : 'DB Hockey Manager'}
+        </h1>
+        <p className="text-gray-500 mt-1">
+          {mode === 'saison' && saison && (
+            <>
+              Saison {saison.season} &middot; Cap pool :{' '}
+              <span className="font-semibold text-blue-700">
+                {new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(saison.pool_cap)}
+              </span>
+            </>
+          )}
+          {mode === 'series' && ps && <>Séries {ps.season} &middot; {roundLabel}</>}
+        </p>
       </div>
 
-      {myPlayingPlayers.length > 0 ? (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm">
-          <p className="font-semibold text-blue-800">
-            {myPlayingPlayers.length} joueur{myPlayingPlayers.length > 1 ? 's' : ''} en action ce soir
-          </p>
-          <p className="text-blue-600 font-medium mt-0.5">{actifLabel}</p>
-          <p className="text-blue-500 text-xs mt-0.5">
-            {myPlayingPlayers.map(p => p.lastName).join(', ')}
-          </p>
-        </div>
-      ) : (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-500">
-          Aucun de tes joueurs actifs ne joue aujourd&apos;hui.
+      {hasActiveSaison && hasActiveSeries && (
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm shrink-0">
+          <Link
+            href={mode === 'saison' ? '/' : '/?mode=saison'}
+            className={`px-4 py-2 font-medium transition-colors ${mode === 'saison' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+          >
+            Saison
+          </Link>
+          <Link
+            href={mode === 'series' ? '/' : '/?mode=series'}
+            className={`px-4 py-2 font-medium transition-colors border-l border-gray-200 ${mode === 'series' ? 'bg-orange-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+          >
+            Séries
+          </Link>
         </div>
       )}
     </div>
@@ -228,17 +319,26 @@ export default async function Home({
   const defaultMode = hasActiveSeries ? 'series' : 'saison'
   const mode = modeParam === 'saison' ? 'saison' : modeParam === 'series' ? 'series' : defaultMode
 
-  // Fetch schedule (commun aux deux modes)
   const { date: todayDate, games: todayGames } = await fetchTodayGames()
   const playingTeams = new Set(todayGames.flatMap(g => [g.awayAbbrev, g.homeAbbrev]))
+  const hasGames = todayGames.length > 0
 
   // ---- Mode Saison ----
   if (mode === 'saison') {
     const standings = saison ? await buildStandings(supabase, saison.id) : []
-    const myStanding = me?.id ? standings.find(s => s.poolerId === me.id) : null
-    const myPlayersToday = (myStanding?.players ?? [])
-      .filter(p => p.playerType === 'actif' && playingTeams.has(p.teamAbbrev))
-      .map(p => ({ lastName: p.lastName, position: p.position }))
+
+    const activity: PoolerActivity[] = standings.map(pooler => {
+      const playing = pooler.players.filter(
+        p => p.playerType === 'actif' && playingTeams.has(p.teamAbbrev)
+      )
+      return {
+        poolerId: pooler.poolerId,
+        poolerName: pooler.poolerName,
+        count: playing.length,
+        detail: fmtDetail(playing),
+        isMe: me?.id === pooler.poolerId,
+      }
+    }).sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
 
     return (
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -262,7 +362,11 @@ export default async function Home({
               </div>
             )}
           </div>
-          <ScheduleWidget todayDate={todayDate} todayGames={todayGames} myPlayingPlayers={myPlayersToday} />
+
+          <div className="space-y-4">
+            <ScheduleList todayDate={todayDate} games={todayGames} />
+            <ActivityTable activity={activity} todayDate={todayDate} hasGames={hasGames} />
+          </div>
         </div>
       </div>
     )
@@ -271,21 +375,40 @@ export default async function Home({
   // ---- Mode Séries ----
   const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
 
-  // Joueurs actifs du pooler en séries (pour le widget)
-  const { data: picksRows } = me?.id && ps ? await supabase
+  // Joueurs actifs de tous les poolers en séries (pour l'activité)
+  const { data: allPicksRows } = ps ? await supabase
     .from('playoff_rosters')
-    .select('players(last_name, position, teams(code))')
+    .select('pooler_id, poolers(id, name), players(position, teams(code))')
     .eq('playoff_season_id', ps.id)
-    .eq('pooler_id', me.id)
     .eq('is_active', true)
     : { data: null }
 
-  const mySeriesPlayersToday = (picksRows ?? []).flatMap(r => {
-    const p = r.players as unknown as { last_name: string; position: string; teams: { code: string } | null } | null
-    if (!p || !p.teams) return []
-    if (!playingTeams.has(p.teams.code)) return []
-    return [{ lastName: p.last_name, position: p.position }]
-  })
+  type PickRow = {
+    pooler_id: string
+    poolers: { id: string; name: string } | null
+    players: { position: string; teams: { code: string } | null } | null
+  }
+
+  const seriesPoolerMap = new Map<string, { name: string; playing: Array<{ position: string }> }>()
+  for (const row of (allPicksRows ?? []) as unknown as PickRow[]) {
+    const pooler = row.poolers
+    const player = row.players
+    if (!pooler || !player) continue
+    if (!seriesPoolerMap.has(pooler.id)) seriesPoolerMap.set(pooler.id, { name: pooler.name, playing: [] })
+    if (player.teams && playingTeams.has(player.teams.code)) {
+      seriesPoolerMap.get(pooler.id)!.playing.push({ position: player.position })
+    }
+  }
+
+  const seriesActivity: PoolerActivity[] = Array.from(seriesPoolerMap.entries())
+    .map(([id, { name, playing }]) => ({
+      poolerId: id,
+      poolerName: name,
+      count: playing.length,
+      detail: fmtDetail(playing),
+      isMe: me?.id === id,
+    }))
+    .sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
 
   // Classement séries
   let playoffStandings: PlayoffRow[] = []
@@ -317,9 +440,8 @@ export default async function Home({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-2">
-          {/* Classement séries */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="bg-slate-800 px-5 py-3 flex items-center justify-between">
+            <div className="bg-slate-800 px-5 py-3">
               <h2 className="text-white font-bold text-sm uppercase tracking-wide">
                 Classement séries — {roundLabel}
               </h2>
@@ -375,65 +497,11 @@ export default async function Home({
           </div>
         </div>
 
-        <ScheduleWidget todayDate={todayDate} todayGames={todayGames} myPlayingPlayers={mySeriesPlayersToday} />
-      </div>
-    </div>
-  )
-}
-
-// ---------- header partagé ----------
-
-function Header({
-  name, saison, ps, mode, hasActiveSaison, hasActiveSeries,
-}: {
-  name: string | null
-  saison: { season: string; pool_cap: number } | null
-  ps: { season: string; current_round: number } | null
-  mode: 'saison' | 'series'
-  hasActiveSaison: boolean
-  hasActiveSeries: boolean
-}) {
-  const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
-  const roundLabel = ps ? (ROUND_LABEL[ps.current_round - 1] ?? `Ronde ${ps.current_round}`) : ''
-
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-      <div className="flex-1">
-        <h1 className="text-3xl font-bold text-gray-800">
-          {name ? <>Bienvenue {name} sur DB Hockey Manager</> : 'DB Hockey Manager'}
-        </h1>
-        <p className="text-gray-500 mt-1">
-          {mode === 'saison' && saison && (
-            <>
-              Saison {saison.season} &middot; Cap pool :{' '}
-              <span className="font-semibold text-blue-700">
-                {new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(saison.pool_cap)}
-              </span>
-            </>
-          )}
-          {mode === 'series' && ps && (
-            <>Séries {ps.season} &middot; {roundLabel}</>
-          )}
-        </p>
-      </div>
-
-      {/* Toggle mode — seulement si les deux sont actifs */}
-      {hasActiveSaison && hasActiveSeries && (
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm shrink-0">
-          <Link
-            href={mode === 'saison' ? '/' : '/?mode=saison'}
-            className={`px-4 py-2 font-medium transition-colors ${mode === 'saison' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-          >
-            Saison
-          </Link>
-          <Link
-            href={mode === 'series' ? '/' : '/?mode=series'}
-            className={`px-4 py-2 font-medium transition-colors border-l border-gray-200 ${mode === 'series' ? 'bg-orange-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-          >
-            Séries
-          </Link>
+        <div className="space-y-4">
+          <ScheduleList todayDate={todayDate} games={todayGames} />
+          <ActivityTable activity={seriesActivity} todayDate={todayDate} hasGames={hasGames} />
         </div>
-      )}
+      </div>
     </div>
   )
 }

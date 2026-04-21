@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import TeamBadge from '@/components/TeamBadge'
+import PoolerSwitcher from '@/components/PoolerSwitcher'
 
 const DASH = '\u2014'
 const STAR = '\u2605'
@@ -300,11 +301,10 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     .eq('is_active', true)
     .single()
 
-  const { data: pooler } = await supabase
-    .from('poolers')
-    .select('id, name')
-    .eq('id', id)
-    .single()
+  const [{ data: pooler }, { data: allPoolers }] = await Promise.all([
+    supabase.from('poolers').select('id, name').eq('id', id).single(),
+    supabase.from('poolers').select('id, name').order('name'),
+  ])
 
   if (!pooler) notFound()
 
@@ -387,9 +387,14 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">{pooler.name}</h1>
-        {saison && <p className="text-gray-500 text-sm">Saison {saison.season}</p>}
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">{pooler.name}</h1>
+          {saison && <p className="text-gray-500 text-sm">Saison {saison.season}</p>}
+        </div>
+        {allPoolers && allPoolers.length > 1 && (
+          <PoolerSwitcher poolers={allPoolers} currentId={id} />
+        )}
       </div>
 
       <div className="bg-white rounded-lg shadow p-5 mb-6 space-y-3">
