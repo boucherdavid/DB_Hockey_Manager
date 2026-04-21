@@ -60,6 +60,12 @@ export default async function SeriesPicksPage() {
     .eq('season', seasonLabel)
     .gt('cap_number', 0)
 
+  // Fallback statique si la colonne conference n'est pas renseignée en BD
+  const EASTERN_TEAMS = new Set([
+    'BOS','BUF','DET','FLA','MTL','OTT','TBL','TOR',
+    'CAR','CBJ','NJD','NYI','NYR','PHI','PIT','WSH',
+  ])
+
   type PlayerRow = {
     id: number
     first_name: string
@@ -75,17 +81,21 @@ export default async function SeriesPicksPage() {
       id: number; first_name: string; last_name: string; position: string
       teams: { code: string; conference: string } | null
     } | null
-    if (!p || !p.position || !p.teams?.conference) return []
+    if (!p || !p.position || !p.teams) return []
+    const teamCode = p.teams.code
+    const conference = p.teams.conference || (EASTERN_TEAMS.has(teamCode) ? 'Est' : 'Ouest')
     return [{
       id: p.id,
       first_name: p.first_name,
       last_name: p.last_name,
       position: p.position,
       cap_number: c.cap_number,
-      team_abbrev: p.teams.code,
-      conference: p.teams.conference,
+      team_abbrev: teamCode,
+      conference,
     }]
-  }).sort((a, b) => a.last_name.localeCompare(b.last_name))
+  }).sort((a, b) =>
+    a.team_abbrev.localeCompare(b.team_abbrev) || b.cap_number - a.cap_number
+  )
 
   // Picks actuels formatés
   const currentPicks = (rawPicks ?? []).flatMap(r => {

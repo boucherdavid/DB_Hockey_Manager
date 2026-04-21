@@ -1,9 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
-import { fetchNhlSkaters, fetchNhlGoalies, normName } from '@/lib/nhl-stats'
+import { buildStandings } from '@/lib/standings'
 import ClassementTable from '../classement/ClassementTable'
-import type { PoolerStanding } from '../classement/page'
 
-export const metadata = { title: 'Poolers — Classement' }
+export const metadata = { title: 'Classement' }
 export const dynamic = 'force-dynamic'
 
 export default async function PoolersPage() {
@@ -24,92 +23,7 @@ export default async function PoolersPage() {
     )
   }
 
-  const [
-    { data: rosterRows },
-    { data: scoringRows },
-    skatersMap,
-    goaliesMap,
-  ] = await Promise.all([
-    supabase
-      .from('pooler_rosters')
-      .select('player_type, poolers(id, name), players(first_name, last_name, position)')
-      .eq('pool_season_id', season.id)
-      .eq('is_active', true)
-      .in('player_type', ['actif', 'reserviste', 'ltir']),
-    supabase.from('scoring_config').select('stat_key, points'),
-    fetchNhlSkaters(),
-    fetchNhlGoalies(),
-  ])
-
-  const scoring: Record<string, number> = {}
-  for (const r of scoringRows ?? []) scoring[r.stat_key] = Number(r.points)
-  const pts = {
-    goal:           scoring.goal           ?? 1,
-    assist:         scoring.assist         ?? 1,
-    goalie_win:     scoring.goalie_win     ?? 2,
-    goalie_otl:     scoring.goalie_otl     ?? 1,
-    goalie_shutout: scoring.goalie_shutout ?? 2,
-  }
-
-  const poolerMap = new Map<string, { name: string; players: PoolerStanding['players'] }>()
-
-  for (const row of rosterRows ?? []) {
-    const pooler = row.poolers as unknown as { id: string; name: string } | null
-    const player = row.players as unknown as { first_name: string; last_name: string; position: string } | null
-    if (!pooler || !player) continue
-
-    if (!poolerMap.has(pooler.id)) poolerMap.set(pooler.id, { name: pooler.name, players: [] })
-
-    const isGoalie = player.position === 'G'
-    const key = normName(`${player.first_name} ${player.last_name}`)
-
-    if (isGoalie) {
-      const stat     = goaliesMap.get(key)
-      const wins     = stat?.wins     ?? 0
-      const otl      = stat?.otLosses ?? 0
-      const shutouts = stat?.shutouts ?? 0
-      const goals    = stat?.goals    ?? 0
-      const assists  = stat?.assists  ?? 0
-      poolerMap.get(pooler.id)!.players.push({
-        firstName: player.first_name, lastName: player.last_name,
-        position: 'G', playerType: row.player_type,
-        teamAbbrev: stat?.teamAbbrev ?? '—',
-        gamesPlayed: stat?.gamesStarted ?? 0,
-        goals, assists, goalieWins: wins, goalieOtl: otl, goalieShutouts: shutouts,
-        poolPoints:
-          wins * pts.goalie_win +
-          otl  * pts.goalie_otl +
-          shutouts * pts.goalie_shutout +
-          goals * pts.goal +
-          assists * pts.assist,
-      })
-    } else {
-      const stat    = skatersMap.get(key)
-      const goals   = stat?.goals   ?? 0
-      const assists = stat?.assists ?? 0
-      poolerMap.get(pooler.id)!.players.push({
-        firstName: player.first_name, lastName: player.last_name,
-        position: stat?.position ?? player.position,
-        playerType: row.player_type,
-        teamAbbrev: stat?.teamAbbrev ?? '—',
-        gamesPlayed: stat?.gamesPlayed ?? 0,
-        goals, assists, goalieWins: 0, goalieOtl: 0, goalieShutouts: 0,
-        poolPoints: goals * pts.goal + assists * pts.assist,
-      })
-    }
-  }
-
-  const standings: PoolerStanding[] = Array.from(poolerMap.entries())
-    .map(([poolerId, { name, players }]) => ({
-      poolerId,
-      poolerName: name,
-      totalPoints: players
-        .filter(p => p.playerType === 'actif')
-        .reduce((s, p) => s + p.poolPoints, 0),
-      players,
-    }))
-    .sort((a, b) => b.totalPoints - a.totalPoints || a.poolerName.localeCompare(b.poolerName))
-
+  const standings = await buildStandings(supabase, season.id)
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
