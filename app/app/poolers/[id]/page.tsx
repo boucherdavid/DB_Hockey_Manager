@@ -259,7 +259,7 @@ function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft,
     ]
     return (
       <div className="mb-6">
-        {title && <h3 className="font-semibold text-gray-700 mb-2">{title} ({rows.length})</h3>}
+        {title && <h3 className="font-semibold text-gray-700 mb-2">{title}{!title.includes('(') ? ` (${rows.length})` : ''}</h3>}
         {rows.length === 0
           ? <p className="text-gray-400 text-sm py-2">Aucun joueur</p>
           : groups.map(({ label, bucket }) => {
@@ -281,7 +281,7 @@ function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft,
 
   return (
     <div className="mb-6">
-      <h3 className="font-semibold text-gray-700 mb-2">{title} ({rows.length})</h3>
+      <h3 className="font-semibold text-gray-700 mb-2">{title}{!title.includes('(') ? ` (${rows.length})` : ''}</h3>
       {rows.length > 0
         ? <div className="overflow-x-auto"><table className="w-full text-sm">{thead}<tbody>{renderRows(rows)}</tbody></table></div>
         : <p className="text-gray-400 text-sm py-2">Aucun joueur</p>
