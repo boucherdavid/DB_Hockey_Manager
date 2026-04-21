@@ -451,7 +451,7 @@ export default async function Home({
                 <p className="text-sm text-gray-500">Le classement sera disponible une fois la comptabilisation démarrée par l&apos;admin.</p>
                 {waitingPoolers.length > 0 && (
                   <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">{waitingPoolers.length} pooler{waitingPoolers.length > 1 ? 's ont' : ' a'} soumis ses picks :</p>
+                    <p className="text-sm font-medium text-gray-700 mb-2">{waitingPoolers.length} pooler{waitingPoolers.length > 1 ? 's ont' : ' a'} soumis ses choix :</p>
                     <div className="flex flex-wrap gap-1.5">
                       {waitingPoolers.map(n => (
                         <span key={n} className="text-xs bg-green-100 text-green-700 rounded-full px-3 py-0.5">{n}</span>
@@ -461,12 +461,12 @@ export default async function Home({
                 )}
                 {me && (
                   <Link href="/series/picks" className="inline-block text-sm text-blue-600 hover:underline">
-                    Soumettre / modifier mes picks →
+                    Soumettre / modifier mes choix →
                   </Link>
                 )}
               </div>
             ) : playoffStandings.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-gray-400">Aucun pooler n&apos;a encore soumis ses picks.</p>
+              <p className="px-5 py-4 text-sm text-gray-400">Aucun pooler n&apos;a encore soumis ses choix.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

@@ -61,7 +61,7 @@ export default function SeriesAdmin({
   }
 
   async function handleAdvance(id: number) {
-    if (!confirm('Avancer à la prochaine ronde ? Les poolers pourront modifier leurs picks.')) return
+    if (!confirm('Avancer à la prochaine ronde ? Les poolers pourront modifier leurs choix.')) return
     setBusy(true)
     setMsg(null)
     const res = await advanceRoundAction(id)
@@ -76,8 +76,8 @@ export default function SeriesAdmin({
     const missing = total - submitted
 
     const confirmMsg = missing > 0
-      ? `${submitted}/${total} poolers ont soumis leurs picks. ${missing} n'ont pas encore de picks. Démarrer quand même ?`
-      : `Tous les poolers ont soumis leurs picks. Démarrer la comptabilisation ?`
+      ? `${submitted}/${total} poolers ont soumis leurs choix. ${missing} n'ont pas encore de choix. Démarrer quand même ?`
+      : `Tous les poolers ont soumis leurs choix. Démarrer la comptabilisation ?`
 
     if (!confirm(confirmMsg)) return
     setBusy(true)
@@ -85,7 +85,7 @@ export default function SeriesAdmin({
     const res = await startScoringAction(id)
     setBusy(false)
     if (res.error) setMsg({ type: 'err', text: res.error })
-    else setMsg({ type: 'ok', text: `Comptabilisation démarrée. ${res.updated} picks verrouillés.` })
+    else setMsg({ type: 'ok', text: `Comptabilisation démarrée. ${res.updated} choix verrouillés.` })
   }
 
   return (
@@ -119,7 +119,7 @@ export default function SeriesAdmin({
                       {pc && (
                         <div className="text-sm mt-1">
                           <span className={pc.pooler_count === pc.total_poolers ? 'text-green-600 font-medium' : 'text-orange-600'}>
-                            {pc.pooler_count}/{pc.total_poolers} poolers ont soumis leurs picks
+                            {pc.pooler_count}/{pc.total_poolers} poolers ont soumis leurs choix
                           </span>
                         </div>
                       )}

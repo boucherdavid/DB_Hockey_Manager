@@ -63,7 +63,7 @@ export default async function SeriesPage() {
           </div>
           {submitted.size > 0 && (
             <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">{submitted.size} pooler{submitted.size > 1 ? 's ont' : ' a'} soumis ses picks :</p>
+              <p className="text-sm font-medium text-gray-700 mb-2">{submitted.size} pooler{submitted.size > 1 ? 's ont' : ' a'} soumis ses choix :</p>
               <div className="flex flex-wrap gap-2">
                 {Array.from(submitted.values()).map(name => (
                   <span key={name} className="text-xs bg-green-100 text-green-700 rounded-full px-3 py-1">{name}</span>
@@ -73,7 +73,7 @@ export default async function SeriesPage() {
           )}
           {user && (
             <Link href="/series/picks" className="inline-block bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700">
-              Soumettre / modifier mes picks
+              Soumettre / modifier mes choix
             </Link>
           )}
         </div>
@@ -229,13 +229,13 @@ export default async function SeriesPage() {
         </div>
         {user && (
           <Link href="/series/picks" className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700">
-            Mes picks
+            Mes choix
           </Link>
         )}
       </div>
 
       {standings.length === 0 ? (
-        <p className="text-gray-500">Aucun pooler n&apos;a encore soumis ses picks.</p>
+        <p className="text-gray-500">Aucun pooler n&apos;a encore soumis ses choix.</p>
       ) : (
         <div className="space-y-3">
           {standings.map((pooler, i) => (

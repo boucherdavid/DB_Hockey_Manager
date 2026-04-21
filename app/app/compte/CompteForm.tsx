@@ -151,7 +151,7 @@ export default function CompteForm({ profile }: { profile: Profile }) {
               required
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <p className="text-xs text-gray-400 mt-1">Ce nom apparaît dans le classement et les picks.</p>
+            <p className="text-xs text-gray-400 mt-1">Ce nom apparaît dans le classement et les choix.</p>
           </div>
           <button type="submit" disabled={nameBusy || name.trim() === profile.name}
             className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">

@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import PicksManager from './PicksManager'
 
-export const metadata = { title: 'Mes picks — Séries' }
+export const metadata = { title: 'Mes choix — Séries' }
 export const dynamic = 'force-dynamic'
 
 export default async function SeriesPicksPage() {

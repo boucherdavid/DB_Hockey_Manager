@@ -195,7 +195,7 @@ export default function PicksManager({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Mes picks — Séries</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Mes choix — Séries</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Ronde {currentRound} — {roundLabel}
             &nbsp;·&nbsp;Cap {(capPerRound / 1_000_000).toFixed(1)} M$ par conférence
