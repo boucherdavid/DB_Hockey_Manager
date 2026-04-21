@@ -22,28 +22,29 @@ function CloseIcon() {
   )
 }
 
-function Avatar({ name }: { name: string }) {
-  const initials = name
-    .split(' ')
-    .map(w => w[0] ?? '')
-    .slice(0, 2)
-    .join('')
-    .toUpperCase()
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+    </svg>
+  )
+}
 
-  // Couleur déterministe basée sur le nom
+function Avatar({ name }: { name: string }) {
+  const initials = name.split(' ').map(w => w[0] ?? '').slice(0, 2).join('').toUpperCase()
   const colors = [
     'bg-blue-600', 'bg-emerald-600', 'bg-violet-600',
     'bg-orange-600', 'bg-rose-600', 'bg-teal-600', 'bg-indigo-600', 'bg-amber-600',
   ]
   const idx = name.split('').reduce((s, c) => s + c.charCodeAt(0), 0) % colors.length
-  const color = colors[idx]
-
   return (
-    <div className={`w-8 h-8 rounded-full ${color} flex items-center justify-center text-white text-xs font-bold select-none`}>
+    <div className={`w-8 h-8 rounded-full ${colors[idx]} flex items-center justify-center text-white text-xs font-bold select-none`}>
       {initials}
     </div>
   )
 }
+
+type DropdownKey = 'pool-saison' | 'statistiques' | 'series' | 'profile' | null
 
 export default function Navbar({
   initialUserName,
@@ -58,12 +59,11 @@ export default function Navbar({
   const [userName, setUserName] = useState<string | null>(initialUserName)
   const [isAdmin, setIsAdmin] = useState(initialIsAdmin)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
+  const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null)
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null)
-  const profileRef = useRef<HTMLDivElement>(null)
+  const navRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Déjà installée : pas de bouton
     if (
       localStorage.getItem('pwaInstalled') === '1' ||
       window.matchMedia('(display-mode: standalone)').matches ||
@@ -75,31 +75,27 @@ export default function Navbar({
     if ((window as any).__pwaPrompt) setInstallPrompt((window as any).__pwaPrompt)
     const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e) }
     window.addEventListener('beforeinstallprompt', handler)
-
     const onInstalled = () => { localStorage.setItem('pwaInstalled', '1'); setInstallPrompt(null) }
     window.addEventListener('appinstalled', onInstalled)
-
     return () => {
       window.removeEventListener('beforeinstallprompt', handler)
       window.removeEventListener('appinstalled', onInstalled)
     }
   }, [])
 
-  // Ferme le menu profil si clic en dehors
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
-        setProfileOpen(false)
+      if (navRef.current && !navRef.current.contains(e.target as Node)) {
+        setOpenDropdown(null)
       }
     }
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
 
-  // Ferme les menus lors d'un changement de route
   useEffect(() => {
     setMenuOpen(false)
-    setProfileOpen(false)
+    setOpenDropdown(null)
   }, [pathname])
 
   useEffect(() => {
@@ -122,57 +118,103 @@ export default function Navbar({
     window.location.href = '/login'
   }
 
-  const linkClass = (href: string) =>
-    `px-3 py-2 rounded text-sm font-medium transition-colors ${
-      pathname === href || pathname.startsWith(href + '/')
-        ? 'bg-pool-navy-light text-white'
-        : 'text-pool-light hover:bg-pool-navy-light hover:text-white'
-    }`
+  const toggle = (key: DropdownKey) => setOpenDropdown(prev => prev === key ? null : key)
 
-  const mobileLinkClass = (href: string) =>
-    `block px-3 py-2 rounded text-sm font-medium transition-colors ${
-      pathname === href
-        ? 'bg-pool-navy-light text-white'
-        : 'text-pool-light hover:bg-pool-navy-light hover:text-white'
+  const isActive = (...paths: string[]) =>
+    paths.some(p => pathname === p || pathname.startsWith(p + '/'))
+
+  const navBtnClass = (active: boolean) =>
+    `flex items-center gap-1 px-3 py-2 rounded text-sm font-medium transition-colors ${
+      active ? 'bg-pool-navy-light text-white' : 'text-pool-light hover:bg-pool-navy-light hover:text-white'
     }`
 
   const dropdownLinkClass = (href: string) =>
     `block px-4 py-2 text-sm transition-colors ${
-      pathname === href
-        ? 'text-blue-600 font-medium bg-blue-50'
-        : 'text-gray-700 hover:bg-gray-50'
+      isActive(href) ? 'text-blue-600 font-medium bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
     }`
 
-  // Liens de navigation publics
-  const publicLinks = (
-    <>
-      <Link href="/joueurs"      className={linkClass('/joueurs')}>Contrats LNH</Link>
-      <Link href="/statistiques" className={linkClass('/statistiques')}>Statistiques</Link>
-      <Link href="/repechage"    className={linkClass('/repechage')}>{'Rep\u00eachage'}</Link>
-      <Link href="/poolers"      className={linkClass('/poolers')}>Classement</Link>
-      <Link href="/series"       className={linkClass('/series')}>{'S\u00e9ries'}</Link>
-      <Link href="/transactions" className={linkClass('/transactions')}>Transactions</Link>
-    </>
+  const mobileLinkClass = (href: string) =>
+    `block px-3 py-2 rounded text-sm font-medium transition-colors ${
+      isActive(href) ? 'bg-pool-navy-light text-white' : 'text-pool-light hover:bg-pool-navy-light hover:text-white'
+    }`
+
+  const MobileSection = ({ label }: { label: string }) => (
+    <div className="px-3 pt-3 pb-0.5 text-xs text-pool-silver uppercase tracking-wide font-semibold">{label}</div>
   )
 
   return (
-    <nav className="bg-pool-navy shadow">
+    <nav className="bg-pool-navy shadow" ref={navRef}>
       <div className="max-w-7xl mx-auto px-4">
-        {/* Barre principale */}
         <div className="flex items-center justify-between h-14">
 
-          {/* Gauche : logo + liens publics */}
+          {/* Gauche : logo + liens */}
           <div className="flex items-center gap-1 min-w-0">
             <Link href="/" className="flex items-center gap-2 text-white font-bold text-sm mr-3 shrink-0 hover:opacity-80 transition-opacity">
               <Image src="/icons/icon-192x192.png" alt="Logo" width={32} height={32} className="rounded" />
-              <span className="hidden lg:inline">{"Page d\u2019accueil"}</span>
+              <span className="hidden lg:inline">Accueil</span>
             </Link>
+
             <div className="hidden md:flex items-center gap-1">
-              {publicLinks}
+
+              {/* Pool Saison */}
+              <div className="relative">
+                <button onClick={() => toggle('pool-saison')}
+                  className={navBtnClass(isActive('/dashboard', '/poolers', '/transactions'))}>
+                  Pool Saison <Chevron open={openDropdown === 'pool-saison'} />
+                </button>
+                {openDropdown === 'pool-saison' && (
+                  <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                    {userName && <Link href="/dashboard"    className={dropdownLinkClass('/dashboard')}>Mon alignement</Link>}
+                    <Link href="/poolers"      className={dropdownLinkClass('/poolers')}>Classement</Link>
+                    <Link href="/transactions" className={dropdownLinkClass('/transactions')}>Transactions</Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Statistiques */}
+              <div className="relative">
+                <button onClick={() => toggle('statistiques')}
+                  className={navBtnClass(isActive('/statistiques'))}>
+                  Statistiques <Chevron open={openDropdown === 'statistiques'} />
+                </button>
+                {openDropdown === 'statistiques' && (
+                  <div className="absolute left-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                    <Link href="/statistiques" className={dropdownLinkClass('/statistiques')}>LNH</Link>
+                    <span className="flex items-center gap-2 px-4 py-2 text-sm text-gray-400 cursor-default">
+                      AHL <span className="text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">À venir</span>
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Contrats LNH */}
+              <Link href="/joueurs" className={navBtnClass(isActive('/joueurs'))}>
+                Contrats LNH
+              </Link>
+
+              {/* Repêchage */}
+              <Link href="/repechage" className={navBtnClass(isActive('/repechage'))}>
+                {'Rep\u00eachage'}
+              </Link>
+
+              {/* Pool Séries */}
+              <div className="relative">
+                <button onClick={() => toggle('series')}
+                  className={navBtnClass(isActive('/series'))}>
+                  {'Pool S\u00e9ries'} <Chevron open={openDropdown === 'series'} />
+                </button>
+                {openDropdown === 'series' && (
+                  <div className="absolute left-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                    {userName && <Link href="/series/picks" className={dropdownLinkClass('/series/picks')}>Mes choix</Link>}
+                    <Link href="/series" className={dropdownLinkClass('/series')}>Classement</Link>
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
 
-          {/* Droite : installer + avatar ou connexion + hamburger */}
+          {/* Droite : installer + avatar */}
           <div className="flex items-center gap-2 shrink-0">
             {installPrompt && (
               <button onClick={handleInstall}
@@ -182,28 +224,24 @@ export default function Navbar({
             )}
 
             {userName ? (
-              /* Avatar avec menu déroulant */
-              <div className="relative" ref={profileRef}>
+              <div className="relative">
                 <button
-                  onClick={() => setProfileOpen(v => !v)}
+                  onClick={() => toggle('profile')}
                   className="flex items-center gap-2 rounded-full p-0.5 hover:ring-2 hover:ring-white/30 transition-all"
                   aria-label="Menu du compte"
-                  aria-expanded={profileOpen}
+                  aria-expanded={openDropdown === 'profile'}
                 >
                   <Avatar name={userName} />
                 </button>
-
-                {profileOpen && (
+                {openDropdown === 'profile' && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 z-50 overflow-hidden">
                     <div className="px-4 py-2.5 border-b bg-gray-50">
                       <p className="text-xs text-gray-500">Connecté en tant que</p>
                       <p className="text-sm font-semibold text-gray-800 truncate">{userName}</p>
                     </div>
                     <div className="py-1">
-                      <Link href="/dashboard"  className={dropdownLinkClass('/dashboard')}>Mon alignement</Link>
-                      <Link href="/series/picks" className={dropdownLinkClass('/series/picks')}>Mes picks — Séries</Link>
-                      <Link href="/compte"     className={dropdownLinkClass('/compte')}>Mon compte</Link>
-                      <Link href="/signaler"   className={dropdownLinkClass('/signaler')}>Signaler un problème</Link>
+                      <Link href="/compte"   className={dropdownLinkClass('/compte')}>Mon compte</Link>
+                      <Link href="/signaler" className={dropdownLinkClass('/signaler')}>Signaler un problème</Link>
                     </div>
                     {isAdmin && (
                       <div className="py-1 border-t">
@@ -241,30 +279,38 @@ export default function Navbar({
           </div>
         </div>
 
-        {/* Menu mobile déroulant */}
+        {/* Menu mobile */}
         {menuOpen && (
-          <div className="md:hidden border-t border-pool-navy-light py-2 flex flex-col gap-1">
-            <Link href="/joueurs"      className={mobileLinkClass('/joueurs')}>Contrats LNH</Link>
-            <Link href="/statistiques" className={mobileLinkClass('/statistiques')}>Statistiques</Link>
-            <Link href="/repechage"    className={mobileLinkClass('/repechage')}>{'Rep\u00eachage'}</Link>
+          <div className="md:hidden border-t border-pool-navy-light py-2 flex flex-col gap-0.5">
+            <MobileSection label="Pool Saison" />
+            {userName && <Link href="/dashboard"    className={mobileLinkClass('/dashboard')}>Mon alignement</Link>}
             <Link href="/poolers"      className={mobileLinkClass('/poolers')}>Classement</Link>
-            <Link href="/series"       className={mobileLinkClass('/series')}>{'S\u00e9ries'}</Link>
             <Link href="/transactions" className={mobileLinkClass('/transactions')}>Transactions</Link>
+
+            <MobileSection label="Statistiques" />
+            <Link href="/statistiques" className={mobileLinkClass('/statistiques')}>LNH</Link>
+            <span className="px-3 py-2 text-sm text-pool-silver opacity-50">AHL (à venir)</span>
+
+            <MobileSection label="Autre" />
+            <Link href="/joueurs"   className={mobileLinkClass('/joueurs')}>Contrats LNH</Link>
+            <Link href="/repechage" className={mobileLinkClass('/repechage')}>{'Rep\u00eachage'}</Link>
+
+            <MobileSection label={'Pool S\u00e9ries'} />
+            {userName && <Link href="/series/picks" className={mobileLinkClass('/series/picks')}>Mes choix</Link>}
+            <Link href="/series" className={mobileLinkClass('/series')}>Classement</Link>
+
             {userName && (
-              <>
-                <div className="mt-1 pt-1 border-t border-pool-navy-light flex flex-col gap-1">
-                  <Link href="/dashboard"    className={mobileLinkClass('/dashboard')}>Mon alignement</Link>
-                  <Link href="/series/picks" className={mobileLinkClass('/series/picks')}>Mes picks — Séries</Link>
-                  <Link href="/compte"       className={mobileLinkClass('/compte')}>Mon compte</Link>
-                  <Link href="/signaler"     className={mobileLinkClass('/signaler')}>Signaler un problème</Link>
-                  {isAdmin && <Link href="/admin" className={mobileLinkClass('/admin')}>Admin</Link>}
-                  <button onClick={handleLogout}
-                    className="block text-left px-3 py-2 rounded text-sm font-medium text-red-400 hover:bg-pool-navy-light hover:text-red-300 transition-colors">
-                    {'D\u00e9connexion'}
-                  </button>
-                </div>
+              <div className="mt-1 pt-1 border-t border-pool-navy-light flex flex-col gap-0.5">
+                <MobileSection label="Compte" />
+                <Link href="/compte"   className={mobileLinkClass('/compte')}>Mon compte</Link>
+                <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler un problème</Link>
+                {isAdmin && <Link href="/admin" className={mobileLinkClass('/admin')}>Admin</Link>}
+                <button onClick={handleLogout}
+                  className="block text-left px-3 py-2 rounded text-sm font-medium text-red-400 hover:bg-pool-navy-light hover:text-red-300 transition-colors">
+                  {'D\u00e9connexion'}
+                </button>
                 <div className="px-3 py-1 text-pool-silver text-xs">{userName}</div>
-              </>
+              </div>
             )}
           </div>
         )}
