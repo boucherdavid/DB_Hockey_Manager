@@ -4,6 +4,44 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+export async function updateNameAction(name: string): Promise<{ error?: string }> {
+  const trimmed = name.trim()
+  if (!trimmed) return { error: 'Le nom ne peut pas être vide.' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+
+  const { error } = await supabase
+    .from('poolers')
+    .update({ name: trimmed })
+    .eq('id', user.id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/compte')
+  revalidatePath('/poolers')
+  return {}
+}
+
+export async function updateEmailAction(email: string): Promise<{ error?: string }> {
+  const trimmed = email.trim().toLowerCase()
+  if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return { error: 'Adresse courriel invalide.' }
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+  const { error } = await supabase.auth.updateUser(
+    { email: trimmed },
+    { emailRedirectTo: `${siteUrl}/compte` },
+  )
+  if (error) return { error: error.message }
+  return {}
+}
+
 export async function updatePasswordAction(newPassword: string): Promise<{ error?: string }> {
   if (newPassword.length < 6) return { error: 'Le mot de passe doit faire au moins 6 caractères.' }
 

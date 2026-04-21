@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { updatePasswordAction, updateProfileAction } from './actions'
+import { updatePasswordAction, updateProfileAction, updateNameAction, updateEmailAction } from './actions'
 
 type Profile = {
   name: string
@@ -13,19 +13,25 @@ type Profile = {
 }
 
 export default function CompteForm({ profile }: { profile: Profile }) {
+  const [name, setName] = useState(profile.name)
+  const [nameMsg, setNameMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [nameBusy, setNameBusy] = useState(false)
+
+  const [email, setEmail] = useState(profile.email)
+  const [emailMsg, setEmailMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [emailBusy, setEmailBusy] = useState(false)
+
   const [phone, setPhone] = useState(profile.phone ?? '')
   const [notifEmail, setNotifEmail] = useState(profile.notif_email)
   const [notifSms, setNotifSms] = useState(profile.notif_sms)
   const [profileMsg, setProfileMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [profileBusy, setProfileBusy] = useState(false)
 
-  const [currentPwd, setCurrentPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [confirmPwd, setConfirmPwd] = useState('')
   const [pwdMsg, setPwdMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [pwdBusy, setPwdBusy] = useState(false)
 
-  // Détecte le flow de réinitialisation (lien reçu par courriel)
   const [isRecovery, setIsRecovery] = useState(false)
   useEffect(() => {
     const hash = window.location.hash
@@ -34,7 +40,33 @@ export default function CompteForm({ profile }: { profile: Profile }) {
     }
   }, [])
 
-  async function handleProfile(e: React.FormEvent) {
+  async function handleName(e: { preventDefault(): void }) {
+    e.preventDefault()
+    setNameBusy(true)
+    setNameMsg(null)
+    const res = await updateNameAction(name)
+    setNameBusy(false)
+    setNameMsg(res.error ? { type: 'err', text: res.error } : { type: 'ok', text: 'Nom mis à jour.' })
+  }
+
+  async function handleEmail(e: { preventDefault(): void }) {
+    e.preventDefault()
+    if (email === profile.email) {
+      setEmailMsg({ type: 'err', text: 'Entrez une nouvelle adresse courriel.' })
+      return
+    }
+    setEmailBusy(true)
+    setEmailMsg(null)
+    const res = await updateEmailAction(email)
+    setEmailBusy(false)
+    if (res.error) {
+      setEmailMsg({ type: 'err', text: res.error })
+    } else {
+      setEmailMsg({ type: 'ok', text: 'Un lien de confirmation a été envoyé à la nouvelle adresse. Le changement sera effectif après confirmation.' })
+    }
+  }
+
+  async function handleProfile(e: { preventDefault(): void }) {
     e.preventDefault()
     setProfileBusy(true)
     setProfileMsg(null)
@@ -43,14 +75,13 @@ export default function CompteForm({ profile }: { profile: Profile }) {
     setProfileMsg(res.error ? { type: 'err', text: res.error } : { type: 'ok', text: 'Profil mis à jour.' })
   }
 
-  async function handlePassword(e: React.FormEvent) {
+  async function handlePassword(e: { preventDefault(): void }) {
     e.preventDefault()
     if (newPwd !== confirmPwd) {
       setPwdMsg({ type: 'err', text: 'Les mots de passe ne correspondent pas.' })
       return
     }
 
-    // Si c'est un flow de récupération, on vérifie d'abord la session avec le token du hash
     if (isRecovery) {
       const supabase = createClient()
       const hashParams = new URLSearchParams(window.location.hash.slice(1))
@@ -69,9 +100,8 @@ export default function CompteForm({ profile }: { profile: Profile }) {
       setPwdMsg({ type: 'err', text: res.error })
     } else {
       setPwdMsg({ type: 'ok', text: 'Mot de passe mis à jour.' })
-      setCurrentPwd(''); setNewPwd(''); setConfirmPwd('')
+      setNewPwd(''); setConfirmPwd('')
       setIsRecovery(false)
-      // Nettoyer le hash
       window.history.replaceState(null, '', window.location.pathname)
     }
   }
@@ -108,22 +138,59 @@ export default function CompteForm({ profile }: { profile: Profile }) {
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
       <h1 className="text-2xl font-bold text-gray-800">Mon compte</h1>
 
-      {/* Infos de base */}
+      {/* Nom d'affichage */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="font-bold text-lg text-gray-800 mb-4">Informations</h2>
-        <dl className="space-y-2 text-sm">
-          <div className="flex gap-3">
-            <dt className="text-gray-500 w-24 shrink-0">Nom</dt>
-            <dd className="font-medium text-gray-800">{profile.name}</dd>
+        <h2 className="font-bold text-lg text-gray-800 mb-4">Nom d&apos;affichage</h2>
+        <form onSubmit={handleName} className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">Ce nom apparaît dans le classement et les picks.</p>
           </div>
-          <div className="flex gap-3">
-            <dt className="text-gray-500 w-24 shrink-0">Courriel</dt>
-            <dd className="font-medium text-gray-800">{profile.email}</dd>
-          </div>
-        </dl>
+          <button type="submit" disabled={nameBusy || name.trim() === profile.name}
+            className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+            {nameBusy ? 'Enregistrement...' : 'Sauvegarder'}
+          </button>
+          {nameMsg && (
+            <p className={`text-sm ${nameMsg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{nameMsg.text}</p>
+          )}
+        </form>
       </div>
 
-      {/* Profil notifications */}
+      {/* Courriel */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="font-bold text-lg text-gray-800 mb-4">Adresse courriel</h2>
+        <form onSubmit={handleEmail} className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Courriel</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Un lien de confirmation sera envoyé à la nouvelle adresse avant que le changement soit appliqué.
+            </p>
+          </div>
+          <button type="submit" disabled={emailBusy || email.trim().toLowerCase() === profile.email}
+            className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+            {emailBusy ? 'Envoi...' : 'Changer le courriel'}
+          </button>
+          {emailMsg && (
+            <p className={`text-sm ${emailMsg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{emailMsg.text}</p>
+          )}
+        </form>
+      </div>
+
+      {/* Notifications */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="font-bold text-lg text-gray-800 mb-4">Notifications</h2>
         <form onSubmit={handleProfile} className="space-y-4">
@@ -181,7 +248,7 @@ export default function CompteForm({ profile }: { profile: Profile }) {
         </form>
       </div>
 
-      {/* Changement de mot de passe */}
+      {/* Mot de passe */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="font-bold text-lg text-gray-800 mb-4">Changer le mot de passe</h2>
         <form onSubmit={handlePassword} className="space-y-4">
