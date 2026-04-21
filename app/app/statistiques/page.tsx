@@ -244,15 +244,16 @@ export default async function StatistiquesPage({
     fetchCurrentTeamMap(),
   ])
 
-  // Replace "X TM" with actual current team from DB (matched by normalized name)
+  // Replace multi-team abbrevs ("2 TM", "ANA,CGY", etc.) with the player's current team from DB
+  const isMultiTeam = (abbrev: string) => /^\d TM$/.test(abbrev) || abbrev.includes(',')
   for (const s of skaters) {
-    if (/^\d TM$/.test(s.teamAbbrev)) {
+    if (isMultiTeam(s.teamAbbrev)) {
       const key = normName(`${s.firstName} ${s.lastName}`)
       s.teamAbbrev = currentTeamMap.get(key) ?? s.teamAbbrev
     }
   }
   for (const g of goalies) {
-    if (/^\d TM$/.test(g.teamAbbrev)) {
+    if (isMultiTeam(g.teamAbbrev)) {
       const key = normName(`${g.firstName} ${g.lastName}`)
       g.teamAbbrev = currentTeamMap.get(key) ?? g.teamAbbrev
     }

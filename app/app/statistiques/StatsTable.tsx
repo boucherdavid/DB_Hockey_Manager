@@ -69,7 +69,7 @@ export default function StatsTable({
     const all = [
       ...skaters.map(s => s.teamAbbrev),
       ...goalies.map(g => g.teamAbbrev),
-    ].filter(t => !/^\d TM$/.test(t))
+    ].filter(t => !/^\d TM$/.test(t) && !t.includes(','))
     return Array.from(new Set(all.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'fr-CA'))
   }, [skaters, goalies])
 
