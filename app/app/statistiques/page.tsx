@@ -170,6 +170,25 @@ function normName(s: string) {
   return (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, ' ').trim()
 }
 
+/** Map nom normalisé → code équipe actuel (DB) */
+async function fetchCurrentTeamMap(): Promise<Map<string, string>> {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('players')
+      .select('first_name, last_name, teams(code)')
+      .not('team_id', 'is', null)
+    const map = new Map<string, string>()
+    for (const p of data ?? []) {
+      const t = p.teams as unknown as { code: string } | null
+      if (t?.code) map.set(normName(`${p.first_name} ${p.last_name}`), t.code)
+    }
+    return map
+  } catch {
+    return new Map()
+  }
+}
+
 /** Noms normalisés des joueurs sur un contrat ELC */
 async function fetchRookieNames(): Promise<string[]> {
   try {
@@ -217,12 +236,27 @@ export default async function StatistiquesPage({
   const { saison } = await searchParams
   const gameType = saison === 'series' ? 3 : 2
 
-  const [skaters, goalies, takenNames, rookieNames] = await Promise.all([
+  const [skaters, goalies, takenNames, rookieNames, currentTeamMap] = await Promise.all([
     fetchSkaters(gameType),
     fetchGoalies(gameType),
     fetchTakenNames(),
     fetchRookieNames(),
+    fetchCurrentTeamMap(),
   ])
+
+  // Replace "X TM" with actual current team from DB (matched by normalized name)
+  for (const s of skaters) {
+    if (/^\d TM$/.test(s.teamAbbrev)) {
+      const key = normName(`${s.firstName} ${s.lastName}`)
+      s.teamAbbrev = currentTeamMap.get(key) ?? s.teamAbbrev
+    }
+  }
+  for (const g of goalies) {
+    if (/^\d TM$/.test(g.teamAbbrev)) {
+      const key = normName(`${g.firstName} ${g.lastName}`)
+      g.teamAbbrev = currentTeamMap.get(key) ?? g.teamAbbrev
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
