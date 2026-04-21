@@ -11,7 +11,7 @@ type Player = {
   id: number
   first_name: string
   last_name: string
-  position: string
+  position: string | null
   cap_number: number
   team_abbrev: string
   conference: string
@@ -21,7 +21,7 @@ type ActivePick = {
   playerId: number
   firstName: string
   lastName: string
-  position: string
+  position: string | null
   cap_number: number
   conference: Conference
   snap_goals: number
@@ -31,12 +31,9 @@ type ActivePick = {
   snap_goalie_shutouts: number
 }
 
-function isDefense(pos: string) { return ['D', 'LD', 'RD'].includes(pos) }
-function isGoalie(pos: string)  { return pos === 'G' }
-
-function posGroup(pos: string): 'F' | 'D' | 'G' {
-  if (isGoalie(pos)) return 'G'
-  if (isDefense(pos)) return 'D'
+function posGroup(pos: string | null): 'F' | 'D' | 'G' {
+  if (pos === 'G') return 'G'
+  if (pos === 'D' || pos === 'LD' || pos === 'RD') return 'D'
   return 'F'
 }
 

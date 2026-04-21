@@ -70,7 +70,7 @@ export default async function SeriesPicksPage() {
     id: number
     first_name: string
     last_name: string
-    position: string
+    position: string | null
     cap_number: number
     team_abbrev: string
     conference: string
@@ -78,17 +78,17 @@ export default async function SeriesPicksPage() {
 
   const players: PlayerRow[] = (rawContracts ?? []).flatMap(c => {
     const p = c.players as unknown as {
-      id: number; first_name: string; last_name: string; position: string
+      id: number; first_name: string; last_name: string; position: string | null
       teams: { code: string; conference: string } | null
     } | null
-    if (!p || !p.position || !p.teams) return []
+    if (!p || !p.teams) return []
     const teamCode = p.teams.code
     const conference = p.teams.conference || (EASTERN_TEAMS.has(teamCode) ? 'Est' : 'Ouest')
     return [{
       id: p.id,
       first_name: p.first_name,
       last_name: p.last_name,
-      position: p.position,
+      position: p.position ?? null,
       cap_number: c.cap_number,
       team_abbrev: teamCode,
       conference,

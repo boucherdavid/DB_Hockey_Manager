@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-04-20
+Derniere mise a jour: 2026-04-21
 
 ## Role du fichier
 
@@ -562,6 +562,125 @@ Fichiers modifiés:
   - Colonne "Cap N+1" ajoutée dans la table Banque de recrues (et Activation obligatoire).
   - Barre de masse salariale N+1 affichée sous la barre courante si `next_nhl_cap` est configuré.
   - Badge "⚠ Dépassement" visible si la somme des salaires N+1 (actifs + réservistes) dépasse le cap N+1 du pool.
+
+### 2026-04-21 (sessions 22-23)
+
+**Widget "Joueurs en action" — refonte complète**:
+- Remplace l'affichage per-pooler par un tableau avec TOUS les poolers : Pooler | Nb | Détail (2A · 1D · 1G).
+- Trié par nombre de joueurs décroissant; le pooler connecté est mis en évidence (fond bleu + "(toi)").
+- Fonctionne en mode Saison (depuis `standings`) et en mode Séries (depuis `playoff_rosters` avec join `teams.code`).
+- Visible uniquement s'il y a des matchs ce soir.
+- Composants séparés : `ScheduleList` et `ActivityTable`.
+
+**Switcher de pooler dans l'alignement**:
+- Nouveau `app/components/PoolerSwitcher.tsx`: `<select>` client-side, navigue vers `/poolers/{id}` via `useRouter`.
+- `poolers/[id]/page.tsx`: fetch de tous les poolers ajouté; `PoolerSwitcher` affiché dans l'en-tête (flex row avec le nom du pooler).
+- Visible uniquement si 2+ poolers existent.
+
+**Refonte Navbar — menu Classement séparé**:
+- `Classement` extrait du dropdown "Pool Saison" et transformé en son propre dropdown.
+- Entrées: "Saison complète" (actif), Hebdomadaire / Mensuel / Meilleurs disponibles (badges "À venir").
+- "Pool Saison" conserve seulement: Mon alignement, Transactions.
+- Menu mobile mis à jour avec la section "Classement" correspondante.
+
+**Page d'accueil — refonte complète**:
+- Remplace les cartes de liens par: classement compact + calendrier du soir + tableau d'activité des poolers.
+- Détection automatique du mode (Saison / Séries) selon les saisons actives.
+- Toggle Saison/Séries affiché uniquement si les deux sont actives simultanément.
+- `ScheduleList`: matchs du jour via `api-web.nhle.com/v1/schedule/now`.
+- `ActivityTable`: tous les poolers avec nombre de joueurs ce soir au format "2A · 1D · 1G".
+- `app/lib/standings.ts`: nouveau fichier partagé avec `buildStandings()` et types `PlayerContrib`/`PoolerStanding`.
+- `app/components/SummaryTable.tsx`: tableau compact partagé (utilisé par accueil et `/classement`).
+
+**Pool des Séries — corrections**:
+- Tri des joueurs dans le sélecteur: équipe ASC puis salaire DESC.
+- Correction conférence NULL: fallback statique `EASTERN_TEAMS` pour les joueurs dont `teams.conference` est vide en BD.
+- Correction filtre `position IS NULL`: le filtre `!p.position` est retiré pour ne plus exclure les joueurs sans position.
+- Types `Player`, `ActivePick`, `PickInput` mis à jour pour accepter `position: string | null`.
+- `posGroup()` dans `PicksManager.tsx` gère `null` (retourne `'F'` par défaut).
+
+**Diagnostic positions NULL**:
+- 24 joueurs avec `position IS NULL` et contrat actif en 2025-26 identifiés.
+- Cause: le scraper `scrape_puckpedia.py` échoue à détecter la position pour certains joueurs (section HTML différente sur PuckPedia).
+- Constat: `teams_offline/MTL.csv` avait Jakub Dobes (id=713) en 1ère ligne avant l'en-tête, le rendant invisible à `fusionner_equipes()`. Corrigé manuellement en BD.
+- Nouveau script `python_script/fix_null_positions.py`:
+  - Requête Supabase: tous les joueurs `position IS NULL` avec contrat actif.
+  - Recherche par nom via `search.d3.nhle.com/api/v1/search/player`.
+  - Mapping des codes NHL (`C/L/R/LW/RW` → `F`, `D/LD/RD` → `D`, `G` → `G`).
+  - Option `--dry-run` pour prévisualiser sans modifier la BD.
+  - Loggue les joueurs sans résultat NHL pour correction manuelle.
+
+Commit: `a3c0311`.
+
+---
+
+### 2026-04-21 (session 21)
+
+**Navbar — Classement en dropdown indépendant**:
+- `Classement` retiré du sous-menu `Pool Saison`; `Pool Saison` conserve seulement `Mon alignement` et `Transactions`.
+- Nouveau dropdown `Classement` avec: `Saison complète` (→ /classement) + `Hebdomadaire`, `Mensuel`, `Meilleurs disponibles` (badges "À venir").
+- Même structure dans le menu mobile.
+
+**Page d'accueil — Toggle Saison/Séries**:
+- Mode détecté via `?mode=saison` ou `?mode=series`; défaut = Séries si `playoff_season` active, sinon Saison.
+- Toggle Saison/Séries affiché uniquement quand les deux modes sont actifs simultanément.
+- **Mode Saison**: classement régulier (`SummaryTable`) + widget matchs du jour + joueurs actifs.
+- **Mode Séries**: classement playoff compact (rang/nom/pts) OU état "en attente" si `scoring_start_at` null + widget matchs + picks actifs.
+- Widget "joueurs en action" reformaté: `2A · 1D · 1G` (comptage par position, sans pastilles d'équipes). Noms listés en dessous.
+- `buildPlayoffStandingsCompact()` inline dans page.tsx: utilise `fetchNhlSkaters(3)/fetchNhlGoalies(3)` + snapshots pour calculer les pts séries.
+
+**Architecture répondue (non implémentée)**:
+- Bloquant si pas tous les poolers participent aux séries: non — poolers sans picks ont 0 pts, pas d'erreur.
+- Vues classement futures (hebdo, mensuel, meilleurs pointeurs disponibles) → dépendent du Chantier B (snapshots); dropdown navbar prêt.
+
+Commit: `bb3db48`.
+
+---
+
+### 2026-04-21 (session 20)
+
+**Page d'accueil — refonte**:
+- Suppression des cartes de liens (Joueurs LNH, Alignements, Mon équipe) et de la grille des poolers.
+- Nouveau layout 2 colonnes (desktop): classement compact à gauche, widget matchs du jour à droite.
+- Widget matchs du jour: fetch `api-web.nhle.com/v1/schedule/now`, date en heure de l'Est, badge "En cours/Terminé" ou heure de début.
+- Widget joueurs actifs: pour le pooler connecté, liste les joueurs actifs dont l'équipe joue ce soir + badge bleu avec compte.
+
+**Refactoring classement**:
+- Nouveau `app/lib/standings.ts`: types `PoolerStanding` + `PlayerContrib` + fonction `buildStandings()`. Partagé par home, `/classement` et `/poolers`.
+- Nouveau `app/components/SummaryTable.tsx`: table résumé du classement (rang, nom cliquable, pts, B/A/V/DP/BL). Partagée par home et classement.
+- `app/app/classement/ClassementTable.tsx`: retire la définition locale de `SummaryTable`, importe le composant partagé.
+- `app/app/classement/page.tsx` et `app/app/poolers/page.tsx`: simplifiés pour utiliser `buildStandings()`.
+
+**Pool des séries — corrections**:
+- `series/picks/page.tsx`: tri des joueurs dans le sélecteur = équipe ASC puis salaire DESC (cohérent avec les autres pages).
+- Fallback statique Est/Ouest via `EASTERN_TEAMS` set: les joueurs dont la colonne `conference` est vide en BD (ex: Dobes MTL) apparaissent maintenant correctement.
+
+**Vision classement (future, non implémenté)**:
+- Classement de la soirée précédente, classement mensuel, meilleurs pointeurs des poolers, meilleurs pointeurs disponibles avec filtres position/équipe/recrue.
+- Dépend du Chantier B (snapshots), planifié à l'Étape 2 de la séquence de validation.
+
+Commit: `984d652`.
+
+---
+
+### 2026-04-21 (session 19)
+
+**Refonte Navbar — menus déroulants groupés**:
+- `app/components/Navbar.tsx`: restructuration complète avec 3 menus déroulants + 2 liens directs.
+  - **Pool Saison** → Mon alignement (`/dashboard`), Classement (`/poolers`), Transactions (`/transactions`)
+  - **Statistiques** → LNH (`/statistiques`), AHL (badge "À venir")
+  - **Contrats LNH** → lien direct `/joueurs`
+  - **Repêchage** → lien direct `/repechage`
+  - **Pool Séries** → Mes choix (`/series/picks`), Classement (`/series`)
+- Composant `Chevron` ajouté (flèche animée dans les boutons de menu).
+- `DropdownKey` union type pour gérer quel menu est ouvert (`pool-saison | statistiques | series | profile | null`).
+- `navRef` unique sur `<nav>` pour fermer tous les dropdowns au clic externe (remplace `profileRef`).
+- Menu mobile: sections nommées correspondant aux groupes desktop.
+- Commit: `193a77a`.
+
+**Mémo de collaboration**: mise à jour automatique de `SUIVI_PROJET.md` en fin de session dorénavant, sans attendre la demande explicite.
+
+---
 
 ### 2026-04-15 (session 14)
 
