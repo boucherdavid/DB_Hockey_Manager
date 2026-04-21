@@ -39,11 +39,13 @@ export default async function SeriesPicksPage() {
     )
   }
 
+  const seasonLabel = ps.season
+
   // Picks actifs du pooler
   const { data: rawPicks } = await supabase
     .from('playoff_rosters')
     .select(`
-      player_id, round_added,
+      player_id, round_added, conference,
       snap_goals, snap_assists, snap_goalie_wins, snap_goalie_otl, snap_goalie_shutouts,
       players (id, first_name, last_name, position, player_contracts (cap_number, season))
     `)
@@ -51,31 +53,46 @@ export default async function SeriesPicksPage() {
     .eq('pooler_id', user.id)
     .eq('is_active', true)
 
-  const seasonLabel = ps.season // ex: '2025-26'
-
-  // Requête directe sur player_contracts pour éviter la limite 1000 lignes de Supabase
+  // Joueurs avec contrat actif + conférence via leur équipe
   const { data: rawContracts } = await supabase
     .from('player_contracts')
-    .select('cap_number, players (id, first_name, last_name, position)')
+    .select('cap_number, players (id, first_name, last_name, position, teams (code, conference))')
     .eq('season', seasonLabel)
     .gt('cap_number', 0)
 
-  const players = (rawContracts ?? []).flatMap(c => {
-    const p = c.players as unknown as { id: number; first_name: string; last_name: string; position: string } | null
-    if (!p || !p.position) return []
+  type PlayerRow = {
+    id: number
+    first_name: string
+    last_name: string
+    position: string
+    cap_number: number
+    team_abbrev: string
+    conference: string
+  }
+
+  const players: PlayerRow[] = (rawContracts ?? []).flatMap(c => {
+    const p = c.players as unknown as {
+      id: number; first_name: string; last_name: string; position: string
+      teams: { code: string; conference: string } | null
+    } | null
+    if (!p || !p.position || !p.teams?.conference) return []
     return [{
       id: p.id,
       first_name: p.first_name,
       last_name: p.last_name,
       position: p.position,
       cap_number: c.cap_number,
-      team_abbrev: '',
+      team_abbrev: p.teams.code,
+      conference: p.teams.conference,
     }]
   }).sort((a, b) => a.last_name.localeCompare(b.last_name))
 
   // Picks actuels formatés
   const currentPicks = (rawPicks ?? []).flatMap(r => {
-    const p = r.players as unknown as { id: number; first_name: string; last_name: string; position: string; player_contracts: { cap_number: number; season: string }[] } | null
+    const p = r.players as unknown as {
+      id: number; first_name: string; last_name: string; position: string
+      player_contracts: { cap_number: number; season: string }[]
+    } | null
     if (!p) return []
     const contract = (p.player_contracts ?? []).find(c => c.season === seasonLabel)
     return [{
@@ -84,6 +101,7 @@ export default async function SeriesPicksPage() {
       lastName: p.last_name,
       position: p.position,
       cap_number: contract?.cap_number ?? 0,
+      conference: (r.conference ?? 'Est') as 'Est' | 'Ouest',
       snap_goals: r.snap_goals,
       snap_assists: r.snap_assists,
       snap_goalie_wins: r.snap_goalie_wins,
@@ -93,7 +111,7 @@ export default async function SeriesPicksPage() {
   })
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8">
       <PicksManager
         playoffSeasonId={ps.id}
         currentRound={ps.current_round}

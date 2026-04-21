@@ -147,6 +147,18 @@ export type PickInput = {
   firstName: string
   lastName: string
   position: string
+  conference: 'Est' | 'Ouest'
+}
+
+function validateConf(picks: PickInput[], conf: 'Est' | 'Ouest'): string | null {
+  const cp = picks.filter(p => p.conference === conf)
+  const fwd = cp.filter(p => !['D', 'LD', 'RD', 'G'].includes(p.position))
+  const def = cp.filter(p => ['D', 'LD', 'RD'].includes(p.position))
+  const gol = cp.filter(p => p.position === 'G')
+  if (fwd.length !== 3) return `Conférence ${conf} : exactement 3 attaquants requis.`
+  if (def.length !== 2) return `Conférence ${conf} : exactement 2 défenseurs requis.`
+  if (gol.length !== 1) return `Conférence ${conf} : exactement 1 gardien requis.`
+  return null
 }
 
 export async function savePicksAction(
@@ -157,12 +169,7 @@ export async function savePicksAction(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non authentifié.' }
 
-  // Vérifier que le joueur est bien un pooler
-  const { data: pooler } = await supabase
-    .from('poolers')
-    .select('id')
-    .eq('id', user.id)
-    .single()
+  const { data: pooler } = await supabase.from('poolers').select('id').eq('id', user.id).single()
   if (!pooler) return { error: 'Compte non lié à un pooler.' }
 
   const { data: ps } = await supabase
@@ -171,67 +178,56 @@ export async function savePicksAction(
     .eq('id', playoffSeasonId)
     .single()
   if (!ps) return { error: 'Saison playoff introuvable.' }
-  if (!ps.is_active) return { error: 'Cette saison playoffs n\'est pas active.' }
+  if (!ps.is_active) return { error: "Cette saison playoffs n'est pas active." }
 
-  // Validation : 3F/2D/1G
-  const fwd = picks.filter(p => !['D', 'LD', 'RD', 'G'].includes(p.position))
-  const def = picks.filter(p => ['D', 'LD', 'RD'].includes(p.position))
-  const gol = picks.filter(p => p.position === 'G')
-  if (fwd.length !== 3) return { error: 'Exactement 3 attaquants requis.' }
-  if (def.length !== 2) return { error: 'Exactement 2 défenseurs requis.' }
-  if (gol.length !== 1) return { error: 'Exactement 1 gardien requis.' }
+  // Validation : 3F/2D/1G par conférence
+  const errEst   = validateConf(picks, 'Est')
+  const errOuest = validateConf(picks, 'Ouest')
+  if (errEst)   return { error: errEst }
+  if (errOuest) return { error: errOuest }
 
-  // Récupérer les stats playoff actuelles pour les snapshots
+  // Snapshots via NHL API
   const [skatersMap, goaliesMap] = await Promise.all([
     fetchNhlSkaters(3),
     fetchNhlGoalies(3),
   ])
 
-  const getSkaterSnap = (firstName: string, lastName: string) => {
+  const getSnap = (firstName: string, lastName: string, position: string) => {
     const key = normName(`${firstName} ${lastName}`)
+    if (position === 'G') {
+      const g = goaliesMap.get(key)
+      return {
+        snap_goals: g?.goals ?? 0, snap_assists: g?.assists ?? 0,
+        snap_goalie_wins: g?.wins ?? 0, snap_goalie_otl: g?.otLosses ?? 0,
+        snap_goalie_shutouts: g?.shutouts ?? 0,
+      }
+    }
     const s = skatersMap.get(key)
-    return { snap_goals: s?.goals ?? 0, snap_assists: s?.assists ?? 0 }
-  }
-
-  const getGoalieSnap = (firstName: string, lastName: string) => {
-    const key = normName(`${firstName} ${lastName}`)
-    const g = goaliesMap.get(key)
     return {
-      snap_goals: g?.goals ?? 0,
-      snap_assists: g?.assists ?? 0,
-      snap_goalie_wins: g?.wins ?? 0,
-      snap_goalie_otl: g?.otLosses ?? 0,
-      snap_goalie_shutouts: g?.shutouts ?? 0,
+      snap_goals: s?.goals ?? 0, snap_assists: s?.assists ?? 0,
+      snap_goalie_wins: 0, snap_goalie_otl: 0, snap_goalie_shutouts: 0,
     }
   }
 
-  // Désactiver tous les picks actifs du pooler pour cette saison
+  // Désactiver les picks actuels
   const { error: deactivateErr } = await supabase
     .from('playoff_rosters')
     .update({ is_active: false, removed_at: new Date().toISOString() })
     .eq('playoff_season_id', playoffSeasonId)
     .eq('pooler_id', user.id)
     .eq('is_active', true)
-
   if (deactivateErr) return { error: deactivateErr.message }
 
-  // Insérer les nouveaux picks avec snapshots
-  const isGoalie = (pos: string) => pos === 'G'
-
-  const newRows = picks.map(p => {
-    const snap = isGoalie(p.position)
-      ? getGoalieSnap(p.firstName, p.lastName)
-      : { ...getSkaterSnap(p.firstName, p.lastName), snap_goalie_wins: 0, snap_goalie_otl: 0, snap_goalie_shutouts: 0 }
-
-    return {
-      playoff_season_id: playoffSeasonId,
-      pooler_id: user.id,
-      player_id: p.playerId,
-      round_added: ps.current_round,
-      is_active: true,
-      ...snap,
-    }
-  })
+  // Insérer les nouveaux picks avec conférence + snapshot
+  const newRows = picks.map(p => ({
+    playoff_season_id: playoffSeasonId,
+    pooler_id: user.id,
+    player_id: p.playerId,
+    round_added: ps.current_round,
+    is_active: true,
+    conference: p.conference,
+    ...getSnap(p.firstName, p.lastName, p.position),
+  }))
 
   const { error: insertErr } = await supabase.from('playoff_rosters').insert(newRows)
   if (insertErr) return { error: insertErr.message }

@@ -86,7 +86,7 @@ export default async function SeriesPage() {
     supabase
       .from('playoff_rosters')
       .select(`
-        pooler_id, player_id,
+        pooler_id, conference,
         snap_goals, snap_assists, snap_goalie_wins, snap_goalie_otl, snap_goalie_shutouts,
         poolers (id, name),
         players (first_name, last_name, position)
@@ -97,7 +97,6 @@ export default async function SeriesPage() {
     fetchNhlGoalies(3),
   ])
 
-  // Scoring config
   const scoring: Record<string, number> = {}
   for (const r of scoringRows ?? []) scoring[r.stat_key] = Number(r.points)
   const pts = {
@@ -108,11 +107,11 @@ export default async function SeriesPage() {
     goalie_shutout: scoring.goalie_shutout ?? 2,
   }
 
-  // Calcul des points par pooler
   type PlayerLine = {
     firstName: string
     lastName: string
     position: string
+    conference: string
     goals: number
     assists: number
     goalieWins: number
@@ -132,17 +131,18 @@ export default async function SeriesPage() {
 
     const key = normName(`${player.first_name} ${player.last_name}`)
     const isG = player.position === 'G'
-
     let line: PlayerLine
+
     if (isG) {
       const stat = goaliesMap.get(key)
-      const wins     = Math.max(0, (stat?.wins ?? 0)      - row.snap_goalie_wins)
-      const otl      = Math.max(0, (stat?.otLosses ?? 0)  - row.snap_goalie_otl)
-      const shutouts = Math.max(0, (stat?.shutouts ?? 0)  - row.snap_goalie_shutouts)
-      const goals    = Math.max(0, (stat?.goals ?? 0)     - row.snap_goals)
-      const assists  = Math.max(0, (stat?.assists ?? 0)   - row.snap_assists)
+      const wins     = Math.max(0, (stat?.wins ?? 0)     - row.snap_goalie_wins)
+      const otl      = Math.max(0, (stat?.otLosses ?? 0) - row.snap_goalie_otl)
+      const shutouts = Math.max(0, (stat?.shutouts ?? 0) - row.snap_goalie_shutouts)
+      const goals    = Math.max(0, (stat?.goals ?? 0)    - row.snap_goals)
+      const assists  = Math.max(0, (stat?.assists ?? 0)  - row.snap_assists)
       line = {
         firstName: player.first_name, lastName: player.last_name, position: 'G',
+        conference: row.conference ?? '',
         goals, assists, goalieWins: wins, goalieOtl: otl, goalieShutouts: shutouts,
         poolPoints: wins * pts.goalie_win + otl * pts.goalie_otl + shutouts * pts.goalie_shutout
           + goals * pts.goal + assists * pts.assist,
@@ -153,6 +153,7 @@ export default async function SeriesPage() {
       const assists = Math.max(0, (stat?.assists ?? 0) - row.snap_assists)
       line = {
         firstName: player.first_name, lastName: player.last_name, position: player.position,
+        conference: row.conference ?? '',
         goals, assists, goalieWins: 0, goalieOtl: 0, goalieShutouts: 0,
         poolPoints: goals * pts.goal + assists * pts.assist,
       }
@@ -172,20 +173,62 @@ export default async function SeriesPage() {
 
   const roundLabel = ROUND_LABEL[ps.current_round - 1] ?? `Ronde ${ps.current_round}`
 
+  function ConfTable({ players, conf }: { players: PlayerLine[]; conf: string }) {
+    const cp = players.filter(p => p.conference === conf)
+    const byGroup = { F: [] as PlayerLine[], D: [] as PlayerLine[], G: [] as PlayerLine[] }
+    for (const p of cp) byGroup[posGroup(p.position) as 'F' | 'D' | 'G'].push(p)
+    const confPts = cp.reduce((s, p) => s + p.poolPoints, 0)
+
+    return (
+      <div>
+        <div className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wide flex justify-between ${conf === 'Est' ? 'bg-blue-800 text-blue-100' : 'bg-orange-700 text-orange-100'}`}>
+          <span>Conférence {conf}</span>
+          <span>{fmtPts(confPts)} pts</span>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs text-gray-400 uppercase tracking-wide">
+            <tr>
+              <th className="px-4 py-1.5 text-left">Joueur</th>
+              <th className="px-2 py-1.5">B</th>
+              <th className="px-2 py-1.5">A</th>
+              <th className="px-2 py-1.5 hidden sm:table-cell">V</th>
+              <th className="px-2 py-1.5 hidden sm:table-cell">DP</th>
+              <th className="px-2 py-1.5 hidden sm:table-cell">BL</th>
+              <th className="px-2 py-1.5 text-blue-500">Pts</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {(['F', 'D', 'G'] as const).map(group =>
+              byGroup[group].map((p, j) => (
+                <tr key={`${group}-${j}`} className="hover:bg-gray-50">
+                  <td className="px-4 py-2">
+                    <span className="font-medium text-gray-800">{p.lastName}, {p.firstName}</span>
+                    <span className="ml-1.5 text-xs text-gray-400">{p.position}</span>
+                  </td>
+                  <td className="px-2 py-2 text-center text-gray-600">{p.goals}</td>
+                  <td className="px-2 py-2 text-center text-gray-600">{p.assists}</td>
+                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? p.goalieWins : '—'}</td>
+                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? p.goalieOtl : '—'}</td>
+                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? (p.goalieShutouts || '—') : '—'}</td>
+                  <td className="px-2 py-2 text-center font-bold text-blue-600">{fmtPts(p.poolPoints)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Pool des séries {ps.season}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Ronde {ps.current_round} — {roundLabel}
-          </p>
+          <p className="text-sm text-gray-500 mt-0.5">Ronde {ps.current_round} — {roundLabel}</p>
         </div>
         {user && (
-          <Link
-            href="/series/picks"
-            className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700"
-          >
+          <Link href="/series/picks" className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700">
             Mes picks
           </Link>
         )}
@@ -195,60 +238,20 @@ export default async function SeriesPage() {
         <p className="text-gray-500">Aucun pooler n&apos;a encore soumis ses picks.</p>
       ) : (
         <div className="space-y-3">
-          {standings.map((pooler, i) => {
-            const byGroup = { F: [] as typeof pooler.players, D: [] as typeof pooler.players, G: [] as typeof pooler.players }
-            for (const p of pooler.players) byGroup[posGroup(p.position) as 'F' | 'D' | 'G'].push(p)
-
-            return (
-              <div key={pooler.poolerId} className="bg-white rounded-lg shadow overflow-hidden">
-                <div className="flex items-center gap-3 px-5 py-3 border-b">
-                  <span className={`font-bold text-lg w-7 text-center ${RANK_COLOR[i] ?? 'text-gray-500'}`}>{i + 1}</span>
-                  <span className="flex-1 font-semibold text-gray-800">{pooler.poolerName}</span>
-                  <span className="text-xl font-bold text-blue-600">{fmtPts(pooler.totalPoints)}</span>
-                  <span className="text-sm text-gray-400">pts</span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-xs text-gray-400 uppercase tracking-wide">
-                      <tr>
-                        <th className="px-4 py-1.5 text-left">Joueur</th>
-                        <th className="px-2 py-1.5">B</th>
-                        <th className="px-2 py-1.5">A</th>
-                        <th className="px-2 py-1.5 hidden sm:table-cell">V</th>
-                        <th className="px-2 py-1.5 hidden sm:table-cell">DP</th>
-                        <th className="px-2 py-1.5 hidden sm:table-cell">BL</th>
-                        <th className="px-2 py-1.5 text-blue-500">Pts</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {(['F', 'D', 'G'] as const).map(group =>
-                        byGroup[group].map((p, j) => (
-                          <tr key={`${group}-${j}`} className="hover:bg-gray-50">
-                            <td className="px-4 py-2">
-                              <span className="font-medium text-gray-800">{p.lastName}, {p.firstName}</span>
-                              <span className="ml-1.5 text-xs text-gray-400">{p.position}</span>
-                            </td>
-                            <td className="px-2 py-2 text-center text-gray-600">{p.goals}</td>
-                            <td className="px-2 py-2 text-center text-gray-600">{p.assists}</td>
-                            <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">
-                              {group === 'G' ? p.goalieWins : '—'}
-                            </td>
-                            <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">
-                              {group === 'G' ? p.goalieOtl : '—'}
-                            </td>
-                            <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">
-                              {group === 'G' ? (p.goalieShutouts || '—') : '—'}
-                            </td>
-                            <td className="px-2 py-2 text-center font-bold text-blue-600">{fmtPts(p.poolPoints)}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+          {standings.map((pooler, i) => (
+            <div key={pooler.poolerId} className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3 border-b">
+                <span className={`font-bold text-lg w-7 text-center ${RANK_COLOR[i] ?? 'text-gray-500'}`}>{i + 1}</span>
+                <span className="flex-1 font-semibold text-gray-800">{pooler.poolerName}</span>
+                <span className="text-xl font-bold text-blue-600">{fmtPts(pooler.totalPoints)}</span>
+                <span className="text-sm text-gray-400">pts</span>
               </div>
-            )
-          })}
+              <div className="overflow-x-auto divide-y">
+                <ConfTable players={pooler.players} conf="Est" />
+                <ConfTable players={pooler.players} conf="Ouest" />
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
