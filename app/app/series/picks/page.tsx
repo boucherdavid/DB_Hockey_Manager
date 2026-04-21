@@ -51,28 +51,27 @@ export default async function SeriesPicksPage() {
     .eq('pooler_id', user.id)
     .eq('is_active', true)
 
-  // Tous les joueurs actifs en séries (ceux qui ont un contrat cette saison)
-  // On se base sur les joueurs en BD avec contrat actif
   const seasonLabel = ps.season // ex: '2025-26'
-  const { data: rawPlayers } = await supabase
-    .from('players')
-    .select('id, first_name, last_name, position, player_contracts (cap_number, season)')
-    .order('last_name')
 
-  // Filtrer sur la saison active et cap > 0 (exclut les ELC/UFA sans contrat)
-  const players = (rawPlayers ?? []).flatMap(p => {
-    const contract = (p.player_contracts as { cap_number: number; season: string }[])
-      .find(c => c.season === seasonLabel && c.cap_number > 0)
-    if (!contract || !p.position) return []
+  // Requête directe sur player_contracts pour éviter la limite 1000 lignes de Supabase
+  const { data: rawContracts } = await supabase
+    .from('player_contracts')
+    .select('cap_number, players (id, first_name, last_name, position)')
+    .eq('season', seasonLabel)
+    .gt('cap_number', 0)
+
+  const players = (rawContracts ?? []).flatMap(c => {
+    const p = c.players as unknown as { id: number; first_name: string; last_name: string; position: string } | null
+    if (!p || !p.position) return []
     return [{
       id: p.id,
       first_name: p.first_name,
       last_name: p.last_name,
       position: p.position,
-      cap_number: contract.cap_number,
+      cap_number: c.cap_number,
       team_abbrev: '',
     }]
-  })
+  }).sort((a, b) => a.last_name.localeCompare(b.last_name))
 
   // Picks actuels formatés
   const currentPicks = (rawPicks ?? []).flatMap(r => {
