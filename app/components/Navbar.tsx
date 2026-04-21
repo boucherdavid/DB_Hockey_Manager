@@ -44,7 +44,7 @@ function Avatar({ name }: { name: string }) {
   )
 }
 
-type DropdownKey = 'pool-saison' | 'statistiques' | 'series' | 'profile' | null
+type DropdownKey = 'pool-saison' | 'classement' | 'statistiques' | 'series' | 'profile' | null
 
 export default function Navbar({
   initialUserName,
@@ -159,14 +159,36 @@ export default function Navbar({
               {/* Pool Saison */}
               <div className="relative">
                 <button onClick={() => toggle('pool-saison')}
-                  className={navBtnClass(isActive('/dashboard', '/poolers', '/transactions'))}>
+                  className={navBtnClass(isActive('/dashboard', '/transactions'))}>
                   Pool Saison <Chevron open={openDropdown === 'pool-saison'} />
                 </button>
                 {openDropdown === 'pool-saison' && (
                   <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
                     {userName && <Link href="/dashboard"    className={dropdownLinkClass('/dashboard')}>Mon alignement</Link>}
-                    <Link href="/poolers"      className={dropdownLinkClass('/poolers')}>Classement</Link>
                     <Link href="/transactions" className={dropdownLinkClass('/transactions')}>Transactions</Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Classement */}
+              <div className="relative">
+                <button onClick={() => toggle('classement')}
+                  className={navBtnClass(isActive('/classement', '/poolers'))}>
+                  Classement <Chevron open={openDropdown === 'classement'} />
+                </button>
+                {openDropdown === 'classement' && (
+                  <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                    <Link href="/classement" className={dropdownLinkClass('/classement')}>Saison complète</Link>
+                    <span className="flex items-center gap-2 px-4 py-2 text-sm text-gray-400 cursor-default">
+                      Hebdomadaire <span className="text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">À venir</span>
+                    </span>
+                    <span className="flex items-center gap-2 px-4 py-2 text-sm text-gray-400 cursor-default">
+                      Mensuel <span className="text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">À venir</span>
+                    </span>
+                    <div className="border-t my-1" />
+                    <span className="flex items-center gap-2 px-4 py-2 text-sm text-gray-400 cursor-default">
+                      Meilleurs disponibles <span className="text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">À venir</span>
+                    </span>
                   </div>
                 )}
               </div>
@@ -284,8 +306,13 @@ export default function Navbar({
           <div className="md:hidden border-t border-pool-navy-light py-2 flex flex-col gap-0.5">
             <MobileSection label="Pool Saison" />
             {userName && <Link href="/dashboard"    className={mobileLinkClass('/dashboard')}>Mon alignement</Link>}
-            <Link href="/poolers"      className={mobileLinkClass('/poolers')}>Classement</Link>
             <Link href="/transactions" className={mobileLinkClass('/transactions')}>Transactions</Link>
+
+            <MobileSection label="Classement" />
+            <Link href="/classement" className={mobileLinkClass('/classement')}>Saison complète</Link>
+            <span className="px-3 py-2 text-sm text-pool-silver opacity-50">Hebdomadaire (à venir)</span>
+            <span className="px-3 py-2 text-sm text-pool-silver opacity-50">Mensuel (à venir)</span>
+            <span className="px-3 py-2 text-sm text-pool-silver opacity-50">Meilleurs disponibles (à venir)</span>
 
             <MobileSection label="Statistiques" />
             <Link href="/statistiques" className={mobileLinkClass('/statistiques')}>LNH</Link>
