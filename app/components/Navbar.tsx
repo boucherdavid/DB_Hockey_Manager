@@ -63,11 +63,26 @@ export default function Navbar({
   const profileRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // Déjà installée : pas de bouton
+    if (
+      localStorage.getItem('pwaInstalled') === '1' ||
+      window.matchMedia('(display-mode: standalone)').matches ||
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window.navigator as any).standalone === true
+    ) return
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ((window as any).__pwaPrompt) setInstallPrompt((window as any).__pwaPrompt)
     const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e) }
     window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
+
+    const onInstalled = () => { localStorage.setItem('pwaInstalled', '1'); setInstallPrompt(null) }
+    window.addEventListener('appinstalled', onInstalled)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
   }, [])
 
   // Ferme le menu profil si clic en dehors
@@ -96,6 +111,9 @@ export default function Navbar({
     if (!installPrompt) return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (installPrompt as any).prompt()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { outcome } = await (installPrompt as any).userChoice
+    if (outcome === 'accepted') localStorage.setItem('pwaInstalled', '1')
     setInstallPrompt(null)
   }
 
