@@ -32,8 +32,10 @@ type ActivePick = {
 }
 
 function posGroup(pos: string | null): 'F' | 'D' | 'G' {
-  if (pos === 'G') return 'G'
-  if (pos === 'D' || pos === 'LD' || pos === 'RD') return 'D'
+  if (!pos) return 'F'
+  const parts = pos.split(',').map(p => p.trim())
+  if (parts.some(p => p === 'G')) return 'G'
+  if (parts.some(p => p === 'D' || p === 'LD' || p === 'RD')) return 'D'
   return 'F'
 }
 
@@ -273,7 +275,7 @@ export default function PicksManager({
               {filtered.length === 0 ? (
                 <div className="px-4 py-6 text-sm text-gray-400 text-center">Aucun joueur trouvé.</div>
               ) : (
-                filtered.slice(0, 150).map(p => {
+                filtered.map(p => {
                   const conf = p.conference as Conference
                   const counts = conf === 'Est' ? countsEst : countsOuest
                   const group = posGroup(p.position)
