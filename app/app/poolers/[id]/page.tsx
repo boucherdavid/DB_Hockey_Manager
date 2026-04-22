@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import TeamBadge from '@/components/TeamBadge'
 import PoolerSwitcher from '@/components/PoolerSwitcher'
+import PoolerPageTabs from './PoolerPageTabs'
 
 const DASH = '\u2014'
 const STAR = '\u2605'
@@ -385,18 +386,8 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
   }, 0)
   const capNextPct = nextPoolCap && nextPoolCap > 0 ? (capNextSaison / nextPoolCap) * 100 : 0
 
-  return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">{pooler.name}</h1>
-          {saison && <p className="text-gray-500 text-sm">Saison {saison.season}</p>}
-        </div>
-        {allPoolers && allPoolers.length > 1 && (
-          <PoolerSwitcher poolers={allPoolers} currentId={id} />
-        )}
-      </div>
-
+  const organisationContent = (
+    <>
       <div className="bg-white rounded-lg shadow p-5 mb-6 space-y-3">
         <div className="flex justify-between text-sm mb-2">
           <span className="font-medium text-gray-700">Masse salariale</span>
@@ -502,6 +493,21 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
           </div>
         )}
       </div>
+    </>
+  )
+
+  return (
+    <div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">{pooler.name}</h1>
+          {saison && <p className="text-gray-500 text-sm">Saison {saison.season}</p>}
+        </div>
+        {allPoolers && allPoolers.length > 1 && (
+          <PoolerSwitcher poolers={allPoolers} currentId={id} />
+        )}
+      </div>
+      <PoolerPageTabs organisationContent={organisationContent} />
     </div>
   )
 }

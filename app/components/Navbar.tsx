@@ -164,7 +164,7 @@ export default function Navbar({
                 </button>
                 {openDropdown === 'pool-saison' && (
                   <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
-                    {userName && <Link href="/dashboard"    className={dropdownLinkClass('/dashboard')}>Mon alignement</Link>}
+                    {userName && <Link href="/dashboard"    className={dropdownLinkClass('/dashboard')}>Mon équipe</Link>}
                     <Link href="/transactions" className={dropdownLinkClass('/transactions')}>Transactions</Link>
                   </div>
                 )}
@@ -305,7 +305,7 @@ export default function Navbar({
         {menuOpen && (
           <div className="md:hidden border-t border-pool-navy-light py-2 flex flex-col gap-0.5">
             <MobileSection label="Pool Saison" />
-            {userName && <Link href="/dashboard"    className={mobileLinkClass('/dashboard')}>Mon alignement</Link>}
+            {userName && <Link href="/dashboard"    className={mobileLinkClass('/dashboard')}>Mon équipe</Link>}
             <Link href="/transactions" className={mobileLinkClass('/transactions')}>Transactions</Link>
 
             <MobileSection label="Classement" />
