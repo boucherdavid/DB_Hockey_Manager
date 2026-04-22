@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { fetchNhlSkaters, fetchNhlGoalies, normName } from '@/lib/nhl-stats'
+import { sendPushToAdmins } from '@/lib/push'
 
 const REVALIDATE = () => {
   revalidatePath('/series')
@@ -169,7 +170,7 @@ export async function savePicksAction(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non authentifié.' }
 
-  const { data: pooler } = await supabase.from('poolers').select('id').eq('id', user.id).single()
+  const { data: pooler } = await supabase.from('poolers').select('id, name').eq('id', user.id).single()
   if (!pooler) return { error: 'Compte non lié à un pooler.' }
 
   const { data: ps } = await supabase
@@ -231,6 +232,13 @@ export async function savePicksAction(
 
   const { error: insertErr } = await supabase.from('playoff_rosters').insert(newRows)
   if (insertErr) return { error: insertErr.message }
+
+  // Notification push aux admins
+  sendPushToAdmins({
+    title: 'DB Hockey Manager — Pool des séries',
+    body: `${pooler?.name ?? 'Un pooler'} a soumis ses choix (Ronde ${ps.current_round}).`,
+    url: '/admin/series',
+  }).catch(() => {})
 
   REVALIDATE()
   return {}

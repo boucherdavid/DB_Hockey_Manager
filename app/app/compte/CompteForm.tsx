@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { updatePasswordAction, updateProfileAction, updateNameAction, updateEmailAction } from './actions'
+import PushToggle from './PushToggle'
 
 type Profile = {
   name: string
@@ -193,6 +194,13 @@ export default function CompteForm({ profile }: { profile: Profile }) {
       {/* Notifications */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="font-bold text-lg text-gray-800 mb-4">Notifications</h2>
+
+        {/* Notifications push PWA */}
+        <div className="mb-6 pb-6 border-b">
+          <p className="text-sm font-medium text-gray-700 mb-3">Notifications push (application)</p>
+          <PushToggle />
+        </div>
+
         <form onSubmit={handleProfile} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
