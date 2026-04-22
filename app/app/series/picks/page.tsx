@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import PicksManager from './PicksManager'
+import { fetchAllPages } from '@/lib/supabase/fetch-all'
 
 export const metadata = { title: 'Mes choix — Séries' }
 export const dynamic = 'force-dynamic'
@@ -53,12 +54,17 @@ export default async function SeriesPicksPage() {
     .eq('pooler_id', user.id)
     .eq('is_active', true)
 
-  // Joueurs avec contrat actif + conférence via leur équipe
-  const { data: rawContracts } = await supabase
-    .from('player_contracts')
-    .select('cap_number, players (id, first_name, last_name, position, teams (code, conference))')
-    .eq('season', seasonLabel)
-    .gt('cap_number', 0)
+  type RawContract = { cap_number: number; players: unknown }
+
+  // Joueurs avec contrat actif + conférence via leur équipe (fetchAllPages pour dépasser la limite 1000)
+  const rawContracts = await fetchAllPages<RawContract>((from, to) =>
+    supabase
+      .from('player_contracts')
+      .select('cap_number, players (id, first_name, last_name, position, teams (code, conference))')
+      .eq('season', seasonLabel)
+      .gt('cap_number', 0)
+      .range(from, to) as unknown as Promise<{ data: RawContract[] | null; error: { message: string } | null }>
+  )
 
   // Fallback statique si la colonne conference n'est pas renseignée en BD
   const EASTERN_TEAMS = new Set([
