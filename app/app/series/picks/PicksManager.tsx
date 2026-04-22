@@ -36,6 +36,7 @@ function posGroup(pos: string | null): 'F' | 'D' | 'G' {
   const parts = pos.split(',').map(p => p.trim())
   if (parts.some(p => p === 'G')) return 'G'
   if (parts.some(p => p === 'D' || p === 'LD' || p === 'RD')) return 'D'
+  if (parts.some(p => p === 'C' || p === 'LW' || p === 'RW' || p === 'W' || p === 'F')) return 'F'
   return 'F'
 }
 
