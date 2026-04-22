@@ -630,7 +630,12 @@ Fichiers modifiés:
 - `page.tsx` mis à jour: le contenu de la page devient `organisationContent` dans `PoolerPageTabs`.
 - Navbar: "Mon alignement" → "Mon équipe" (desktop + mobile).
 
-Commit: `a3c0311` (corrections séries/positions), `263c820` (restructuration Mon Équipe).
+**Pool des Séries — correctifs sélecteur (session suivante)**:
+- `posGroup` gère maintenant les positions composées (ex: `"LD,RD"`, `"C,RW"`): split sur virgule + vérification par partie. Lane Hutson (`"LD,RD"`) classé correctement comme défenseur.
+- Positions attaquants explicites: `C`, `LW`, `RW`, `W`, `F` vérifiés individuellement (symétrie avec D et G).
+- Retrait du `slice(0, 150)` dans la liste de sélection: la liste défile maintenant jusqu'au bout.
+
+Commits: `a3c0311` (corrections séries/positions), `263c820` (restructuration Mon Équipe), `17a33ad` / `a997c77` (posGroup + défilement).
 
 ---
 
