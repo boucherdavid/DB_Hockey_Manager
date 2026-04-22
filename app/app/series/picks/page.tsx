@@ -53,8 +53,8 @@ export default async function SeriesPicksPage() {
     if (bracketRes.ok) {
       const bracket = await bracketRes.json() as {
         series: {
-          topSeedTeam: { id: number; abbrev: string }
-          bottomSeedTeam: { id: number; abbrev: string }
+          topSeedTeam: { id: number; abbrev: string } | null
+          bottomSeedTeam: { id: number; abbrev: string } | null
           losingTeamId?: number
         }[]
       }
@@ -63,8 +63,8 @@ export default async function SeriesPicksPage() {
         const losingIds = new Set(series.map(s => s.losingTeamId).filter(Boolean))
         const active = new Set<string>()
         for (const s of series) {
-          if (!losingIds.has(s.topSeedTeam.id)) active.add(s.topSeedTeam.abbrev)
-          if (!losingIds.has(s.bottomSeedTeam.id)) active.add(s.bottomSeedTeam.abbrev)
+          if (s.topSeedTeam && !losingIds.has(s.topSeedTeam.id)) active.add(s.topSeedTeam.abbrev)
+          if (s.bottomSeedTeam && !losingIds.has(s.bottomSeedTeam.id)) active.add(s.bottomSeedTeam.abbrev)
         }
         if (active.size > 0) activeTeamCodes = active
       }
