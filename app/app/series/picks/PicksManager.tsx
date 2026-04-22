@@ -107,12 +107,14 @@ export default function PicksManager({
   capPerRound,
   players,
   currentPicks,
+  activeTeamCount,
 }: {
   playoffSeasonId: number
   currentRound: number
   capPerRound: number
   players: Player[]
   currentPicks: ActivePick[]
+  activeTeamCount: number | null
 }) {
   const [roster, setRoster] = useState<ActivePick[]>(currentPicks)
   const [search, setSearch] = useState('')
@@ -202,6 +204,9 @@ export default function PicksManager({
           <p className="text-sm text-gray-500 mt-0.5">
             Ronde {currentRound} — {roundLabel}
             &nbsp;·&nbsp;Cap {(capPerRound / 1_000_000).toFixed(1)} M$ par conférence
+            {activeTeamCount !== null && (
+              <>&nbsp;·&nbsp;<span className="text-green-600 font-medium">{activeTeamCount} équipes actives</span></>
+            )}
           </p>
         </div>
         {!editMode && (

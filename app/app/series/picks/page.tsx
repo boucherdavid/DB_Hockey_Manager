@@ -42,6 +42,37 @@ export default async function SeriesPicksPage() {
 
   const seasonLabel = ps.season
 
+  // Équipes encore actives dans le bracket (API NHL) — filtre la liste de sélection
+  const playoffYear = parseInt(ps.season.split('-')[0]) + 1
+  let activeTeamCodes: Set<string> | null = null
+  try {
+    const bracketRes = await fetch(
+      `https://api-web.nhle.com/v1/playoff-bracket/${playoffYear}`,
+      { next: { revalidate: 3600 } }
+    )
+    if (bracketRes.ok) {
+      const bracket = await bracketRes.json() as {
+        series: {
+          topSeedTeam: { id: number; abbrev: string }
+          bottomSeedTeam: { id: number; abbrev: string }
+          losingTeamId?: number
+        }[]
+      }
+      const series = bracket.series ?? []
+      if (series.length > 0) {
+        const losingIds = new Set(series.map(s => s.losingTeamId).filter(Boolean))
+        const active = new Set<string>()
+        for (const s of series) {
+          if (!losingIds.has(s.topSeedTeam.id)) active.add(s.topSeedTeam.abbrev)
+          if (!losingIds.has(s.bottomSeedTeam.id)) active.add(s.bottomSeedTeam.abbrev)
+        }
+        if (active.size > 0) activeTeamCodes = active
+      }
+    }
+  } catch {
+    // Silently ignore — pas de filtre si l'API est indisponible
+  }
+
   // Picks actifs du pooler
   const { data: rawPicks } = await supabase
     .from('playoff_rosters')
@@ -89,6 +120,7 @@ export default async function SeriesPicksPage() {
     } | null
     if (!p || !p.teams) return []
     const teamCode = p.teams.code
+    if (activeTeamCodes && !activeTeamCodes.has(teamCode)) return []
     const conference = p.teams.conference || (EASTERN_TEAMS.has(teamCode) ? 'Est' : 'Ouest')
     return [{
       id: p.id,
@@ -134,6 +166,7 @@ export default async function SeriesPicksPage() {
         capPerRound={ps.cap_per_round}
         players={players}
         currentPicks={currentPicks}
+        activeTeamCount={activeTeamCodes?.size ?? null}
       />
     </div>
   )
