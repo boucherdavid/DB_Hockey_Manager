@@ -635,7 +635,15 @@ Fichiers modifiés:
 - Positions attaquants explicites: `C`, `LW`, `RW`, `W`, `F` vérifiés individuellement (symétrie avec D et G).
 - Retrait du `slice(0, 150)` dans la liste de sélection: la liste défile maintenant jusqu'au bout.
 
-Commits: `a3c0311` (corrections séries/positions), `263c820` (restructuration Mon Équipe), `17a33ad` / `a997c77` (posGroup + défilement).
+**Pool des Séries — filtre équipes actives (bracket NHL)**:
+- `picks/page.tsx`: fetch `api-web.nhle.com/v1/playoff-bracket/{année}` au chargement (année dérivée de `ps.season`, ex: `"2025-26"` → 2026).
+- Équipes actives = toutes les équipes du bracket dont l'ID n'est pas un `losingTeamId` dans une série terminée.
+- Filtre appliqué côté serveur avant de passer la liste à `PicksManager`.
+- Fallback silencieux si l'API est indisponible (liste complète affichée sans filtre).
+- `PicksManager`: affiche «N équipes actives» dans le sous-titre si le filtre est actif.
+- Cache de 1h (`revalidate: 3600`) sur la réponse du bracket.
+
+Commits: `a3c0311` (corrections séries/positions), `263c820` (restructuration Mon Équipe), `17a33ad` / `a997c77` (posGroup + défilement), `d5c22f5` (filtre équipes actives).
 
 ---
 
