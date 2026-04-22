@@ -598,6 +598,7 @@ Fichiers modifiés:
 - Correction filtre `position IS NULL`: le filtre `!p.position` est retiré pour ne plus exclure les joueurs sans position.
 - Types `Player`, `ActivePick`, `PickInput` mis à jour pour accepter `position: string | null`.
 - `posGroup()` dans `PicksManager.tsx` gère `null` (retourne `'F'` par défaut).
+- Correction limite 1000 rangées Supabase: `fetchAllPages` appliqué sur `player_contracts` (1575 contrats en 2025-26). Johnston/DAL, Schmaltz/UTA, Wedgewood/COL maintenant visibles dans le sélecteur.
 
 **Diagnostic positions NULL**:
 - 24 joueurs avec `position IS NULL` et contrat actif en 2025-26 identifiés.
@@ -609,8 +610,27 @@ Fichiers modifiés:
   - Mapping des codes NHL (`C/L/R/LW/RW` → `F`, `D/LD/RD` → `D`, `G` → `G`).
   - Option `--dry-run` pour prévisualiser sans modifier la BD.
   - Loggue les joueurs sans résultat NHL pour correction manuelle.
+- Script lancé avec succès; positions corrigées en BD.
 
-Commit: `a3c0311`.
+**PWA — Notifications push**:
+- Nouveau `app/lib/push.ts`: `sendPushToAdmins(payload)` — envoie une notification Web Push à tous les admins abonnés. Supprime automatiquement les subscriptions invalides (410/404).
+- Nouvelles Server Actions `app/app/compte/push-actions.ts`: `subscribePushAction`, `unsubscribePushAction`, `getSubscriptionStatusAction`.
+- Nouveau composant client `app/app/compte/PushToggle.tsx`: toggle d'abonnement/désabonnement dans la page "Mon compte".
+- `app/public/sw.js` mis à jour (v4): handlers `push` et `notificationclick` ajoutés.
+- `app/app/series/actions.ts`: `sendPushToAdmins` appelé après soumission des choix séries.
+- Table `push_subscriptions` créée dans Supabase (endpoint, p256dh, auth; RLS admin only).
+- Package `web-push` installé (`npm install web-push`); variables d'env `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` à configurer dans Vercel.
+
+**Contraste — suppression du mode sombre**:
+- `app/app/globals.css`: bloc `@media (prefers-color-scheme: dark)` supprimé.
+- Fond et texte forcés en blanc/noir, les titres restent lisibles sur mobile.
+
+**Restructuration `/poolers/[id]` — Mon Équipe**:
+- Nouveau `app/app/poolers/[id]/PoolerPageTabs.tsx`: composant client avec deux onglets — "Organisation" (contenu actuel) et "Alignement" (placeholder pour Chantier B — points séries).
+- `page.tsx` mis à jour: le contenu de la page devient `organisationContent` dans `PoolerPageTabs`.
+- Navbar: "Mon alignement" → "Mon équipe" (desktop + mobile).
+
+Commit: `a3c0311` (corrections séries/positions), `263c820` (restructuration Mon Équipe).
 
 ---
 
