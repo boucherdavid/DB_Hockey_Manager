@@ -85,16 +85,15 @@ export default async function SeriesPicksPage() {
     .eq('pooler_id', user.id)
     .eq('is_active', true)
 
-  type RawContract = { cap_number: number; players: unknown }
+  type RawPlayer = { id: number; first_name: string; last_name: string; position: string | null; teams: unknown; player_contracts: unknown }
 
-  // Joueurs avec contrat actif + conférence via leur équipe (fetchAllPages pour dépasser la limite 1000)
-  const rawContracts = await fetchAllPages<RawContract>((from, to) =>
+  // Partir de players avec is_available=true pour exclure salaires retenus et rachats
+  const rawPlayers = await fetchAllPages<RawPlayer>((from, to) =>
     supabase
-      .from('player_contracts')
-      .select('cap_number, players (id, first_name, last_name, position, teams (code, conference))')
-      .eq('season', seasonLabel)
-      .gt('cap_number', 0)
-      .range(from, to) as unknown as Promise<{ data: RawContract[] | null; error: { message: string } | null }>
+      .from('players')
+      .select('id, first_name, last_name, position, teams (code, conference), player_contracts (season, cap_number)')
+      .eq('is_available', true)
+      .range(from, to) as unknown as Promise<{ data: RawPlayer[] | null; error: { message: string } | null }>
   )
 
   // Fallback statique si la colonne conference n'est pas renseignée en BD
@@ -113,21 +112,24 @@ export default async function SeriesPicksPage() {
     conference: string
   }
 
-  const players: PlayerRow[] = (rawContracts ?? []).flatMap(c => {
-    const p = c.players as unknown as {
+  const players: PlayerRow[] = (rawPlayers ?? []).flatMap(p => {
+    const player = p as unknown as {
       id: number; first_name: string; last_name: string; position: string | null
       teams: { code: string; conference: string } | null
-    } | null
-    if (!p || !p.teams) return []
-    const teamCode = p.teams.code
+      player_contracts: { season: string; cap_number: number }[]
+    }
+    if (!player.teams) return []
+    const teamCode = player.teams.code
     if (activeTeamCodes && !activeTeamCodes.has(teamCode)) return []
-    const conference = p.teams.conference || (EASTERN_TEAMS.has(teamCode) ? 'Est' : 'Ouest')
+    const contract = (player.player_contracts ?? []).find(c => c.season === seasonLabel && c.cap_number > 0)
+    if (!contract) return []
+    const conference = player.teams.conference || (EASTERN_TEAMS.has(teamCode) ? 'Est' : 'Ouest')
     return [{
-      id: p.id,
-      first_name: p.first_name,
-      last_name: p.last_name,
-      position: p.position ?? null,
-      cap_number: c.cap_number,
+      id: player.id,
+      first_name: player.first_name,
+      last_name: player.last_name,
+      position: player.position ?? null,
+      cap_number: contract.cap_number,
       team_abbrev: teamCode,
       conference,
     }]

@@ -188,11 +188,19 @@ export type PickInput = {
   conference: 'Est' | 'Ouest'
 }
 
+function posGroup(pos: string | null): 'F' | 'D' | 'G' {
+  if (!pos) return 'F'
+  const parts = pos.split(',').map(p => p.trim())
+  if (parts.some(p => p === 'G')) return 'G'
+  if (parts.some(p => p === 'D' || p === 'LD' || p === 'RD')) return 'D'
+  return 'F'
+}
+
 function validateConf(picks: PickInput[], conf: 'Est' | 'Ouest'): string | null {
   const cp = picks.filter(p => p.conference === conf)
-  const fwd = cp.filter(p => !['D', 'LD', 'RD', 'G'].includes(p.position ?? ''))
-  const def = cp.filter(p => ['D', 'LD', 'RD'].includes(p.position ?? ''))
-  const gol = cp.filter(p => p.position === 'G')
+  const fwd = cp.filter(p => posGroup(p.position) === 'F')
+  const def = cp.filter(p => posGroup(p.position) === 'D')
+  const gol = cp.filter(p => posGroup(p.position) === 'G')
   if (fwd.length !== 3) return `Conférence ${conf} : exactement 3 attaquants requis.`
   if (def.length !== 2) return `Conférence ${conf} : exactement 2 défenseurs requis.`
   if (gol.length !== 1) return `Conférence ${conf} : exactement 1 gardien requis.`
