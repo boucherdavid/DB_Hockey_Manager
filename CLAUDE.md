@@ -120,7 +120,16 @@ Les pages de consultation publique doivent etre utilisables sur mobile. Regle: q
 - Masquer les colonnes secondaires sur mobile avec `hidden sm:table-cell` (et l'en-tete correspondant).
 - Ne pas utiliser de layout en colonnes cote a cote sur mobile (preferer `flex-wrap` ou `grid-cols-1`).
 
-Pages de consultation: `/`, `/joueurs`, `/statistiques`, `/repechage`, `/poolers`, `/poolers/[id]`, `/transactions`.
+Pages de consultation: `/`, `/joueurs`, `/statistiques`, `/repechage`, `/poolers`, `/poolers/[id]`, `/transactions`, `/aide`.
+
+## Page Aide (`/aide`)
+
+`app/app/aide/page.tsx` contient trois sections:
+- **Installation** : instructions PWA pour ordinateur, iPhone et Android.
+- **Guide d'utilisation** : instructions par fonctionnalité (section en construction, à compléter au fur et à mesure).
+- **Règlements** : règles métier du pool visibles par les poolers.
+
+Règle : lors de l'ajout ou de la modification d'une fonctionnalité accessible aux poolers, évaluer si la section "Guide d'utilisation" ou "Règlements" de `/aide` doit être mise à jour.
 
 ## Regle de maintenance
 

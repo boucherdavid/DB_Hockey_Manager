@@ -263,6 +263,7 @@ export default function Navbar({
                     </div>
                     <div className="py-1">
                       <Link href="/compte"   className={dropdownLinkClass('/compte')}>Mon compte</Link>
+                      <Link href="/aide"     className={dropdownLinkClass('/aide')}>Aide &amp; Règlements</Link>
                       <Link href="/signaler" className={dropdownLinkClass('/signaler')}>Signaler un problème</Link>
                     </div>
                     {isAdmin && (
@@ -330,6 +331,7 @@ export default function Navbar({
               <div className="mt-1 pt-1 border-t border-pool-navy-light flex flex-col gap-0.5">
                 <MobileSection label="Compte" />
                 <Link href="/compte"   className={mobileLinkClass('/compte')}>Mon compte</Link>
+                <Link href="/aide"     className={mobileLinkClass('/aide')}>Aide &amp; Règlements</Link>
                 <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler un problème</Link>
                 {isAdmin && <Link href="/admin" className={mobileLinkClass('/admin')}>Admin</Link>}
                 <button onClick={handleLogout}

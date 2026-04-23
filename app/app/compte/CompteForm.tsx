@@ -22,16 +22,17 @@ export default function CompteForm({ profile }: { profile: Profile }) {
   const [emailMsg, setEmailMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [emailBusy, setEmailBusy] = useState(false)
 
-  const [phone, setPhone] = useState(profile.phone ?? '')
-  const [notifEmail, setNotifEmail] = useState(profile.notif_email)
-  const [notifSms, setNotifSms] = useState(profile.notif_sms)
-  const [profileMsg, setProfileMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
-  const [profileBusy, setProfileBusy] = useState(false)
 
   const [newPwd, setNewPwd] = useState('')
   const [confirmPwd, setConfirmPwd] = useState('')
   const [pwdMsg, setPwdMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [pwdBusy, setPwdBusy] = useState(false)
+
+  const [phone, setPhone] = useState(profile.phone ?? '')
+  const [notifEmail, setNotifEmail] = useState(profile.notif_email)
+  const [notifSms, setNotifSms] = useState(profile.notif_sms)
+  const [profileMsg, setProfileMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [profileBusy, setProfileBusy] = useState(false)
 
   const [isRecovery, setIsRecovery] = useState(false)
   useEffect(() => {
