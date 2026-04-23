@@ -87,12 +87,11 @@ export default async function SeriesPicksPage() {
 
   type RawPlayer = { id: number; first_name: string; last_name: string; position: string | null; teams: unknown; player_contracts: unknown }
 
-  // Partir de players avec is_available=true pour exclure salaires retenus et rachats
+  // Partir de players pour exclure salaires retenus et rachats
   const rawPlayers = await fetchAllPages<RawPlayer>((from, to) =>
     supabase
       .from('players')
-      .select('id, first_name, last_name, position, teams (code, conference), player_contracts (season, cap_number)')
-      .eq('is_available', true)
+      .select('id, first_name, last_name, position, teams (code, conference), player_contracts (season, cap_number, years_remaining)')
       .range(from, to) as unknown as Promise<{ data: RawPlayer[] | null; error: { message: string } | null }>
   )
 
@@ -116,12 +115,14 @@ export default async function SeriesPicksPage() {
     const player = p as unknown as {
       id: number; first_name: string; last_name: string; position: string | null
       teams: { code: string; conference: string } | null
-      player_contracts: { season: string; cap_number: number }[]
+      player_contracts: { season: string; cap_number: number; years_remaining: number | null }[]
     }
     if (!player.teams) return []
     const teamCode = player.teams.code
     if (activeTeamCodes && !activeTeamCodes.has(teamCode)) return []
-    const contract = (player.player_contracts ?? []).find(c => c.season === seasonLabel && c.cap_number > 0)
+    const contract = (player.player_contracts ?? []).find(
+      c => c.season === seasonLabel && c.cap_number > 0 && (c.years_remaining ?? 0) > 0
+    )
     if (!contract) return []
     const conference = player.teams.conference || (EASTERN_TEAMS.has(teamCode) ? 'Est' : 'Ouest')
     return [{
