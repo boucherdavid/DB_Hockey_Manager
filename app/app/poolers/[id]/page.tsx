@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import TeamBadge from '@/components/TeamBadge'
 import PoolerSwitcher from '@/components/PoolerSwitcher'
 import PoolerPageTabs from './PoolerPageTabs'
+import { buildStandings } from '@/lib/standings'
 
 const DASH = '\u2014'
 const STAR = '\u2605'
@@ -507,7 +508,10 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
           <PoolerSwitcher poolers={allPoolers} currentId={id} />
         )}
       </div>
-      <PoolerPageTabs organisationContent={organisationContent} />
+      <PoolerPageTabs
+        organisationContent={organisationContent}
+        alignementPlayers={saison ? (await buildStandings(supabase, saison.id)).find(s => s.poolerId === id)?.players ?? [] : []}
+      />
     </div>
   )
 }

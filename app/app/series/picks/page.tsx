@@ -121,7 +121,7 @@ export default async function SeriesPicksPage() {
     const teamCode = player.teams.code
     if (activeTeamCodes && !activeTeamCodes.has(teamCode)) return []
     const contract = (player.player_contracts ?? []).find(
-      c => c.season === seasonLabel && c.cap_number > 0 && (c.years_remaining ?? 0) > 0
+      c => c.season === seasonLabel && c.cap_number > 0 && (c.years_remaining == null || c.years_remaining > 0)
     )
     if (!contract) return []
     const conference = player.teams.conference || (EASTERN_TEAMS.has(teamCode) ? 'Est' : 'Ouest')
