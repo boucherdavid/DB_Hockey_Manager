@@ -63,6 +63,12 @@ Je l'utiliserai pour:
 - Correction : RLS activé sur les deux tables via SQL Editor Supabase (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`).
 - Les policies de lecture publique et d'écriture admin existaient déjà.
 - `schema.sql` mis à jour pour refléter l'état réel (RLS + policies déplacés dans la section sécurité).
+- Nouvelle page `/aide` créée avec 3 onglets : Installation PWA (ordinateur, iPhone, Android), Guide d'utilisation (Mon équipe, Pool des séries, Classement, Transactions, Statistiques LNH), Règlements (alignement, cap, recrues, transactions, séries).
+- Barre de recherche transversale : recherche sur l'ensemble du contenu de la page, affiche les résultats de tous les onglets avec une étiquette indiquant la section source.
+- Lien « Aide & Règlements » ajouté dans le dropdown profil de la Navbar (desktop + mobile).
+- Note de maintenance ajoutée dans `CLAUDE.md` : évaluer une mise à jour de `/aide` lors de chaque ajout de fonctionnalité pooler.
+- Confirmé : nom de connexion (email) et nom d'affichage dans le classement (`poolers.name`) sont indépendants — déjà en place.
+- Confirmé : Pool des séries non bloqué par le Chantier B — utilise les stats NHL API en temps réel.
 - Rotation des clés Supabase non effectuée : projet non affecté par la brèche Vercel confirmé (aucun email reçu).
 
 ### 2026-04-01
