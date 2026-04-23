@@ -69,6 +69,12 @@ Je l'utiliserai pour:
 - Note de maintenance ajoutée dans `CLAUDE.md` : évaluer une mise à jour de `/aide` lors de chaque ajout de fonctionnalité pooler.
 - Confirmé : nom de connexion (email) et nom d'affichage dans le classement (`poolers.name`) sont indépendants — déjà en place.
 - Confirmé : Pool des séries non bloqué par le Chantier B — utilise les stats NHL API en temps réel.
+- Correction pool des séries : filtre `years_remaining > 0` remplacé par `years_remaining == null || years_remaining > 0` — les contrats en fin de saison avec `years_remaining = null` n'étaient plus visibles dans le sélecteur.
+- Onglet Alignement dans `/poolers/[id]` : placeholder remplacé par la vraie table MJ/B/A/V/DP/BL/PTS via `buildStandings()`, symétrique avec la vue détail du classement.
+- Page `/aide` refaite en 3 onglets (Installation / Guide d'utilisation / Règlements) avec barre de recherche transversale — composant client `AideTabs.tsx`.
+- Guide d'utilisation complété : Mon équipe, Pool des séries, Classement, Transactions, Statistiques LNH.
+- Règlements : plafond salarial précisé — cap fixé et ajustable par l'admin.
+- Idée future notée dans la feuille de route (Chantier A) : indicateurs joueurs dans Organisation et Alignement — joue ce soir, statut blessure, séquence chaude/froide (game-log NHL API, seuil N configurable selon feedback poolers).
 - Rotation des clés Supabase non effectuée : projet non affecté par la brèche Vercel confirmé (aucun email reçu).
 
 ### 2026-04-01
