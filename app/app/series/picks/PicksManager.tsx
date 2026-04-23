@@ -138,8 +138,10 @@ export default function PicksManager({
     countsEst.F === 3 && countsEst.D === 2 && countsEst.G === 1 &&
     countsOuest.F === 3 && countsOuest.D === 2 && countsOuest.G === 1
 
-  const capEstOk   = rosterEst.reduce((s, p) => s + p.cap_number, 0) <= capPerRound
-  const capOuestOk = rosterOuest.reduce((s, p) => s + p.cap_number, 0) <= capPerRound
+  const capUsedEst   = rosterEst.reduce((s, p) => s + p.cap_number, 0)
+  const capUsedOuest = rosterOuest.reduce((s, p) => s + p.cap_number, 0)
+  const capEstOk   = capUsedEst   <= capPerRound
+  const capOuestOk = capUsedOuest <= capPerRound
   const capOk = capEstOk && capOuestOk
 
   const filtered = useMemo(() => {
@@ -251,8 +253,16 @@ export default function PicksManager({
       {/* Sélecteur de joueurs */}
       {editMode && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="bg-slate-700 px-5 py-3">
+          <div className="bg-slate-700 px-5 py-3 flex items-center justify-between">
             <h2 className="text-white font-bold text-sm uppercase tracking-wide">Ajouter des joueurs</h2>
+            <div className="flex gap-4 text-xs">
+              <span className={capEstOk ? 'text-green-300' : 'text-red-300'}>
+                Est : {((capPerRound - capUsedEst) / 1_000_000).toFixed(2)} M$ restant
+              </span>
+              <span className={capOuestOk ? 'text-green-300' : 'text-red-300'}>
+                Ouest : {((capPerRound - capUsedOuest) / 1_000_000).toFixed(2)} M$ restant
+              </span>
+            </div>
           </div>
           <div className="p-4 space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -287,7 +297,9 @@ export default function PicksManager({
                   const group = posGroup(p.position)
                   const alreadyIn = pickedIds.has(p.id)
                   const groupFull = counts[group] >= GROUP_NEEDS[group]
-                  const disabled = alreadyIn || groupFull
+                  const capUsed = conf === 'Est' ? capUsedEst : capUsedOuest
+                  const capWouldExceed = !alreadyIn && capUsed + p.cap_number > capPerRound
+                  const disabled = alreadyIn || groupFull || capWouldExceed
 
                   return (
                     <div key={p.id}
