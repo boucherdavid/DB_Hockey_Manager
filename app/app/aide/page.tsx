@@ -75,28 +75,89 @@ export default function AidePage() {
       <section id="guide">
         <h2 className="text-xl font-bold text-gray-800 mb-4 pb-2 border-b">Guide d&apos;utilisation</h2>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-4 text-sm text-amber-800">
-          <strong>Section en construction.</strong> Les instructions d&apos;utilisation seront ajoutées au fur et à mesure que les fonctionnalités seront déployées.
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-4 text-sm text-amber-800 mb-4">
+          <strong>Section en construction.</strong> Les instructions seront complétées au fur et à mesure que les fonctionnalités sont déployées.
         </div>
 
-        <div className="mt-4 space-y-3">
-          <div className="bg-white rounded-lg shadow p-5 opacity-50">
-            <h3 className="font-semibold text-gray-800 mb-1">Mon équipe</h3>
-            <p className="text-sm text-gray-600">Comment consulter votre alignement et vos choix de repêchage.</p>
-            <p className="text-xs text-gray-400 mt-2 italic">Instructions à venir.</p>
+        <div className="space-y-4">
+
+          {/* Mon équipe */}
+          <div className="bg-white rounded-lg shadow p-5">
+            <h3 className="font-semibold text-gray-800 mb-3">Mon équipe</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Accédez à votre alignement via <strong>Pool Saison → Mon équipe</strong> dans la barre de navigation.
+            </p>
+            <ul className="text-sm text-gray-700 space-y-1.5">
+              <li>• L&apos;onglet <strong>Organisation</strong> affiche votre roster complet: actifs, réservistes, recrues et joueurs LTIR.</li>
+              <li>• Votre <strong>masse salariale</strong> et le cap restant sont affichés en haut de page.</li>
+              <li>• Vos <strong>choix de repêchage</strong> sont listés en bas, regroupés par saison.</li>
+              <li>• Le <strong>sélecteur de pooler</strong> en haut vous permet de consulter l&apos;alignement d&apos;un autre pooler.</li>
+            </ul>
+            <p className="text-xs text-gray-400 mt-3 italic">Modifications d&apos;alignement: effectuées par l&apos;administrateur seulement pour l&apos;instant.</p>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-5 opacity-50">
-            <h3 className="font-semibold text-gray-800 mb-1">Pool des séries</h3>
-            <p className="text-sm text-gray-600">Comment choisir vos joueurs pour chaque ronde des séries.</p>
-            <p className="text-xs text-gray-400 mt-2 italic">Instructions à venir.</p>
+          {/* Pool des séries */}
+          <div className="bg-white rounded-lg shadow p-5">
+            <h3 className="font-semibold text-gray-800 mb-3">Pool des séries éliminatoires</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Le pool des séries est <strong>self-service</strong> : chaque pooler fait ses propres sélections, sans passer par l&apos;administrateur.
+              Accédez à vos choix via <strong>Pool Séries → Mes choix</strong>.
+            </p>
+            <h4 className="text-sm font-semibold text-gray-700 mb-1.5">Faire vos sélections</h4>
+            <ul className="text-sm text-gray-700 space-y-1.5 mb-4">
+              <li>• Choisissez <strong>3 attaquants, 2 défenseurs et 1 gardien</strong> pour la ronde en cours.</li>
+              <li>• Seuls les joueurs dont l&apos;équipe est encore active dans les séries apparaissent dans la liste.</li>
+              <li>• Votre sélection doit respecter le <strong>cap de la ronde</strong> (environ 25 M$).</li>
+              <li>• Les joueurs sont triés par équipe puis par salaire pour faciliter la navigation.</li>
+              <li>• Cliquez sur <strong>Soumettre mes choix</strong> pour confirmer. Vous pouvez modifier votre sélection tant que la ronde n&apos;est pas fermée.</li>
+            </ul>
+            <h4 className="text-sm font-semibold text-gray-700 mb-1.5">Entre les rondes</h4>
+            <ul className="text-sm text-gray-700 space-y-1.5">
+              <li>• Vous pouvez <strong>conserver ou remplacer</strong> vos joueurs au début de chaque nouvelle ronde.</li>
+              <li>• Si l&apos;équipe d&apos;un de vos joueurs est éliminée, vous <strong>devez le remplacer</strong> avant la ronde suivante.</li>
+            </ul>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-5 opacity-50">
-            <h3 className="font-semibold text-gray-800 mb-1">Transactions</h3>
-            <p className="text-sm text-gray-600">Comment consulter l&apos;historique des échanges et mouvements de la saison.</p>
-            <p className="text-xs text-gray-400 mt-2 italic">Instructions à venir.</p>
+          {/* Classement */}
+          <div className="bg-white rounded-lg shadow p-5">
+            <h3 className="font-semibold text-gray-800 mb-3">Classement</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Accédez au classement via <strong>Classement → Saison complète</strong> ou via la page d&apos;accueil.
+            </p>
+            <ul className="text-sm text-gray-700 space-y-1.5">
+              <li>• Le tableau affiche le rang, les points totaux et le détail (buts, passes, victoires, défaites prol.).</li>
+              <li>• Cliquez sur le nom d&apos;un pooler pour consulter son alignement complet.</li>
+              <li>• La page d&apos;accueil affiche aussi un widget <strong>Joueurs en action ce soir</strong> : combien de joueurs de chaque pooler jouent le soir même.</li>
+            </ul>
+            <p className="text-xs text-gray-400 mt-3 italic">Classements hebdomadaire et mensuel à venir.</p>
           </div>
+
+          {/* Transactions */}
+          <div className="bg-white rounded-lg shadow p-5">
+            <h3 className="font-semibold text-gray-800 mb-3">Transactions</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Consultez l&apos;historique des mouvements via <strong>Pool Saison → Transactions</strong>.
+            </p>
+            <ul className="text-sm text-gray-700 space-y-1.5">
+              <li>• Les transactions sont séparées en deux catégories: <strong>Échanges</strong> (joueurs et picks entre poolers) et <strong>Ajustements</strong> (signatures, libérations, changements de type).</li>
+              <li>• Toutes les transactions sont effectuées par l&apos;administrateur.</li>
+            </ul>
+          </div>
+
+          {/* Statistiques */}
+          <div className="bg-white rounded-lg shadow p-5">
+            <h3 className="font-semibold text-gray-800 mb-3">Statistiques LNH</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Accédez aux statistiques via <strong>Statistiques → LNH</strong>.
+            </p>
+            <ul className="text-sm text-gray-700 space-y-1.5">
+              <li>• Consultez les stats des patineurs (triés par points) et des gardiens (triés par victoires).</li>
+              <li>• Un <strong>point vert</strong> indique qu&apos;un joueur appartient déjà à un pooler dans la saison active.</li>
+              <li>• Basculez entre <strong>Saison régulière</strong> et <strong>Séries</strong> avec le toggle en haut à droite.</li>
+              <li>• Filtrez par attaquants / défenseurs et effectuez une recherche par nom.</li>
+            </ul>
+          </div>
+
         </div>
       </section>
 
@@ -123,7 +184,8 @@ export default function AidePage() {
           <div className="bg-white rounded-lg shadow p-5">
             <h3 className="font-semibold text-gray-800 mb-3">Plafond salarial</h3>
             <ul className="text-sm text-gray-700 space-y-1.5">
-              <li>• Le cap du pool = plafond NHL × facteur (généralement 1.24–1.25), arrondi au million supérieur</li>
+              <li>• Le cap du pool est fixé par l&apos;administrateur. Il est calculé à partir du plafond salarial NHL de la saison, multiplié par un facteur (généralement 1.24–1.25) et arrondi au million supérieur.</li>
+              <li>• Le facteur et le plafond NHL peuvent être ajustés par l&apos;administrateur avant ou pendant une saison.</li>
               <li>• Seuls les joueurs <strong>actifs</strong> et <strong>réservistes</strong> comptent dans la masse salariale</li>
               <li>• Les joueurs en <strong>LTIR</strong> et dans la <strong>banque de recrues</strong> ne comptent <em>pas</em> dans la masse</li>
             </ul>
