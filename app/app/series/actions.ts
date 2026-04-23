@@ -120,6 +120,41 @@ export async function activatePlayoffSeasonAction(id: number): Promise<{ error?:
   return {}
 }
 
+export async function deletePlayoffSeasonAction(id: number): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { data: ps } = await supabase.from('playoff_seasons').select('is_active, scoring_start_at').eq('id', id).single()
+  if (!ps) return { error: 'Saison introuvable.' }
+  if (ps.is_active) return { error: 'Impossible de supprimer la saison active.' }
+  if (ps.scoring_start_at) return { error: 'Impossible de supprimer une saison avec comptabilisation démarrée.' }
+
+  const { error } = await supabase.from('playoff_seasons').delete().eq('id', id)
+  if (error) return { error: error.message }
+  REVALIDATE()
+  return {}
+}
+
+export async function updateCapAction(id: number, capPerRound: number): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { data: ps } = await supabase.from('playoff_seasons').select('scoring_start_at').eq('id', id).single()
+  if (!ps) return { error: 'Saison introuvable.' }
+  if (ps.scoring_start_at) return { error: 'Impossible de modifier le cap après le démarrage de la comptabilisation.' }
+
+  const { error } = await supabase.from('playoff_seasons').update({ cap_per_round: capPerRound }).eq('id', id)
+  if (error) return { error: error.message }
+  REVALIDATE()
+  return {}
+}
+
 export async function advanceRoundAction(id: number): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

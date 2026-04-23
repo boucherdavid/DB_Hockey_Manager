@@ -325,6 +325,15 @@ ALTER TABLE poolers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pooler_rosters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE roster_changes ENABLE ROW LEVEL SECURITY;
 
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transaction_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Lecture publique transactions" ON transactions FOR SELECT USING (true);
+CREATE POLICY "Lecture publique transaction_items" ON transaction_items FOR SELECT USING (true);
+CREATE POLICY "Admin modifie transactions" ON transactions FOR ALL
+  USING (EXISTS (SELECT 1 FROM poolers WHERE id = auth.uid() AND is_admin = true));
+CREATE POLICY "Admin modifie transaction_items" ON transaction_items FOR ALL
+  USING (EXISTS (SELECT 1 FROM poolers WHERE id = auth.uid() AND is_admin = true));
+
 ALTER TABLE pool_draft_picks ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Lecture publique picks" ON pool_draft_picks FOR SELECT USING (true);
 CREATE POLICY "Admin modifie picks" ON pool_draft_picks FOR ALL

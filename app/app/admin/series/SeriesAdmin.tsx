@@ -6,6 +6,8 @@ import {
   activatePlayoffSeasonAction,
   advanceRoundAction,
   startScoringAction,
+  deletePlayoffSeasonAction,
+  updateCapAction,
 } from '@/app/series/actions'
 
 const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
@@ -36,6 +38,8 @@ export default function SeriesAdmin({
   const [cap, setCap] = useState('25000000')
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [editingCapId, setEditingCapId] = useState<number | null>(null)
+  const [editingCapValue, setEditingCapValue] = useState('')
 
   function getPicksCount(id: number) {
     return picksCounts.find(p => p.playoff_season_id === id)
@@ -58,6 +62,27 @@ export default function SeriesAdmin({
     setBusy(false)
     if (res.error) setMsg({ type: 'err', text: res.error })
     else setMsg({ type: 'ok', text: 'Saison activée.' })
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm('Supprimer cette saison playoff et tous ses picks ?')) return
+    setBusy(true)
+    setMsg(null)
+    const res = await deletePlayoffSeasonAction(id)
+    setBusy(false)
+    if (res.error) setMsg({ type: 'err', text: res.error })
+    else setMsg({ type: 'ok', text: 'Saison supprimée.' })
+  }
+
+  async function handleUpdateCap(id: number) {
+    const val = parseFloat(editingCapValue)
+    if (!val || val < 1_000_000) { setMsg({ type: 'err', text: 'Cap invalide.' }); return }
+    setBusy(true)
+    setMsg(null)
+    const res = await updateCapAction(id, val)
+    setBusy(false)
+    if (res.error) setMsg({ type: 'err', text: res.error })
+    else { setMsg({ type: 'ok', text: 'Cap mis à jour.' }); setEditingCapId(null) }
   }
 
   async function handleAdvance(id: number) {
@@ -114,7 +139,29 @@ export default function SeriesAdmin({
                       </div>
                       <div className="text-sm text-gray-500 mt-0.5">
                         Ronde {ps.current_round} — {ROUND_LABEL[ps.current_round - 1] ?? `Ronde ${ps.current_round}`}
-                        &nbsp;·&nbsp;Cap {(ps.cap_per_round / 1_000_000).toFixed(1)} M$
+                        &nbsp;·&nbsp;
+                        {editingCapId === ps.id ? (
+                          <span className="inline-flex items-center gap-1">
+                            <input
+                              type="number" value={editingCapValue}
+                              onChange={e => setEditingCapValue(e.target.value)}
+                              min={1_000_000} step={500_000}
+                              className="border border-gray-300 rounded px-2 py-0.5 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <button onClick={() => handleUpdateCap(ps.id)} disabled={busy}
+                              className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 disabled:opacity-50">✓</button>
+                            <button onClick={() => setEditingCapId(null)}
+                              className="text-xs text-gray-500 hover:text-gray-700">✕</button>
+                          </span>
+                        ) : (
+                          <span>
+                            Cap {(ps.cap_per_round / 1_000_000).toFixed(1)} M$
+                            {!ps.scoring_start_at && (
+                              <button onClick={() => { setEditingCapId(ps.id); setEditingCapValue(String(ps.cap_per_round)) }}
+                                className="ml-1 text-xs text-blue-500 hover:underline">modifier</button>
+                            )}
+                          </span>
+                        )}
                       </div>
                       {pc && (
                         <div className="text-sm mt-1">
@@ -150,6 +197,12 @@ export default function SeriesAdmin({
                       )}
                       {ps.is_active && ps.current_round >= 4 && (
                         <span className="text-sm text-gray-400 italic">Finale en cours</span>
+                      )}
+                      {!ps.is_active && !ps.scoring_start_at && (
+                        <button onClick={() => handleDelete(ps.id)} disabled={busy}
+                          className="text-sm text-red-500 hover:text-red-700 disabled:opacity-50">
+                          Supprimer
+                        </button>
                       )}
                     </div>
                   </div>

@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-23
+
+- Sécurité : suite à la brèche Vercel du 19 avril 2026, vérification des variables d'environnement locales (`app/.env.local`, `python_script/.env`) — non commitées, donc non exposées via git.
+- Sécurité : email Supabase signalant RLS désactivé sur `transactions` et `transaction_items` (tables créées en avril 2026 sans activation du RLS).
+- Correction : RLS activé sur les deux tables via SQL Editor Supabase (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`).
+- Les policies de lecture publique et d'écriture admin existaient déjà.
+- `schema.sql` mis à jour pour refléter l'état réel (RLS + policies déplacés dans la section sécurité).
+- Rotation des clés Supabase non effectuée : projet non affecté par la brèche Vercel confirmé (aucun email reçu).
+
 ### 2026-04-01
 
 - Prise de connaissance initiale du projet.
