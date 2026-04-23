@@ -11,7 +11,7 @@ const TYPE_BADGE: Record<string, string> = { reserviste: 'RES', ltir: 'LTIR' }
 
 function positionGroup(pos: string): number {
   if (pos === 'G') return 2
-  if (pos === 'D' || pos === 'LD' || pos === 'RD' || pos.includes('D')) return 1
+  if (pos === 'D' || pos === 'LD' || pos === 'RD') return 1
   return 0
 }
 
