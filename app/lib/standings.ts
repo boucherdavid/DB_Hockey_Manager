@@ -31,7 +31,7 @@ export async function buildStandings(supabase: any, seasonId: string): Promise<P
       .eq('pool_season_id', seasonId)
       .eq('is_active', true)
       .in('player_type', ['actif', 'reserviste', 'ltir']),
-    supabase.from('scoring_config').select('stat_key, points'),
+    supabase.from('scoring_config').select('stat_key, points').in('scope', ['regular', 'both']),
     fetchNhlSkaters(),
     fetchNhlGoalies(),
   ])

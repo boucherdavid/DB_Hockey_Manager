@@ -15,6 +15,7 @@ export type NhlSkaterStat = {
   gamesPlayed: number
   goals: number
   assists: number
+  gameWinningGoals: number
 }
 
 export type NhlGoalieStat = {
@@ -82,6 +83,7 @@ export async function fetchNhlSkaters(gameType = 2): Promise<Map<string, NhlSkat
         gamesPlayed: entries.reduce((s, e) => s + Number(e.gamesPlayed ?? 0), 0),
         goals: entries.reduce((s, e) => s + Number(e.goals ?? 0), 0),
         assists: entries.reduce((s, e) => s + Number(e.assists ?? 0), 0),
+        gameWinningGoals: entries.reduce((s, e) => s + Number(e.gameWinningGoals ?? 0), 0),
       })
     }
     return result

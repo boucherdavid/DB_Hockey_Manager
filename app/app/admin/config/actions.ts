@@ -318,9 +318,10 @@ export async function updatePickOwnerAction(
 }
 
 export async function updateScoringAction(
-  updates: { id: number; points: number }[],
+  updates: { id: number; points: number; points_playoffs: number | null }[],
 ): Promise<{ error?: string }> {
-  if (updates.some(u => u.points < 0)) return { error: 'Les points ne peuvent pas être négatifs.' }
+  if (updates.some(u => u.points < 0 || (u.points_playoffs !== null && u.points_playoffs < 0)))
+    return { error: 'Les points ne peuvent pas être négatifs.' }
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -331,7 +332,7 @@ export async function updateScoringAction(
   for (const u of updates) {
     const { error } = await supabase
       .from('scoring_config')
-      .update({ points: u.points })
+      .update({ points: u.points, points_playoffs: u.points_playoffs })
       .eq('id', u.id)
     if (error) return { error: error.message }
   }

@@ -27,7 +27,7 @@ export default async function AdminConfigPage() {
 
   const { data: scoringRows } = await supabase
     .from('scoring_config')
-    .select('id, stat_key, label, points, scope')
+    .select('id, stat_key, label, points, points_playoffs, scope')
     .order('id')
 
   // Charger les poolers et les picks de la saison active

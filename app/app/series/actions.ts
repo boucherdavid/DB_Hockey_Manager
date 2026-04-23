@@ -59,13 +59,15 @@ export async function startScoringAction(playoffSeasonId: number): Promise<{ err
           snap_goalie_wins:     goaliesMap.get(key)?.wins      ?? 0,
           snap_goalie_otl:      goaliesMap.get(key)?.otLosses  ?? 0,
           snap_goalie_shutouts: goaliesMap.get(key)?.shutouts  ?? 0,
+          snap_gwg:             0,
         }
       : {
-          snap_goals:           skatersMap.get(key)?.goals   ?? 0,
-          snap_assists:         skatersMap.get(key)?.assists  ?? 0,
+          snap_goals:           skatersMap.get(key)?.goals            ?? 0,
+          snap_assists:         skatersMap.get(key)?.assists           ?? 0,
           snap_goalie_wins:     0,
           snap_goalie_otl:      0,
           snap_goalie_shutouts: 0,
+          snap_gwg:             skatersMap.get(key)?.gameWinningGoals ?? 0,
         }
 
     await supabase.from('playoff_rosters').update(snap).eq('id', pick.id)
@@ -235,13 +237,14 @@ export async function savePicksAction(
       return {
         snap_goals: g?.goals ?? 0, snap_assists: g?.assists ?? 0,
         snap_goalie_wins: g?.wins ?? 0, snap_goalie_otl: g?.otLosses ?? 0,
-        snap_goalie_shutouts: g?.shutouts ?? 0,
+        snap_goalie_shutouts: g?.shutouts ?? 0, snap_gwg: 0,
       }
     }
     const s = skatersMap.get(key)
     return {
       snap_goals: s?.goals ?? 0, snap_assists: s?.assists ?? 0,
       snap_goalie_wins: 0, snap_goalie_otl: 0, snap_goalie_shutouts: 0,
+      snap_gwg: s?.gameWinningGoals ?? 0,
     }
   }
 

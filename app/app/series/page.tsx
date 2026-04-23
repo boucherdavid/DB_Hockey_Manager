@@ -82,12 +82,12 @@ export default async function SeriesPage() {
   }
 
   const [{ data: scoringRows }, { data: rosterRows }, skatersMap, goaliesMap] = await Promise.all([
-    supabase.from('scoring_config').select('stat_key, points'),
+    supabase.from('scoring_config').select('stat_key, points, points_playoffs').in('scope', ['playoffs', 'both']),
     supabase
       .from('playoff_rosters')
       .select(`
         pooler_id, conference,
-        snap_goals, snap_assists, snap_goalie_wins, snap_goalie_otl, snap_goalie_shutouts,
+        snap_goals, snap_assists, snap_goalie_wins, snap_goalie_otl, snap_goalie_shutouts, snap_gwg,
         poolers (id, name),
         players (first_name, last_name, position)
       `)
@@ -97,14 +97,17 @@ export default async function SeriesPage() {
     fetchNhlGoalies(3),
   ])
 
-  const scoring: Record<string, number> = {}
-  for (const r of scoringRows ?? []) scoring[r.stat_key] = Number(r.points)
-  const pts = {
-    goal:           scoring.goal           ?? 1,
-    assist:         scoring.assist         ?? 1,
-    goalie_win:     scoring.goalie_win     ?? 2,
-    goalie_otl:     scoring.goalie_otl     ?? 1,
-    goalie_shutout: scoring.goalie_shutout ?? 2,
+  const pts: Record<string, number> = {}
+  for (const r of scoringRows ?? []) {
+    pts[r.stat_key] = r.points_playoffs !== null ? Number(r.points_playoffs) : Number(r.points)
+  }
+  const p = {
+    goal:           pts.goal           ?? 1,
+    assist:         pts.assist         ?? 1,
+    goalie_win:     pts.goalie_win     ?? 2,
+    goalie_otl:     pts.goalie_otl     ?? 1,
+    goalie_shutout: pts.goalie_shutout ?? 2,
+    gwg:            pts.gwg            ?? 1,
   }
 
   type PlayerLine = {
@@ -114,6 +117,7 @@ export default async function SeriesPage() {
     conference: string
     goals: number
     assists: number
+    gwg: number
     goalieWins: number
     goalieOtl: number
     goalieShutouts: number
@@ -143,19 +147,20 @@ export default async function SeriesPage() {
       line = {
         firstName: player.first_name, lastName: player.last_name, position: 'G',
         conference: row.conference ?? '',
-        goals, assists, goalieWins: wins, goalieOtl: otl, goalieShutouts: shutouts,
-        poolPoints: wins * pts.goalie_win + otl * pts.goalie_otl + shutouts * pts.goalie_shutout
-          + goals * pts.goal + assists * pts.assist,
+        goals, assists, gwg: 0, goalieWins: wins, goalieOtl: otl, goalieShutouts: shutouts,
+        poolPoints: wins * p.goalie_win + otl * p.goalie_otl + shutouts * p.goalie_shutout
+          + goals * p.goal + assists * p.assist,
       }
     } else {
       const stat = skatersMap.get(key)
-      const goals   = Math.max(0, (stat?.goals ?? 0)   - row.snap_goals)
-      const assists = Math.max(0, (stat?.assists ?? 0) - row.snap_assists)
+      const goals   = Math.max(0, (stat?.goals ?? 0)                - row.snap_goals)
+      const assists = Math.max(0, (stat?.assists ?? 0)              - row.snap_assists)
+      const gwg     = Math.max(0, (stat?.gameWinningGoals ?? 0)     - row.snap_gwg)
       line = {
         firstName: player.first_name, lastName: player.last_name, position: player.position,
         conference: row.conference ?? '',
-        goals, assists, goalieWins: 0, goalieOtl: 0, goalieShutouts: 0,
-        poolPoints: goals * pts.goal + assists * pts.assist,
+        goals, assists, gwg, goalieWins: 0, goalieOtl: 0, goalieShutouts: 0,
+        poolPoints: goals * p.goal + assists * p.assist + gwg * p.gwg,
       }
     }
 
@@ -191,6 +196,7 @@ export default async function SeriesPage() {
               <th className="px-4 py-1.5 text-left">Joueur</th>
               <th className="px-2 py-1.5">B</th>
               <th className="px-2 py-1.5">A</th>
+              <th className="px-2 py-1.5 hidden sm:table-cell" title="Buts gagnants">BG</th>
               <th className="px-2 py-1.5 hidden sm:table-cell">V</th>
               <th className="px-2 py-1.5 hidden sm:table-cell">DP</th>
               <th className="px-2 py-1.5 hidden sm:table-cell">BL</th>
@@ -199,18 +205,19 @@ export default async function SeriesPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {(['F', 'D', 'G'] as const).map(group =>
-              byGroup[group].map((p, j) => (
+              byGroup[group].map((pl, j) => (
                 <tr key={`${group}-${j}`} className="hover:bg-gray-50">
                   <td className="px-4 py-2">
-                    <span className="font-medium text-gray-800">{p.lastName}, {p.firstName}</span>
-                    <span className="ml-1.5 text-xs text-gray-400">{p.position}</span>
+                    <span className="font-medium text-gray-800">{pl.lastName}, {pl.firstName}</span>
+                    <span className="ml-1.5 text-xs text-gray-400">{pl.position}</span>
                   </td>
-                  <td className="px-2 py-2 text-center text-gray-600">{p.goals}</td>
-                  <td className="px-2 py-2 text-center text-gray-600">{p.assists}</td>
-                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? p.goalieWins : '—'}</td>
-                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? p.goalieOtl : '—'}</td>
-                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? (p.goalieShutouts || '—') : '—'}</td>
-                  <td className="px-2 py-2 text-center font-bold text-blue-600">{fmtPts(p.poolPoints)}</td>
+                  <td className="px-2 py-2 text-center text-gray-600">{pl.goals}</td>
+                  <td className="px-2 py-2 text-center text-gray-600">{pl.assists}</td>
+                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group !== 'G' ? (pl.gwg || '—') : '—'}</td>
+                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? pl.goalieWins : '—'}</td>
+                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? pl.goalieOtl : '—'}</td>
+                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? (pl.goalieShutouts || '—') : '—'}</td>
+                  <td className="px-2 py-2 text-center font-bold text-blue-600">{fmtPts(pl.poolPoints)}</td>
                 </tr>
               ))
             )}
