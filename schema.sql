@@ -14,6 +14,7 @@ CREATE TABLE teams (
 -- Joueurs LNH
 CREATE TABLE players (
   id SERIAL PRIMARY KEY,
+  nhl_id INTEGER UNIQUE,            -- identifiant NHL officiel (api-web.nhle.com)
   first_name VARCHAR(100) NOT NULL,
   last_name VARCHAR(100) NOT NULL,
   team_id INTEGER REFERENCES teams(id),
@@ -114,6 +115,16 @@ CREATE TABLE roster_changes (
   notes TEXT,
   changed_by UUID REFERENCES poolers(id),
   changed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Configuration du pointage (saison régulière et séries)
+CREATE TABLE scoring_config (
+  id              SERIAL PRIMARY KEY,
+  stat_key        TEXT NOT NULL UNIQUE,
+  label           TEXT NOT NULL,
+  points          NUMERIC(4,1) NOT NULL DEFAULT 1,
+  points_playoffs NUMERIC(4,1) DEFAULT NULL,
+  scope           TEXT NOT NULL DEFAULT 'both' CHECK (scope IN ('regular', 'playoffs', 'both'))
 );
 
 -- Transactions entre poolers
@@ -278,6 +289,15 @@ CREATE TABLE transaction_items (
 INSERT INTO pool_seasons (season, nhl_cap, is_active)
 VALUES ('2025-26', 88000000, true);
 
+-- Pointage par défaut
+INSERT INTO scoring_config (stat_key, label, points, points_playoffs, scope) VALUES
+  ('goal',           'But',                                    1.0, NULL, 'both'),
+  ('assist',         'Passe',                                  1.0, NULL, 'both'),
+  ('goalie_win',     'Victoire (gardien)',                     2.0, NULL, 'both'),
+  ('goalie_otl',     'Défaite en prol./fusillade (gardien)',   1.0, NULL, 'both'),
+  ('goalie_shutout', 'Blanchissage (gardien)',                 2.0, NULL, 'both'),
+  ('gwg',            'But gagnant (attaquant)',                0.0, 1.0, 'both');
+
 -- Quelques équipes LNH pour commencer
 INSERT INTO teams (code, name, city) VALUES
   ('ANA', 'Ducks', 'Anaheim'),
@@ -337,6 +357,11 @@ CREATE POLICY "Admin modifie transaction_items" ON transaction_items FOR ALL
 ALTER TABLE pool_draft_picks ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Lecture publique picks" ON pool_draft_picks FOR SELECT USING (true);
 CREATE POLICY "Admin modifie picks" ON pool_draft_picks FOR ALL
+  USING (EXISTS (SELECT 1 FROM poolers WHERE id = auth.uid() AND is_admin = true));
+
+ALTER TABLE scoring_config ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Lecture publique scoring" ON scoring_config FOR SELECT USING (true);
+CREATE POLICY "Admin modifie scoring" ON scoring_config FOR ALL
   USING (EXISTS (SELECT 1 FROM poolers WHERE id = auth.uid() AND is_admin = true));
 
 -- Tout le monde peut lire les équipes et joueurs

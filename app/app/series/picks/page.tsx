@@ -92,6 +92,7 @@ export default async function SeriesPicksPage() {
     supabase
       .from('players')
       .select('id, first_name, last_name, position, teams (code, conference), player_contracts (season, cap_number, years_remaining)')
+      .eq('is_available', true)
       .range(from, to) as unknown as Promise<{ data: RawPlayer[] | null; error: { message: string } | null }>
   )
 

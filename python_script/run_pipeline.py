@@ -32,6 +32,13 @@ STEPS = [
         'skip_flag': None,
         'description': 'Synchronise les repêchages des 5 dernières saisons',
     },
+    {
+        'name': '4. Backfill nhl_id manquants',
+        'script': 'backfill_nhl_ids.py',
+        'skip_flag': None,
+        'description': 'Associe les identifiants NHL officiels aux joueurs sans nhl_id',
+        'optional': True,
+    },
 ]
 
 
@@ -79,10 +86,13 @@ def main():
 
         success = run_step(step['script'], step['name'])
         if not success:
-            separator('Pipeline interrompu')
-            print(f'  Arrêt sur : {step["name"]}')
-            print('  Corrigez l\'erreur et relancez.')
-            sys.exit(1)
+            if step.get('optional'):
+                print(f'\n⚠️  Étape optionnelle échouée (pipeline continue) : {step["name"]}')
+            else:
+                separator('Pipeline interrompu')
+                print(f'  Arrêt sur : {step["name"]}')
+                print('  Corrigez l\'erreur et relancez.')
+                sys.exit(1)
 
     total = time.time() - pipeline_start
     separator(f'Pipeline terminé en {total:.1f}s')

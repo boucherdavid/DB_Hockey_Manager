@@ -462,6 +462,7 @@ def upload_vers_supabase(csv_path=None):
     print(f'[INFO] A inserer: {len(players_to_insert)} | A mettre a jour: {len(players_to_update)}')
 
     nb_inserts = 0
+    inserted_ids = []
     if players_to_insert:
         payloads = [p for _, p in players_to_insert]
         keys = [k for k, _ in players_to_insert]
@@ -472,11 +473,13 @@ def upload_vers_supabase(csv_path=None):
                 result = supabase.table('players').insert(batch).execute()
                 for j, p in enumerate(result.data):
                     existing_map[batch_keys[j]] = {'id': p['id'], 'draft_year': None}
+                    inserted_ids.append(p['id'])
                 nb_inserts += len(result.data)
             except Exception as e:
                 print(f'[ERREUR INSERT] Batch {i//BATCH_SIZE + 1}: {e}')
 
     nb_updates = 0
+    updated_ids = [pid for pid, _ in players_to_update]
     update_payloads = [{**payload, 'id': pid} for pid, payload in players_to_update]
     for i in range(0, len(update_payloads), BATCH_SIZE):
         batch = update_payloads[i:i+BATCH_SIZE]
@@ -530,6 +533,29 @@ def upload_vers_supabase(csv_path=None):
 
     # Second passage de dédup : nettoie les doublons créés par les inserts ci-dessus
     deduplicate_players(supabase)
+
+    # Marquer is_available = False pour les joueurs absents du run courant
+    # (rachetés, retraités, salaires retenus, etc.)
+    processed_ids = set(inserted_ids) | set(updated_ids)
+    if processed_ids:
+        try:
+            all_active = (
+                supabase.table('players')
+                .select('id')
+                .eq('is_available', True)
+                .execute()
+                .data
+            )
+            to_disable = [p['id'] for p in all_active if p['id'] not in processed_ids]
+            nb_disabled = 0
+            for i in range(0, len(to_disable), BATCH_SIZE):
+                batch_ids = to_disable[i:i+BATCH_SIZE]
+                supabase.table('players').update({'is_available': False}).in_('id', batch_ids).execute()
+                nb_disabled += len(batch_ids)
+            if nb_disabled:
+                print(f'     Joueurs désactivés: {nb_disabled} (absents du run)')
+        except Exception as e:
+            print(f'[AVERTISSEMENT] Mise à jour is_available échouée : {e}')
 
     print('\n[OK] Import termine!')
     print(f'     Joueurs inseres   : {nb_inserts}')

@@ -56,6 +56,47 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-23 (suite)
+
+**Étape 1 — Scoring config (complétée)**
+- Table `scoring_config` confirmée existante en Supabase avec 6 stats : goal, assist, goalie_win, goalie_otl, goalie_shutout, gwg.
+- UI `ScoringConfig.tsx` et action `updateScoringAction` déjà en place — rien à coder.
+- `schema.sql` mis à jour pour documenter la table et ses données initiales.
+
+**Préalable Chantier B — nhl_id sur players**
+- Décision : ajouter `nhl_id INTEGER UNIQUE` sur la table `players` pour un matching fiable (vs matching par nom).
+- Migration SQL exécutée dans Supabase : `ALTER TABLE players ADD COLUMN IF NOT EXISTS nhl_id INTEGER UNIQUE`.
+- `schema.sql` mis à jour.
+- Nouveau script `python_script/backfill_nhl_ids.py` : utilise l'API stats NHL (même source que `nhl-stats.ts`) — 2 appels bulk au lieu d'un appel par joueur.
+- Résultat du backfill : 639 nhl_id enregistrés, 7 doublons détectés (joueurs échangés) et fusionnés via SQL, 354 sans match (prospects/blessés — se rempliront au premier match LNH).
+- `run_pipeline.py` : étape 4 ajoutée (`backfill_nhl_ids.py`, optionnelle — ne bloque pas le pipeline).
+- `import_supabase.py` : ajout de la logique `is_available = False` pour les joueurs absents du run courant (rachetés, retraités, salaires retenus).
+- `series/picks/page.tsx` : filtre `.eq('is_available', true)` ajouté sur la requête players.
+
+**Prochaine étape — Chantier B (à reprendre)**
+- Créer table `player_stat_snapshots` dans Supabase (SQL prêt, non encore exécuté) :
+  ```sql
+  CREATE TABLE player_stat_snapshots (
+    id SERIAL PRIMARY KEY,
+    player_id INTEGER NOT NULL REFERENCES players(id),
+    pooler_id UUID NOT NULL REFERENCES poolers(id),
+    pool_season_id INTEGER NOT NULL REFERENCES pool_seasons(id),
+    snapshot_type VARCHAR(20) NOT NULL CHECK (snapshot_type IN ('activation', 'deactivation', 'season_end')),
+    taken_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    goals INTEGER NOT NULL DEFAULT 0,
+    assists INTEGER NOT NULL DEFAULT 0,
+    goalie_wins INTEGER NOT NULL DEFAULT 0,
+    goalie_otl INTEGER NOT NULL DEFAULT 0,
+    goalie_shutouts INTEGER NOT NULL DEFAULT 0
+  );
+  ALTER TABLE player_stat_snapshots ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "lecture publique snapshots" ON player_stat_snapshots FOR SELECT USING (true);
+  CREATE POLICY "admin modifie snapshots" ON player_stat_snapshots FOR ALL
+    USING (EXISTS (SELECT 1 FROM poolers WHERE id = auth.uid() AND is_admin = true));
+  ```
+- Puis : capture de snapshot dans `submitTransactionAction` lors des changements actif/désactivation.
+- Puis : mise à jour de `buildStandings()` pour utiliser les deltas snapshot.
+
 ### 2026-04-23
 
 - Sécurité : suite à la brèche Vercel du 19 avril 2026, vérification des variables d'environnement locales (`app/.env.local`, `python_script/.env`) — non commitées, donc non exposées via git.
