@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { takeSnapshot } from '@/lib/snapshot'
 
 const ACTIVE_LIMITS = { forward: 12, defense: 6, goalie: 2 } as const
 type Bucket = keyof typeof ACTIVE_LIMITS
@@ -10,6 +11,8 @@ const BUCKET_LABELS: Record<Bucket, string> = {
   defense: 'défenseurs actifs',
   goalie: 'gardiens actifs',
 }
+
+type PlayerType = 'actif' | 'recrue' | 'reserviste' | 'ltir'
 
 function getPlayerBucket(position: string | null): Bucket {
   const pos = (position ?? '').toUpperCase()
@@ -39,11 +42,53 @@ async function countActiveByBucket(
   }).length
 }
 
+function detectChangeType(
+  oldType: PlayerType | null,
+  newType: PlayerType,
+  isRemoval = false,
+): string {
+  if (isRemoval) return oldType === 'actif' ? 'deactivation' : 'retrait'
+  if (!oldType) {
+    const map: Record<PlayerType, string> = {
+      actif:      'activation',
+      reserviste: 'ajout_reserviste',
+      recrue:     'ajout_recrue',
+      ltir:       'ltir',
+    }
+    return map[newType]
+  }
+  if (newType === 'actif') return 'activation'
+  if (oldType === 'actif') return 'deactivation'
+  if (newType === 'ltir') return 'ltir'
+  if (oldType === 'ltir') return 'retour_ltir'
+  return 'changement_type'
+}
+
+async function logChange(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  playerId: number,
+  poolerId: string,
+  poolSeasonId: number,
+  changeType: string,
+  oldType: string | null,
+  newType: string | null,
+): Promise<void> {
+  await supabase.from('roster_change_log').insert({
+    player_id:      playerId,
+    pooler_id:      poolerId,
+    pool_season_id: poolSeasonId,
+    change_type:    changeType,
+    old_type:       oldType,
+    new_type:       newType,
+    changed_by:     null, // null = admin; pooler_id ici quand self-service implémenté
+  })
+}
+
 export async function addPlayerAction(
   poolerId: string,
   playerId: number,
   saisonId: number,
-  playerType: 'actif' | 'recrue' | 'reserviste' | 'ltir',
+  playerType: PlayerType,
   rookieType?: 'repeche' | 'agent_libre',
   poolDraftYear?: number,
 ): Promise<{ error?: string }> {
@@ -86,19 +131,34 @@ export async function addPlayerAction(
       .from('pooler_rosters')
       .update({ is_active: true, player_type: playerType, removed_at: null, ...rookieFields })
       .eq('id', existing.id)
-    return error ? { error: error.message } : {}
+    if (error) return { error: error.message }
+  } else {
+    const { error } = await supabase.from('pooler_rosters').insert({
+      pooler_id:      poolerId,
+      player_id:      playerId,
+      pool_season_id: saisonId,
+      player_type:    playerType,
+      is_active:      true,
+      ...rookieFields,
+    })
+    if (error) return { error: error.message }
   }
 
-  const { error } = await supabase.from('pooler_rosters').insert({
-    pooler_id: poolerId,
-    player_id: playerId,
-    pool_season_id: saisonId,
-    player_type: playerType,
-    is_active: true,
-    ...rookieFields,
-  })
+  const changeType = detectChangeType(null, playerType)
+  await logChange(supabase, playerId, poolerId, saisonId, changeType, null, playerType)
 
-  return error ? { error: error.message } : {}
+  if (playerType === 'actif') {
+    const { data: player } = await supabase.from('players').select('nhl_id').eq('id', playerId).single()
+    await takeSnapshot({
+      playerId,
+      nhlId:        player?.nhl_id ?? null,
+      poolerId,
+      poolSeasonId: saisonId,
+      snapshotType: 'activation',
+    })
+  }
+
+  return {}
 }
 
 export async function updateRookieTypeAction(
@@ -110,7 +170,7 @@ export async function updateRookieTypeAction(
   const { error } = await supabase
     .from('pooler_rosters')
     .update({
-      rookie_type: rookieType,
+      rookie_type:    rookieType,
       pool_draft_year: rookieType === 'repeche' ? (poolDraftYear ?? null) : null,
     })
     .eq('id', rosterId)
@@ -122,7 +182,7 @@ export async function removePlayerAction(rosterId: number): Promise<{ error?: st
 
   const { data: entry } = await supabase
     .from('pooler_rosters')
-    .select('player_type, pooler_id, pool_season_id')
+    .select('player_id, player_type, pooler_id, pool_season_id')
     .eq('id', rosterId)
     .single()
 
@@ -140,6 +200,23 @@ export async function removePlayerAction(rosterId: number): Promise<{ error?: st
     }
   }
 
+  if (entry) {
+    const oldType = entry.player_type as PlayerType
+    const changeType = detectChangeType(oldType, oldType, true)
+    await logChange(supabase, entry.player_id, entry.pooler_id, entry.pool_season_id, changeType, oldType, null)
+
+    if (oldType === 'actif') {
+      const { data: player } = await supabase.from('players').select('nhl_id').eq('id', entry.player_id).single()
+      await takeSnapshot({
+        playerId:     entry.player_id,
+        nhlId:        player?.nhl_id ?? null,
+        poolerId:     entry.pooler_id,
+        poolSeasonId: entry.pool_season_id,
+        snapshotType: 'deactivation',
+      })
+    }
+  }
+
   const { error } = await supabase
     .from('pooler_rosters')
     .update({ is_active: false, removed_at: new Date().toISOString() })
@@ -153,9 +230,16 @@ export async function changeTypeAction(
   playerId: number,
   poolerId: string,
   saisonId: number,
-  newType: 'actif' | 'recrue' | 'reserviste' | 'ltir',
+  newType: PlayerType,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
+
+  const { data: currentEntry } = await supabase
+    .from('pooler_rosters')
+    .select('player_type')
+    .eq('id', entryId)
+    .single()
+  const oldType = (currentEntry?.player_type ?? null) as PlayerType | null
 
   if (newType === 'recrue') {
     const { data: player } = await supabase.from('players').select('is_rookie').eq('id', playerId).single()
@@ -174,20 +258,37 @@ export async function changeTypeAction(
   }
 
   const { error } = await supabase.from('pooler_rosters').update({ player_type: newType }).eq('id', entryId)
+  if (error) return { error: error.message }
 
-  return error ? { error: error.message } : {}
+  if (oldType !== newType) {
+    const changeType = detectChangeType(oldType, newType)
+    await logChange(supabase, playerId, poolerId, saisonId, changeType, oldType, newType)
+
+    if (oldType === 'actif' || newType === 'actif') {
+      const { data: player } = await supabase.from('players').select('nhl_id').eq('id', playerId).single()
+      await takeSnapshot({
+        playerId,
+        nhlId:        player?.nhl_id ?? null,
+        poolerId,
+        poolSeasonId: saisonId,
+        snapshotType: newType === 'actif' ? 'activation' : 'deactivation',
+      })
+    }
+  }
+
+  return {}
 }
 
 type AddEntry = {
-  player_id: number
-  player_type: 'actif' | 'recrue' | 'reserviste' | 'ltir'
-  rookie_type?: 'repeche' | 'agent_libre'
+  player_id:      number
+  player_type:    PlayerType
+  rookie_type?:   'repeche' | 'agent_libre'
   pool_draft_year?: number
 }
 
 type ChangeTypeEntry = {
   entryId: number
-  newType: 'actif' | 'recrue' | 'reserviste' | 'ltir'
+  newType: PlayerType
 }
 
 export async function submitRosterAction(
@@ -199,13 +300,17 @@ export async function submitRosterAction(
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
 
-  // Reconstituer l'état final pour validation
+  // Récupérer le roster courant pour validation et détection des types
   const { data: current } = await supabase
     .from('pooler_rosters')
-    .select('id, player_type, players(position, is_rookie)')
+    .select('id, player_id, player_type, players(position, is_rookie, nhl_id)')
     .eq('pooler_id', poolerId)
     .eq('pool_season_id', saisonId)
     .eq('is_active', true)
+
+  const currentMap = new Map(
+    (current ?? []).map((r: any) => [r.id, r]),
+  )
 
   const removeSet = new Set(toRemove)
   const changeMap = new Map(toChangeType.map(c => [c.entryId, c.newType]))
@@ -217,8 +322,8 @@ export async function submitRosterAction(
     if (removeSet.has(row.id)) continue
     finalEntries.push({
       player_type: changeMap.get(row.id) ?? row.player_type,
-      position: row.players?.position ?? null,
-      is_rookie: row.players?.is_rookie ?? false,
+      position:    row.players?.position ?? null,
+      is_rookie:   row.players?.is_rookie ?? false,
     })
   }
 
@@ -229,8 +334,8 @@ export async function submitRosterAction(
     }
     finalEntries.push({
       player_type: entry.player_type,
-      position: player?.position ?? null,
-      is_rookie: player?.is_rookie ?? false,
+      position:    player?.position ?? null,
+      is_rookie:   player?.is_rookie ?? false,
     })
   }
 
@@ -253,7 +358,24 @@ export async function submitRosterAction(
     return { error: `Un minimum de 2 réservistes est requis (${reservistes.length} dans cet alignement).` }
   }
 
-  // Application
+  // Application — retraits
+  for (const rosterId of toRemove) {
+    const row = currentMap.get(rosterId) as any
+    if (!row) continue
+    const oldType = row.player_type as PlayerType
+    const changeType = detectChangeType(oldType, oldType, true)
+    await logChange(supabase, row.player_id, poolerId, saisonId, changeType, oldType, null)
+    if (oldType === 'actif') {
+      await takeSnapshot({
+        playerId:     row.player_id,
+        nhlId:        row.players?.nhl_id ?? null,
+        poolerId,
+        poolSeasonId: saisonId,
+        snapshotType: 'deactivation',
+      })
+    }
+  }
+
   if (toRemove.length > 0) {
     const { error } = await supabase
       .from('pooler_rosters')
@@ -262,11 +384,29 @@ export async function submitRosterAction(
     if (error) return { error: error.message }
   }
 
+  // Application — changements de type
   for (const { entryId, newType } of toChangeType) {
+    const row = currentMap.get(entryId) as any
+    const oldType = (row?.player_type ?? null) as PlayerType | null
     const { error } = await supabase.from('pooler_rosters').update({ player_type: newType }).eq('id', entryId)
     if (error) return { error: error.message }
+
+    if (oldType !== newType) {
+      const changeType = detectChangeType(oldType, newType)
+      await logChange(supabase, row.player_id, poolerId, saisonId, changeType, oldType, newType)
+      if (oldType === 'actif' || newType === 'actif') {
+        await takeSnapshot({
+          playerId:     row.player_id,
+          nhlId:        row.players?.nhl_id ?? null,
+          poolerId,
+          poolSeasonId: saisonId,
+          snapshotType: newType === 'actif' ? 'activation' : 'deactivation',
+        })
+      }
+    }
   }
 
+  // Application — ajouts
   for (const entry of toAdd) {
     const rookieFields = entry.rookie_type
       ? { rookie_type: entry.rookie_type, pool_draft_year: entry.rookie_type === 'repeche' ? (entry.pool_draft_year ?? null) : null }
@@ -288,14 +428,28 @@ export async function submitRosterAction(
       if (error) return { error: error.message }
     } else {
       const { error } = await supabase.from('pooler_rosters').insert({
-        pooler_id: poolerId,
-        player_id: entry.player_id,
+        pooler_id:      poolerId,
+        player_id:      entry.player_id,
         pool_season_id: saisonId,
-        player_type: entry.player_type,
-        is_active: true,
+        player_type:    entry.player_type,
+        is_active:      true,
         ...rookieFields,
       })
       if (error) return { error: error.message }
+    }
+
+    const changeType = detectChangeType(null, entry.player_type)
+    const { data: player } = await supabase.from('players').select('nhl_id').eq('id', entry.player_id).single()
+    await logChange(supabase, entry.player_id, poolerId, saisonId, changeType, null, entry.player_type)
+
+    if (entry.player_type === 'actif') {
+      await takeSnapshot({
+        playerId:     entry.player_id,
+        nhlId:        player?.nhl_id ?? null,
+        poolerId,
+        poolSeasonId: saisonId,
+        snapshotType: 'activation',
+      })
     }
   }
 

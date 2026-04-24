@@ -331,6 +331,22 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     return acc
   }, {})
 
+  const { data: changeLogData } = await supabase
+    .from('roster_change_log')
+    .select('id, change_type, old_type, new_type, changed_at, players(first_name, last_name, position)')
+    .eq('pooler_id', id)
+    .eq('pool_season_id', saison?.id)
+    .order('changed_at', { ascending: false })
+
+  const changeLog = (changeLogData ?? []) as unknown as {
+    id: number
+    change_type: string
+    old_type: string | null
+    new_type: string | null
+    changed_at: string
+    players: { first_name: string; last_name: string; position: string | null } | null
+  }[]
+
   const { data } = await supabase
     .from('pooler_rosters')
     .select(`
@@ -511,6 +527,7 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
       <PoolerPageTabs
         organisationContent={organisationContent}
         alignementPlayers={saison ? (await buildStandings(supabase, saison.id)).find(s => s.poolerId === id)?.players ?? [] : []}
+        changeLog={changeLog}
       />
     </div>
   )
