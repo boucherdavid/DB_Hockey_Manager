@@ -270,19 +270,24 @@ def _merge(supabase, keep_id, dup_id):
     supabase.table('pooler_rosters').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
     supabase.table('roster_changes').update({'player_in_id': keep_id}).eq('player_in_id', dup_id).execute()
     supabase.table('roster_changes').update({'player_out_id': keep_id}).eq('player_out_id', dup_id).execute()
+    supabase.table('roster_change_log').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
+    supabase.table('player_stat_snapshots').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
     supabase.table('players').delete().eq('id', dup_id).execute()
 
 
 def deduplicate_players(supabase):
-    """Détecte et fusionne les doublons joueurs (même nom normalisé + même équipe).
-    Conserve l'enregistrement avec le plus petit ID (le plus ancien), migre les
-    références pooler_rosters et roster_changes, puis supprime le doublon."""
+    """Détecte et fusionne les doublons joueurs. Trois cas couverts :
+    1. Même nom + même équipe → doublons directs.
+    2. Même nom + un sans équipe + un seul avec équipe → fusionner.
+    3. Même nom + équipes différentes, un seul a un nhl_id → le sans nhl_id est un doublon
+       (joueur qui a changé d'équipe entre deux imports).
+    Conserve l'enregistrement avec le plus petit ID, sauf cas 3 où on garde celui avec nhl_id."""
     print('\n[DEDUP] Recherche de doublons joueurs...')
 
     all_players = []
     offset = 0
     while True:
-        batch = supabase.table('players').select('id, first_name, last_name, team_id').range(offset, offset + 999).execute().data
+        batch = supabase.table('players').select('id, first_name, last_name, team_id, nhl_id').range(offset, offset + 999).execute().data
         all_players.extend(batch)
         if len(batch) < 1000:
             break
@@ -304,29 +309,51 @@ def deduplicate_players(supabase):
         by_team = {}
         for p in players:
             tid = p['team_id']
-            by_team.setdefault(tid, []).append(p['id'])
+            by_team.setdefault(tid, []).append(p)
 
         # Cas 1 : plusieurs entrées pour la même équipe → doublons directs
-        for tid, ids in by_team.items():
-            if len(ids) < 2:
+        for tid, entries in by_team.items():
+            if len(entries) < 2:
                 continue
-            ids_sorted = sorted(ids)
-            keep_id = ids_sorted[0]
-            for dup_id in ids_sorted[1:]:
-                print(f'[DEDUP] Doublon même équipe ({name_key}|{tid}): conserver {keep_id}, supprimer {dup_id}')
-                _merge(supabase, keep_id, dup_id)
+            entries_sorted = sorted(entries, key=lambda p: p['id'])
+            keep_id = entries_sorted[0]['id']
+            for dup in entries_sorted[1:]:
+                print(f'[DEDUP] Doublon même équipe ({name_key}|{tid}): conserver {keep_id}, supprimer {dup["id"]}')
+                _merge(supabase, keep_id, dup['id'])
                 nb_fusions += 1
 
+        # Reconstruire by_team après fusions éventuelles (IDs supprimés)
+        remaining = [p for p in players if p['id'] not in
+                     {dup['id'] for entries in by_team.values() for dup in entries[1:] if len(entries) > 1}]
+
         # Cas 2 : une entrée sans équipe (team_id=None) + une avec équipe → fusionner
-        if None in by_team:
-            null_ids = sorted(by_team[None])
-            real_teams = {tid: sorted(ids) for tid, ids in by_team.items() if tid is not None}
+        by_team2 = {}
+        for p in remaining:
+            by_team2.setdefault(p['team_id'], []).append(p)
+
+        if None in by_team2:
+            null_entries = sorted(by_team2[None], key=lambda p: p['id'])
+            real_teams = {tid: sorted(entries, key=lambda p: p['id']) for tid, entries in by_team2.items() if tid is not None}
             if len(real_teams) == 1:
-                # Un seul joueur réel avec équipe → les entrées sans équipe sont des doublons
-                real_id = list(real_teams.values())[0][0]
-                for dup_id in null_ids:
-                    print(f'[DEDUP] Doublon sans équipe ({name_key}): conserver {real_id}, supprimer {dup_id}')
-                    _merge(supabase, real_id, dup_id)
+                real_id = list(real_teams.values())[0][0]['id']
+                for dup in null_entries:
+                    print(f'[DEDUP] Doublon sans équipe ({name_key}): conserver {real_id}, supprimer {dup["id"]}')
+                    _merge(supabase, real_id, dup['id'])
+                    nb_fusions += 1
+                remaining = [p for p in remaining if p['id'] != real_id and p['id'] not in {d['id'] for d in null_entries}] + \
+                            [list(real_teams.values())[0][0]]
+
+        # Cas 3 : plusieurs entrées avec équipes différentes, un seul a un nhl_id
+        # → joueur qui a changé d'équipe, le nouveau record sans nhl_id est le doublon
+        real_remaining = [p for p in remaining if p['team_id'] is not None]
+        if len(real_remaining) >= 2:
+            with_nhl_id = [p for p in real_remaining if p.get('nhl_id')]
+            without_nhl_id = [p for p in real_remaining if not p.get('nhl_id')]
+            if len(with_nhl_id) == 1 and len(without_nhl_id) >= 1:
+                keep = with_nhl_id[0]
+                for dup in without_nhl_id:
+                    print(f'[DEDUP] Doublon changement équipe ({name_key}): conserver {keep["id"]} (nhl_id={keep["nhl_id"]}), supprimer {dup["id"]}')
+                    _merge(supabase, keep['id'], dup['id'])
                     nb_fusions += 1
 
     if nb_fusions:
@@ -451,6 +478,11 @@ def upload_vers_supabase(csv_path=None):
         elif f'{fn}|{ln}|' in existing_map:
             # Joueur en base sans équipe assignée (team_id null)
             player_info = existing_map[f'{fn}|{ln}|']
+        elif key_name in existing_by_name and len(existing_by_name[key_name]) == 1:
+            # Joueur unique par nom avec une équipe différente (changement d'équipe)
+            player_info = existing_by_name[key_name][0]
+            # Mettre à jour le cache avec la nouvelle clé équipe pour les passes suivantes (ex: contrats)
+            existing_map[key_team] = {'id': player_info['id'], 'draft_year': player_info.get('draft_year')}
         else:
             player_info = None
 
