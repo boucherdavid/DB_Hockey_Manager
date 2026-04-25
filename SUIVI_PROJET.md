@@ -83,6 +83,11 @@ Je l'utiliserai pour:
 - `startScoringAction` → push général à tous : "La comptabilisation des points de la ronde X est démarrée !".
 - `lib/push.ts` : ajout de `sendPushToAll(payload)` pour les envois à tous les abonnés.
 
+**Page `/aide` mise à jour :**
+- Guide — Pool des séries : détection automatique des picks éliminés décrite (blocage de sauvegarde), participation optionnelle mentionnée.
+- Règlements — Pool des séries : participation optionnelle ajoutée, blocage automatique décrit.
+- Guide — Notifications : nouvelle section (activation par appareil, liste des 4 événements couverts).
+
 **Règle métier notée :** La participation au pool des séries est optionnelle — tous les poolers ne participent pas nécessairement. Les notifications séries ciblent uniquement les poolers avec des picks actifs dans la saison playoffs courante.
 
 **Ce qui reste pour Chantier H (phases futures) :**
