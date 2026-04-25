@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { takeSnapshot } from '@/lib/snapshot'
+import { sendPushToUser } from '@/lib/push'
 
 const ACTIVE_LIMITS = { forward: 12, defense: 6, goalie: 2 } as const
 type Bucket = keyof typeof ACTIVE_LIMITS
@@ -13,6 +14,13 @@ const BUCKET_LABELS: Record<Bucket, string> = {
 }
 
 type PlayerType = 'actif' | 'recrue' | 'reserviste' | 'ltir'
+
+const TYPE_LABEL: Record<PlayerType, string> = {
+  actif:      'actif',
+  reserviste: 'réserviste',
+  recrue:     'recrue',
+  ltir:       'LTIR',
+}
 
 function getPlayerBucket(position: string | null): Bucket {
   const pos = (position ?? '').toUpperCase()
@@ -158,6 +166,20 @@ export async function addPlayerAction(
     })
   }
 
+  // Notification push au pooler
+  const { data: playerInfo } = await supabase
+    .from('players')
+    .select('first_name, last_name')
+    .eq('id', playerId)
+    .single()
+  if (playerInfo) {
+    sendPushToUser(poolerId, {
+      title: 'DB Hockey Manager — Alignement',
+      body:  `${playerInfo.last_name}, ${playerInfo.first_name} ajouté (${TYPE_LABEL[playerType]}).`,
+      url:   `/poolers/${poolerId}`,
+    }).catch(() => {})
+  }
+
   return {}
 }
 
@@ -222,6 +244,21 @@ export async function removePlayerAction(rosterId: number): Promise<{ error?: st
     .update({ is_active: false, removed_at: new Date().toISOString() })
     .eq('id', rosterId)
 
+  if (!error && entry) {
+    const { data: playerInfo } = await supabase
+      .from('players')
+      .select('first_name, last_name')
+      .eq('id', entry.player_id)
+      .single()
+    if (playerInfo) {
+      sendPushToUser(entry.pooler_id, {
+        title: 'DB Hockey Manager — Alignement',
+        body:  `${playerInfo.last_name}, ${playerInfo.first_name} retiré de votre alignement.`,
+        url:   `/poolers/${entry.pooler_id}`,
+      }).catch(() => {})
+    }
+  }
+
   return error ? { error: error.message } : {}
 }
 
@@ -273,6 +310,19 @@ export async function changeTypeAction(
         poolSeasonId: saisonId,
         snapshotType: newType === 'actif' ? 'activation' : 'deactivation',
       })
+    }
+
+    const { data: playerInfo } = await supabase
+      .from('players')
+      .select('first_name, last_name')
+      .eq('id', playerId)
+      .single()
+    if (playerInfo) {
+      sendPushToUser(poolerId, {
+        title: 'DB Hockey Manager — Alignement',
+        body:  `${playerInfo.last_name}, ${playerInfo.first_name} : ${TYPE_LABEL[oldType ?? 'actif']} → ${TYPE_LABEL[newType]}.`,
+        url:   `/poolers/${poolerId}`,
+      }).catch(() => {})
     }
   }
 
@@ -451,6 +501,20 @@ export async function submitRosterAction(
         snapshotType: 'activation',
       })
     }
+  }
+
+  // Notification push de synthèse au pooler
+  const totalChanges = toAdd.length + toRemove.length + toChangeType.length
+  if (totalChanges > 0) {
+    const parts: string[] = []
+    if (toAdd.length)        parts.push(`${toAdd.length} ajout${toAdd.length > 1 ? 's' : ''}`)
+    if (toRemove.length)     parts.push(`${toRemove.length} retrait${toRemove.length > 1 ? 's' : ''}`)
+    if (toChangeType.length) parts.push(`${toChangeType.length} changement${toChangeType.length > 1 ? 's' : ''} de type`)
+    sendPushToUser(poolerId, {
+      title: 'DB Hockey Manager — Alignement mis à jour',
+      body:  `L'admin a modifié votre alignement : ${parts.join(', ')}.`,
+      url:   `/poolers/${poolerId}`,
+    }).catch(() => {})
   }
 
   return {}

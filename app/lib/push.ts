@@ -13,15 +13,12 @@ export type PushPayload = {
   url?: string
 }
 
-export async function sendPushToAdmins(payload: PushPayload) {
-  const supabase = createAdminClient()
-
-  const { data: subs } = await supabase
-    .from('push_subscriptions')
-    .select('id, endpoint, p256dh, auth')
-
+async function sendToSubscriptions(
+  subs: { id: string; endpoint: string; p256dh: string; auth: string }[],
+  payload: PushPayload,
+) {
   if (!subs || subs.length === 0) return
-
+  const supabase = createAdminClient()
   const notification = JSON.stringify(payload)
 
   await Promise.allSettled(
@@ -32,7 +29,6 @@ export async function sendPushToAdmins(payload: PushPayload) {
           notification,
         )
       } catch (err: unknown) {
-        // Abonnement expiré ou révoqué — on le supprime
         const status = (err as { statusCode?: number }).statusCode
         if (status === 404 || status === 410) {
           await supabase.from('push_subscriptions').delete().eq('id', sub.id)
@@ -40,4 +36,34 @@ export async function sendPushToAdmins(payload: PushPayload) {
       }
     }),
   )
+}
+
+export async function sendPushToAdmins(payload: PushPayload) {
+  const supabase = createAdminClient()
+
+  const { data: adminIds } = await supabase
+    .from('poolers')
+    .select('id')
+    .eq('is_admin', true)
+
+  if (!adminIds || adminIds.length === 0) return
+
+  const ids = adminIds.map(p => p.id)
+  const { data: subs } = await supabase
+    .from('push_subscriptions')
+    .select('id, endpoint, p256dh, auth')
+    .in('user_id', ids)
+
+  await sendToSubscriptions(subs ?? [], payload)
+}
+
+export async function sendPushToUser(userId: string, payload: PushPayload) {
+  const supabase = createAdminClient()
+
+  const { data: subs } = await supabase
+    .from('push_subscriptions')
+    .select('id, endpoint, p256dh, auth')
+    .eq('user_id', userId)
+
+  await sendToSubscriptions(subs ?? [], payload)
 }

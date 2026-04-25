@@ -83,6 +83,10 @@ export default async function AdminPage() {
           <h2 className="font-bold text-lg text-gray-800 group-hover:text-teal-700">Retours des poolers</h2>
           <p className="text-gray-500 text-sm mt-1">Consulter et exporter les problèmes et suggestions soumis par les poolers</p>
         </Link>
+        <Link href="/admin/suivi" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow group">
+          <h2 className="font-bold text-lg text-gray-800 group-hover:text-rose-700">Suivi de l&apos;activité</h2>
+          <p className="text-gray-500 text-sm mt-1">Fil chronologique de tous les changements : alignements, transactions et picks séries</p>
+        </Link>
       </div>
     </div>
   )
