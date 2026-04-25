@@ -117,8 +117,9 @@ const SECTIONS: Section[] = [
         <h4 className="text-sm font-semibold text-gray-700 mb-1.5">Entre les rondes</h4>
         <ul className="text-sm text-gray-700 space-y-1.5">
           <li>• Vous pouvez <strong>conserver ou remplacer</strong> vos joueurs au début de chaque nouvelle ronde.</li>
-          <li>• Si l&apos;équipe d&apos;un de vos joueurs est éliminée, vous <strong>devez le remplacer</strong> avant la ronde suivante.</li>
+          <li>• Si l&apos;équipe d&apos;un de vos joueurs est éliminée, l&apos;application le détecte automatiquement : le joueur apparaît en rouge et la sauvegarde est bloquée tant qu&apos;il n&apos;est pas remplacé.</li>
         </ul>
+        <p className="text-xs text-gray-400 mt-3 italic">La participation au pool des séries est optionnelle.</p>
       </div>
     ),
   },
@@ -155,6 +156,27 @@ const SECTIONS: Section[] = [
           <li>• Les transactions sont séparées en deux catégories : <strong>Échanges</strong> (joueurs et picks entre poolers) et <strong>Ajustements</strong> (signatures, libérations, changements de type).</li>
           <li>• Toutes les transactions sont effectuées par l&apos;administrateur.</li>
         </ul>
+      </div>
+    ),
+  },
+  {
+    id: 'guide-notifications',
+    tab: 'guide',
+    title: 'Notifications',
+    keywords: 'notifications push alerte avertissement alignement series picks equipe eliminee admin compte appareil activer',
+    content: (
+      <div>
+        <p className="text-sm text-gray-600 mb-3">
+          Activez les notifications push depuis <strong>Mon compte</strong> pour être averti des événements importants sur votre appareil.
+        </p>
+        <h4 className="text-sm font-semibold text-gray-700 mb-1.5">Vous recevez une notification quand :</h4>
+        <ul className="text-sm text-gray-700 space-y-1.5 mb-4">
+          <li>• L&apos;administrateur modifie votre alignement (ajout, retrait, changement de type).</li>
+          <li>• Une nouvelle ronde des séries est démarrée — rappel de soumettre vos choix.</li>
+          <li>• La comptabilisation des points d&apos;une ronde est démarrée.</li>
+          <li>• Un ou plusieurs de vos joueurs appartiennent à une équipe éliminée — action requise.</li>
+        </ul>
+        <p className="text-xs text-gray-400 italic">Les notifications s&apos;activent par appareil. Vous pouvez les désactiver à tout moment depuis Mon compte.</p>
       </div>
     ),
   },
@@ -236,12 +258,13 @@ const SECTIONS: Section[] = [
     id: 'regl-series',
     tab: 'reglements',
     title: 'Pool des séries éliminatoires',
-    keywords: 'series playoff attaquant defenseur gardien cap ronde eliminee remplacement pointage buts passes victoires prolongation',
+    keywords: 'series playoff attaquant defenseur gardien cap ronde eliminee remplacement pointage buts passes victoires prolongation optionnel participation',
     content: (
       <ul className="text-sm text-gray-700 space-y-1.5">
-        <li>• Chaque pooler sélectionne <strong>3 attaquants, 2 défenseurs et 1 gardien</strong> par ronde.</li>
-        <li>• Un cap d&apos;environ <strong>25 M$</strong> s&apos;applique à la sélection active.</li>
-        <li>• Si l&apos;équipe d&apos;un joueur est éliminée, un remplacement est obligatoire avant la ronde suivante.</li>
+        <li>• La participation au pool des séries est <strong>optionnelle</strong> — tous les poolers ne sont pas tenus d&apos;y participer.</li>
+        <li>• Chaque pooler participant sélectionne <strong>3 attaquants, 2 défenseurs et 1 gardien</strong> par ronde.</li>
+        <li>• Un cap s&apos;applique à la sélection active (montant fixé par l&apos;administrateur).</li>
+        <li>• Si l&apos;équipe d&apos;un joueur est éliminée, l&apos;application le détecte et bloque la sauvegarde tant que le joueur n&apos;est pas remplacé.</li>
         <li>• Les poolers peuvent conserver ou changer leurs joueurs entre chaque ronde.</li>
         <li>• Pointage : buts, passes, victoires de gardien, défaites en prolongation/fusillade.</li>
       </ul>
