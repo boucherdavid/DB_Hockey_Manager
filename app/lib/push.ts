@@ -67,3 +67,13 @@ export async function sendPushToUser(userId: string, payload: PushPayload) {
 
   await sendToSubscriptions(subs ?? [], payload)
 }
+
+export async function sendPushToAll(payload: PushPayload) {
+  const supabase = createAdminClient()
+
+  const { data: subs } = await supabase
+    .from('push_subscriptions')
+    .select('id, endpoint, p256dh, auth')
+
+  await sendToSubscriptions(subs ?? [], payload)
+}

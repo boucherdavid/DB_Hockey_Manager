@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { fetchNhlSkaters, fetchNhlGoalies, normName } from '@/lib/nhl-stats'
-import { sendPushToAdmins } from '@/lib/push'
+import { sendPushToAdmins, sendPushToAll, sendPushToUser } from '@/lib/push'
 
 const REVALIDATE = () => {
   revalidatePath('/series')
@@ -79,6 +79,18 @@ export async function startScoringAction(playoffSeasonId: number): Promise<{ err
     .from('playoff_seasons')
     .update({ scoring_start_at: new Date().toISOString() })
     .eq('id', playoffSeasonId)
+
+  // Notification : comptabilisation démarrée
+  const { data: psSeason } = await supabase
+    .from('playoff_seasons')
+    .select('current_round')
+    .eq('id', playoffSeasonId)
+    .single()
+  sendPushToAll({
+    title: 'DB Hockey Manager — Pool des séries',
+    body:  `La comptabilisation des points de la ronde ${psSeason?.current_round ?? ''} est démarrée !`,
+    url:   '/series',
+  }).catch(() => {})
 
   REVALIDATE()
   return { updated }
@@ -168,12 +180,75 @@ export async function advanceRoundAction(id: number): Promise<{ error?: string }
   if (!ps) return { error: 'Saison introuvable.' }
   if (ps.current_round >= 4) return { error: 'Déjà à la finale.' }
 
+  const newRound = ps.current_round + 1
   const { error } = await supabase
     .from('playoff_seasons')
-    .update({ current_round: ps.current_round + 1 })
+    .update({ current_round: newRound })
     .eq('id', id)
 
   if (error) return { error: error.message }
+
+  // Notification générale : nouvelle ronde démarrée
+  const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
+  sendPushToAll({
+    title: 'DB Hockey Manager — Pool des séries',
+    body:  `Ronde ${newRound} démarrée (${ROUND_LABEL[newRound - 1] ?? `Ronde ${newRound}`}) — soumettez vos nouveaux choix !`,
+    url:   '/series/picks',
+  }).catch(() => {})
+
+  // Notification ciblée : poolers avec des joueurs d'équipes éliminées
+  try {
+    const { data: psData } = await supabase
+      .from('playoff_seasons')
+      .select('season')
+      .eq('id', id)
+      .single()
+
+    if (psData) {
+      const playoffYear = parseInt(psData.season.split('-')[0]) + 1
+      const bracketRes = await fetch(`https://api-web.nhle.com/v1/playoff-bracket/${playoffYear}`)
+      if (bracketRes.ok) {
+        const bracket = await bracketRes.json() as {
+          series: { topSeedTeam: { id: number; abbrev: string } | null; bottomSeedTeam: { id: number; abbrev: string } | null; losingTeamId?: number }[]
+        }
+        const series = bracket.series ?? []
+        const losingIds = new Set(series.map(s => s.losingTeamId).filter(Boolean))
+        const activeCodes = new Set<string>()
+        for (const s of series) {
+          if (s.topSeedTeam && !losingIds.has(s.topSeedTeam.id)) activeCodes.add(s.topSeedTeam.abbrev)
+          if (s.bottomSeedTeam && !losingIds.has(s.bottomSeedTeam.id)) activeCodes.add(s.bottomSeedTeam.abbrev)
+        }
+
+        if (activeCodes.size > 0) {
+          // Trouver les picks actifs dont l'équipe est éliminée
+          const { data: activePicks } = await supabase
+            .from('playoff_rosters')
+            .select('pooler_id, players (teams (code))')
+            .eq('playoff_season_id', id)
+            .eq('is_active', true)
+
+          const affectedPoolers = new Set<string>()
+          for (const pick of activePicks ?? []) {
+            const code = (pick.players as unknown as { teams: { code: string } | null } | null)?.teams?.code
+            if (code && !activeCodes.has(code)) {
+              affectedPoolers.add(pick.pooler_id)
+            }
+          }
+
+          for (const poolerId of affectedPoolers) {
+            sendPushToUser(poolerId, {
+              title: 'DB Hockey Manager — Action requise',
+              body:  'Un ou plusieurs joueurs de votre alignement appartiennent à une équipe éliminée. Mettez à jour vos choix.',
+              url:   '/series/picks',
+            }).catch(() => {})
+          }
+        }
+      }
+    }
+  } catch {
+    // Silently ignore si l'API bracket est indisponible
+  }
+
   REVALIDATE()
   return {}
 }
