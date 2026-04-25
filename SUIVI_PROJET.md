@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-04-21
+Derniere mise a jour: 2026-04-24
 
 ## Role du fichier
 
@@ -55,6 +55,26 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-04-24 (suite)
+
+**Bugfix — Doublons joueurs lors d'un changement d'équipe (`import_supabase.py`)**
+
+Symptôme : `run_pipeline.py` créait 6 nouveaux enregistrements (ids 2508-2513 : Cam Fowler, Joonas Korpisalo, Jason Dickinson, Connor Ingram, Erik Karlsson, Nate Schmidt) pour des joueurs ayant changé d'équipe, puis `backfill_nhl_ids.py` échouait avec une violation de contrainte UNIQUE sur `nhl_id` (le bon enregistrement avait déjà un `nhl_id`).
+
+Cause racine : le lookup utilisait `nom|équipe` comme clé primaire. Si l'équipe avait changé entre deux imports, aucun match → insertion d'un nouveau record. Le dict `existing_by_name` (par nom seul) était construit mais jamais utilisé.
+
+Corrections apportées dans `python_script/import_supabase.py` :
+- **Lookup (prévention)** : ajout d'un 3e fallback via `existing_by_name` quand ni `nom+équipe` ni `nom+null` ne matchent. Si un seul joueur porte ce nom en BD (non-ambigu), on met à jour au lieu d'insérer. La clé est aussi ajoutée à `existing_map` pour que la boucle contrats suive correctement.
+- **`deduplicate_players` Cas 3 (nettoyage)** : détecte les paires avec le même nom, équipes différentes, un seul `nhl_id` → le record sans `nhl_id` est le doublon, fusionné dans l'autre. Nettoie les 6 doublons existants au prochain run.
+- **`_merge`** : ajout de `roster_change_log` et `player_stat_snapshots` aux tables réassignées lors d'une fusion (évite les références orphelines vers les nouvelles tables).
+
+Les homonymes (ex: deux Sebastian Aho avec deux `nhl_id` distincts) ne sont pas affectés : `len(existing_by_name[key]) > 1` → pas de fallback.
+
+**Documentation maintenance**
+- Nouveau fichier `docs/maintenance.md` : ordre des scripts Python, description de chaque étape, procédure SQL, tableau résumé.
+
+---
 
 ### 2026-04-24
 
