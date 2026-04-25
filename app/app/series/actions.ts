@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { fetchNhlSkaters, fetchNhlGoalies, normName } from '@/lib/nhl-stats'
-import { sendPushToAdmins, sendPushToAll, sendPushToUser } from '@/lib/push'
+import { sendPushToAdmins, sendPushToUser } from '@/lib/push'
 
 const REVALIDATE = () => {
   revalidatePath('/series')
@@ -80,17 +80,27 @@ export async function startScoringAction(playoffSeasonId: number): Promise<{ err
     .update({ scoring_start_at: new Date().toISOString() })
     .eq('id', playoffSeasonId)
 
-  // Notification : comptabilisation démarrée
+  // Notification : comptabilisation démarrée — uniquement aux poolers avec picks actifs
   const { data: psSeason } = await supabase
     .from('playoff_seasons')
     .select('current_round')
     .eq('id', playoffSeasonId)
     .single()
-  sendPushToAll({
-    title: 'DB Hockey Manager — Pool des séries',
-    body:  `La comptabilisation des points de la ronde ${psSeason?.current_round ?? ''} est démarrée !`,
-    url:   '/series',
-  }).catch(() => {})
+
+  const { data: participants } = await supabase
+    .from('playoff_rosters')
+    .select('pooler_id')
+    .eq('playoff_season_id', playoffSeasonId)
+    .eq('is_active', true)
+
+  const participantIds = [...new Set((participants ?? []).map(p => p.pooler_id))]
+  await Promise.all(participantIds.map(uid =>
+    sendPushToUser(uid, {
+      title: 'DB Hockey Manager — Pool des séries',
+      body:  `La comptabilisation des points de la ronde ${psSeason?.current_round ?? ''} est démarrée !`,
+      url:   '/series',
+    }).catch(() => {})
+  ))
 
   REVALIDATE()
   return { updated }
@@ -188,13 +198,23 @@ export async function advanceRoundAction(id: number): Promise<{ error?: string }
 
   if (error) return { error: error.message }
 
-  // Notification générale : nouvelle ronde démarrée
+  // Notification générale : nouvelle ronde démarrée — uniquement aux poolers avec picks actifs
   const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
-  sendPushToAll({
-    title: 'DB Hockey Manager — Pool des séries',
-    body:  `Ronde ${newRound} démarrée (${ROUND_LABEL[newRound - 1] ?? `Ronde ${newRound}`}) — soumettez vos nouveaux choix !`,
-    url:   '/series/picks',
-  }).catch(() => {})
+
+  const { data: roundParticipants } = await supabase
+    .from('playoff_rosters')
+    .select('pooler_id')
+    .eq('playoff_season_id', id)
+    .eq('is_active', true)
+
+  const roundParticipantIds = [...new Set((roundParticipants ?? []).map(p => p.pooler_id))]
+  await Promise.all(roundParticipantIds.map(uid =>
+    sendPushToUser(uid, {
+      title: 'DB Hockey Manager — Pool des séries',
+      body:  `Ronde ${newRound} démarrée (${ROUND_LABEL[newRound - 1] ?? `Ronde ${newRound}`}) — soumettez vos nouveaux choix !`,
+      url:   '/series/picks',
+    }).catch(() => {})
+  ))
 
   // Notification ciblée : poolers avec des joueurs d'équipes éliminées
   try {
