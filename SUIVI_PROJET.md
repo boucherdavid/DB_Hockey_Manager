@@ -56,6 +56,35 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-25 (suite)
+
+**Chantier H — Notifications push + page /admin/suivi**
+
+`app/lib/push.ts` :
+- `sendPushToAdmins` corrigé : filtre maintenant par `is_admin = true` (bug : envoyait à tous les abonnés).
+- `sendPushToUser(userId, payload)` : nouvelle fonction pour envoyer un push ciblé à un pooler spécifique.
+- Refactorisé avec helper interne `sendToSubscriptions` pour éviter la duplication.
+
+`app/app/admin/rosters/actions.ts` :
+- `addPlayerAction` → push pooler : "Dupont, Jean ajouté (actif)".
+- `removePlayerAction` → push pooler : "Dupont, Jean retiré de votre alignement".
+- `changeTypeAction` → push pooler : "Dupont, Jean : actif → LTIR".
+- `submitRosterAction` → push synthèse : "L'admin a modifié votre alignement : 2 ajouts, 1 retrait".
+- Les push sont fire-and-forget (`.catch(() => {})`) — ne bloquent jamais l'action principale.
+
+`app/app/admin/suivi/page.tsx` (nouveau) :
+- Fil d'activité chronologique pour l'admin.
+- Trois sources : `roster_change_log` (100 derniers), `transactions` (50 dernières), `playoff_rosters` (100 derniers picks, regroupés par session pooler+ronde+minute).
+- Tableau avec colonnes Date / Catégorie (point coloré) / Pooler / Action (badge) / Détail.
+- Lien ajouté dans `admin/page.tsx`.
+
+**Ce qui reste pour Chantier H (phases futures) :**
+- Préférences de notification par pooler (opt-out par type).
+- Notifications poolers pour ballotage (bloquant, quand ballotage sera codé).
+- Canal courriel en complément du push.
+
+---
+
 ### 2026-04-25
 
 **Pool des séries — Blocage des picks d'équipes éliminées**
