@@ -56,6 +56,57 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-24
+
+**Documentation — Règles métier et templates**
+- Nouveau fichier `docs/regles-changements-alignement.md` : règles complètes des changements d'alignement (limite horaire, gel post-désactivation, LTIR, ballotage, club école, journalisation, notifications).
+- Nouveau dossier `docs/templates/` + `invitation-pool-series.md` : template courriel d'invitation au pool des séries.
+- Chantier H (Notifications + Suivi admin) ajouté à la feuille de route.
+- Chantier G (Ballotage) enrichi avec les règles de processus et de priorité.
+
+**Supabase — nouvelles tables**
+- `player_stat_snapshots` : confirmée déjà existante (créée session précédente).
+- `roster_change_log` : créée (player_id, pooler_id, pool_season_id, change_type, old_type, new_type, changed_at, changed_by). RLS activé.
+
+**Chantier B — Classement + points saison (complété)**
+
+Étape 1 — `app/lib/nhl-snapshot.ts` :
+- `fetchPlayerStatsById(nhlId, gameType)` via `api-web.nhle.com/v1/player/{id}/landing`.
+- Retourne `{ goals, assists, goalie_wins, goalie_otl, goalie_shutouts }` ou zéros si indisponible.
+
+Étape 2 — `app/lib/snapshot.ts` :
+- `takeSnapshot({ playerId, nhlId, poolerId, poolSeasonId, snapshotType, takenAt })` : fetch NHL + insert Supabase.
+- `takeSeasonEndSnapshots(poolSeasonId)` : snapshot `season_end` pour tous les actifs.
+
+Étape 3 — Journalisation automatique dans `roster_change_log` :
+- `detectChangeType(oldType, newType, isRemoval)` : type détecté automatiquement.
+- Types supportés : `activation`, `deactivation`, `ajout_reserviste`, `ajout_recrue`, `retrait`, `ltir`, `retour_ltir`, `changement_type`, `signature_agent_libre`.
+
+Étape 4 — `app/app/admin/rosters/actions.ts` :
+- Snapshots + journalisation intégrés dans `addPlayerAction`, `removePlayerAction`, `changeTypeAction`, `submitRosterAction`.
+- `changed_by = null` (admin); champ prévu pour self-service pooler futur.
+
+Étape 5 — `app/lib/standings.ts` refactorisé :
+- Calcul par snapshots : points = Σ(deactivation − activation) par période.
+- Période ouverte (joueur encore actif) : stats NHL actuelles − dernier snapshot d'activation.
+- Fallback stats brutes si aucun snapshot d'activation (joueurs activés avant le système).
+- `app/lib/nhl-stats.ts` : ajout de `fetchNhlSkatersByNhlId()` et `fetchNhlGoaliesByNhlId()` (map par nhl_id). Refactorisé pour éviter la duplication de code.
+
+Étape 6 — `app/app/poolers/[id]/PoolerPageTabs.tsx` :
+- Troisième onglet "Historique" ajouté.
+- Compteurs agents libres (libres / LTIR) avec limites affichées.
+- Tableau chronologique des changements avec badge coloré par type.
+- `page.tsx` : query `roster_change_log` ajoutée et passée en props.
+
+Étape 7 — `app/app/admin/config/SeasonEndSync.tsx` :
+- Bouton admin avec confirmation, appel `seasonEndSyncAction`, affichage résultat (count + erreurs).
+- `seasonEndSyncAction` ajoutée dans `admin/config/actions.ts`.
+- Intégré dans `admin/config/page.tsx` (colonne droite, sous ScoringConfig).
+
+**Prochaine étape**
+- Étape 3 de la séquence : saisie manuelle des transactions historiques 2025-26 via l'interface existante.
+- Valider que les rosters correspondent à la réalité de fin de saison.
+
 ### 2026-04-23 (suite)
 
 **Étape 1 — Scoring config (complétée)**
