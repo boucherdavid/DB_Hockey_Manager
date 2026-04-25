@@ -78,6 +78,11 @@ Je l'utiliserai pour:
 - Tableau avec colonnes Date / Catégorie (point coloré) / Pooler / Action (badge) / Détail.
 - Lien ajouté dans `admin/page.tsx`.
 
+**Notifications pool des séries ajoutées dans `app/app/series/actions.ts` :**
+- `advanceRoundAction` → push général à tous : "Ronde X démarrée — soumettez vos nouveaux choix !" + push ciblé aux poolers dont un pick est d'une équipe éliminée : "Action requise — mettez à jour vos choix".
+- `startScoringAction` → push général à tous : "La comptabilisation des points de la ronde X est démarrée !".
+- `lib/push.ts` : ajout de `sendPushToAll(payload)` pour les envois à tous les abonnés.
+
 **Ce qui reste pour Chantier H (phases futures) :**
 - Préférences de notification par pooler (opt-out par type).
 - Notifications poolers pour ballotage (bloquant, quand ballotage sera codé).
