@@ -48,12 +48,14 @@ function RosterPanel({
   roster,
   capPerRound,
   editMode,
+  eliminatedIds,
   onRemove,
 }: {
   conf: Conference
   roster: ActivePick[]
   capPerRound: number
   editMode: boolean
+  eliminatedIds: Set<number>
   onRemove: (id: number) => void
 }) {
   const totalCap = roster.reduce((s, p) => s + p.cap_number, 0)
@@ -82,17 +84,25 @@ function RosterPanel({
             {groupPlayers.length === 0 ? (
               <div className="px-4 py-3 text-sm text-gray-400 italic">Aucun joueur sélectionné</div>
             ) : (
-              groupPlayers.map(p => (
-                <div key={p.playerId} className="flex items-center gap-3 px-4 py-2.5 border-b last:border-0">
-                  <span className="text-xs text-gray-400 w-8 text-center shrink-0">{p.position}</span>
-                  <span className="flex-1 font-medium text-gray-800 text-sm">{p.lastName}, {p.firstName}</span>
-                  <span className="text-sm text-gray-500 shrink-0">{(p.cap_number / 1_000_000).toFixed(2)} M$</span>
-                  {editMode && (
-                    <button onClick={() => onRemove(p.playerId)}
-                      className="text-red-400 hover:text-red-600 text-xs px-1 shrink-0">✕</button>
-                  )}
-                </div>
-              ))
+              groupPlayers.map(p => {
+                const eliminated = eliminatedIds.has(p.playerId)
+                return (
+                  <div key={p.playerId} className={`flex items-center gap-3 px-4 py-2.5 border-b last:border-0 ${eliminated ? 'bg-red-50' : ''}`}>
+                    <span className="text-xs text-gray-400 w-8 text-center shrink-0">{p.position}</span>
+                    <span className={`flex-1 font-medium text-sm ${eliminated ? 'text-red-700 line-through' : 'text-gray-800'}`}>
+                      {p.lastName}, {p.firstName}
+                    </span>
+                    {eliminated && (
+                      <span className="text-xs text-red-600 font-medium shrink-0">Éliminé</span>
+                    )}
+                    <span className="text-sm text-gray-500 shrink-0">{(p.cap_number / 1_000_000).toFixed(2)} M$</span>
+                    {editMode && (
+                      <button onClick={() => onRemove(p.playerId)}
+                        className="text-red-400 hover:text-red-600 text-xs px-1 shrink-0">✕</button>
+                    )}
+                  </div>
+                )
+              })
             )}
           </div>
         )
@@ -108,6 +118,7 @@ export default function PicksManager({
   players,
   currentPicks,
   activeTeamCount,
+  scoringStarted,
 }: {
   playoffSeasonId: number
   currentRound: number
@@ -115,14 +126,18 @@ export default function PicksManager({
   players: Player[]
   currentPicks: ActivePick[]
   activeTeamCount: number | null
+  scoringStarted: boolean
 }) {
+  const validPlayerIds = useMemo(() => new Set(players.map(p => p.id)), [players])
+  const hasEliminatedOnLoad = !scoringStarted && currentPicks.some(p => !validPlayerIds.has(p.playerId))
+
   const [roster, setRoster] = useState<ActivePick[]>(currentPicks)
   const [search, setSearch] = useState('')
   const [posFilter, setPosFilter] = useState<'F' | 'D' | 'G' | ''>('')
   const [confFilter, setConfFilter] = useState<Conference | ''>('')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
-  const [editMode, setEditMode] = useState(currentPicks.length === 0)
+  const [editMode, setEditMode] = useState(currentPicks.length === 0 || hasEliminatedOnLoad)
 
   const rosterEst   = roster.filter(p => p.conference === 'Est')
   const rosterOuest = roster.filter(p => p.conference === 'Ouest')
@@ -143,6 +158,12 @@ export default function PicksManager({
   const capEstOk   = capUsedEst   <= capPerRound
   const capOuestOk = capUsedOuest <= capPerRound
   const capOk = capEstOk && capOuestOk
+
+  const eliminatedIds = useMemo(() => {
+    if (scoringStarted) return new Set<number>()
+    return new Set(roster.filter(p => !validPlayerIds.has(p.playerId)).map(p => p.playerId))
+  }, [roster, validPlayerIds, scoringStarted])
+  const hasEliminated = eliminatedIds.size > 0
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -176,7 +197,7 @@ export default function PicksManager({
   }
 
   async function handleSave() {
-    if (!rosterOk || !capOk) return
+    if (!rosterOk || !capOk || hasEliminated) return
     setSaving(true)
     setMsg(null)
     const picks: PickInput[] = roster.map(p => ({
@@ -219,16 +240,28 @@ export default function PicksManager({
         )}
       </div>
 
+      {/* Banner équipes éliminées */}
+      {hasEliminated && (
+        <div className="rounded-lg border border-red-300 bg-red-50 px-5 py-4">
+          <p className="text-sm font-semibold text-red-700">
+            Un ou plusieurs joueurs de votre alignement appartiennent à une équipe éliminée.
+          </p>
+          <p className="text-sm text-red-600 mt-1">
+            Retirez-les et remplacez-les par des joueurs d&apos;équipes encore actives avant de sauvegarder.
+          </p>
+        </div>
+      )}
+
       {/* Deux panels côte à côte sur desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <RosterPanel conf="Est"   roster={rosterEst}   capPerRound={capPerRound} editMode={editMode} onRemove={removePlayer} />
-        <RosterPanel conf="Ouest" roster={rosterOuest} capPerRound={capPerRound} editMode={editMode} onRemove={removePlayer} />
+        <RosterPanel conf="Est"   roster={rosterEst}   capPerRound={capPerRound} editMode={editMode} eliminatedIds={eliminatedIds} onRemove={removePlayer} />
+        <RosterPanel conf="Ouest" roster={rosterOuest} capPerRound={capPerRound} editMode={editMode} eliminatedIds={eliminatedIds} onRemove={removePlayer} />
       </div>
 
       {/* Bouton sauvegarder */}
       {editMode && (
         <div className="flex flex-wrap items-center gap-4">
-          <button onClick={handleSave} disabled={saving || !rosterOk || !capOk}
+          <button onClick={handleSave} disabled={saving || !rosterOk || !capOk || hasEliminated}
             className="bg-green-600 text-white px-6 py-2 rounded font-medium hover:bg-green-700 disabled:opacity-50 text-sm">
             {saving ? 'Sauvegarde...' : 'Sauvegarder'}
           </button>

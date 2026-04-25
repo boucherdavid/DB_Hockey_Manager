@@ -220,7 +220,7 @@ export async function savePicksAction(
 
   const { data: ps } = await supabase
     .from('playoff_seasons')
-    .select('current_round, is_active')
+    .select('current_round, is_active, scoring_start_at, season')
     .eq('id', playoffSeasonId)
     .single()
   if (!ps) return { error: 'Saison playoff introuvable.' }
@@ -231,6 +231,43 @@ export async function savePicksAction(
   const errOuest = validateConf(picks, 'Ouest')
   if (errEst)   return { error: errEst }
   if (errOuest) return { error: errOuest }
+
+  // Validation : aucun joueur d'une équipe éliminée (seulement si scoring pas encore démarré)
+  if (!ps.scoring_start_at) {
+    try {
+      const playoffYear = parseInt(ps.season.split('-')[0]) + 1
+      const bracketRes = await fetch(`https://api-web.nhle.com/v1/playoff-bracket/${playoffYear}`)
+      if (bracketRes.ok) {
+        const bracket = await bracketRes.json() as {
+          series: { topSeedTeam: { id: number; abbrev: string } | null; bottomSeedTeam: { id: number; abbrev: string } | null; losingTeamId?: number }[]
+        }
+        const series = bracket.series ?? []
+        if (series.length > 0) {
+          const losingIds = new Set(series.map(s => s.losingTeamId).filter(Boolean))
+          const activeCodes = new Set<string>()
+          for (const s of series) {
+            if (s.topSeedTeam && !losingIds.has(s.topSeedTeam.id)) activeCodes.add(s.topSeedTeam.abbrev)
+            if (s.bottomSeedTeam && !losingIds.has(s.bottomSeedTeam.id)) activeCodes.add(s.bottomSeedTeam.abbrev)
+          }
+          if (activeCodes.size > 0) {
+            const playerIds = picks.map(p => p.playerId)
+            const { data: playerTeams } = await supabase
+              .from('players')
+              .select('id, teams (code)')
+              .in('id', playerIds)
+            for (const pt of playerTeams ?? []) {
+              const code = (pt.teams as unknown as { code: string } | null)?.code
+              if (code && !activeCodes.has(code)) {
+                return { error: `Un joueur sélectionné appartient à une équipe éliminée (${code}). Retirez-le avant de sauvegarder.` }
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Si l'API est indisponible, on laisse passer — la validation UI a déjà filtré
+    }
+  }
 
   // Snapshots via NHL API
   const [skatersMap, goaliesMap] = await Promise.all([
