@@ -4,6 +4,7 @@ import ConfigForm from './ConfigForm'
 import SeasonsManager from './SeasonsManager'
 import InitTabs from './InitTabs'
 import ScoringConfig from './ScoringConfig'
+import SeasonEndSync from './SeasonEndSync'
 import { type Pick, type Pooler } from './PicksEditor'
 
 export default async function AdminConfigPage() {
@@ -71,6 +72,9 @@ export default async function AdminConfigPage() {
           }
           {scoringRows && scoringRows.length > 0 && (
             <ScoringConfig rows={scoringRows} />
+          )}
+          {activeSaison && (
+            <SeasonEndSync seasonId={activeSaison.id} season={activeSaison.season} />
           )}
         </div>
       </div>
