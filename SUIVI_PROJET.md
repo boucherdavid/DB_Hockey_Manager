@@ -56,6 +56,24 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-25
+
+**Pool des séries — Blocage des picks d'équipes éliminées**
+
+Quand la comptabilisation n'est pas encore démarrée (`scoring_start_at = null`) et qu'une série est terminée, les joueurs des équipes éliminées sont désormais détectés et bloqués.
+
+Comportement :
+- Si un pick existant appartient à une équipe éliminée : mode édition forcé à l'ouverture + banner rouge + joueur barré avec badge "Éliminé" dans le panel + bouton Sauvegarder désactivé.
+- Validation serveur dans `savePicksAction` : fetch du bracket NHL API, vérification de chaque joueur soumis — si un appartient à une équipe éliminée, la sauvegarde échoue avec message d'erreur.
+- Le filtre UI existant (sélecteur de joueurs limité aux équipes actives) reste inchangé.
+
+Fichiers modifiés :
+- `app/app/series/picks/page.tsx` : ajout de `scoring_start_at` dans la query + prop `scoringStarted` passée.
+- `app/app/series/picks/PicksManager.tsx` : calcul `eliminatedIds`, banner, mise en évidence dans `RosterPanel`, blocage de sauvegarde.
+- `app/app/series/actions.ts` : validation côté serveur via bracket NHL.
+
+---
+
 ### 2026-04-24 (suite)
 
 **Bugfix — Doublons joueurs lors d'un changement d'équipe (`import_supabase.py`)**
