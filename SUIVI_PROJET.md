@@ -124,8 +124,15 @@ Les homonymes (ex: deux Sebastian Aho avec deux `nhl_id` distincts) ne sont pas 
 - Intégré dans `admin/config/page.tsx` (colonne droite, sous ScoringConfig).
 
 **Prochaine étape**
+- **AVANT les prochains chantiers** : amélioration pool des séries (voir ci-dessous).
 - Étape 3 de la séquence : saisie manuelle des transactions historiques 2025-26 via l'interface existante.
 - Valider que les rosters correspondent à la réalité de fin de saison.
+
+**Modification pool des séries à faire en priorité**
+Quand la comptabilisation des points d'une ronde n'est pas encore commencée ET qu'une série est terminée, les joueurs des deux équipes éliminées doivent devenir indisponibles pour la ronde en cours. Les poolers ayant déjà sélectionné un de ces joueurs doivent obligatoirement ajuster leur choix.
+- Détecter les équipes éliminées via l'API NHL (bracket playoffs).
+- Filtrer les joueurs disponibles dans le sélecteur de la ronde active.
+- Afficher un avertissement aux poolers concernés et bloquer la sauvegarde si un joueur éliminé est encore dans leur sélection.
 
 ### 2026-04-23 (suite)
 
