@@ -49,15 +49,18 @@ type DropdownKey = 'pool-saison' | 'classement' | 'statistiques' | 'series' | 'p
 export default function Navbar({
   initialUserName,
   initialIsAdmin,
+  initialUnreadCount = 0,
 }: {
   initialUserName: string | null
   initialIsAdmin: boolean
+  initialUnreadCount?: number
 }) {
   const pathname = usePathname()
   const supabase = createClient()
 
   const [userName, setUserName] = useState<string | null>(initialUserName)
   const [isAdmin, setIsAdmin] = useState(initialIsAdmin)
+  const [unreadCount] = useState(initialUnreadCount)
   const [menuOpen, setMenuOpen] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null)
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null)
@@ -274,6 +277,17 @@ export default function Navbar({
                             Panneau admin
                           </span>
                         </Link>
+                        <Link href="/admin/feedback" className={dropdownLinkClass('/admin/feedback')}>
+                          <span className="flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                              <span className="text-xs bg-blue-100 text-blue-700 rounded px-1.5 py-0.5">Admin</span>
+                              Boîte de réception
+                            </span>
+                            {unreadCount > 0 && (
+                              <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>
+                            )}
+                          </span>
+                        </Link>
                       </div>
                     )}
                     <div className="py-1 border-t">
@@ -334,6 +348,16 @@ export default function Navbar({
                 <Link href="/aide"     className={mobileLinkClass('/aide')}>Aide &amp; Règlements</Link>
                 <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler un problème</Link>
                 {isAdmin && <Link href="/admin" className={mobileLinkClass('/admin')}>Admin</Link>}
+                {isAdmin && (
+                  <Link href="/admin/feedback" className={mobileLinkClass('/admin/feedback')}>
+                    <span className="flex items-center justify-between">
+                      Boîte de réception
+                      {unreadCount > 0 && (
+                        <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>
+                      )}
+                    </span>
+                  </Link>
+                )}
                 <button onClick={handleLogout}
                   className="block text-left px-3 py-2 rounded text-sm font-medium text-red-400 hover:bg-pool-navy-light hover:text-red-300 transition-colors">
                   {'D\u00e9connexion'}

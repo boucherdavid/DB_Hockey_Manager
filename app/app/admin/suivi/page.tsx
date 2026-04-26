@@ -57,10 +57,11 @@ export default async function AdminSuiviPage() {
       .order('created_at', { ascending: false })
       .limit(50),
 
-    // Soumissions pool des séries (picks les plus récents par pooler+ronde)
+    // Soumissions pool des séries
     supabase
       .from('playoff_rosters')
-      .select('id, round_added, created_at, poolers!playoff_rosters_pooler_id_fkey (name), players (first_name, last_name)')
+      .select('id, round_added, created_at, pooler_id, poolers (name)')
+      .not('created_at', 'is', null)
       .order('created_at', { ascending: false })
       .limit(100),
   ])
@@ -112,14 +113,13 @@ export default async function AdminSuiviPage() {
     })
   }
 
-  // Picks séries — regrouper par created_at proche = même soumission
-  // On affiche chaque pick individuellement car pas de table de soumission
+  // Picks séries — regrouper par pooler + ronde + minute (= même soumission)
   const picksBySession = new Map<string, { poolerName: string; round: number; count: number; at: string }>()
   for (const p of playoffPicks ?? []) {
+    if (!p.created_at) continue
     const pooler = (p as any).poolers as { name: string } | null
     const name = pooler?.name ?? '?'
-    // Clé = pooler + ronde + heure arrondie à la minute
-    const minuteKey = `${name}|${p.round_added}|${p.created_at?.slice(0, 16)}`
+    const minuteKey = `${(p as any).pooler_id}|${p.round_added}|${p.created_at.slice(0, 16)}`
     if (!picksBySession.has(minuteKey)) {
       picksBySession.set(minuteKey, { poolerName: name, round: p.round_added, count: 0, at: p.created_at })
     }
