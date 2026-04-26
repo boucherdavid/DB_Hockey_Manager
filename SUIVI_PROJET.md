@@ -56,6 +56,43 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-26
+
+**Boîte de réception — refonte du flux de traitement des retours poolers**
+
+Migration SQL exécutée dans Supabase :
+```sql
+ALTER TABLE feedback DROP CONSTRAINT feedback_status_check;
+ALTER TABLE feedback ADD CONSTRAINT feedback_status_check
+  CHECK (status IN ('nouveau', 'traité', 'archivé'));
+UPDATE feedback SET status = 'traité' WHERE status IN ('lu', 'résolu');
+```
+
+Fichiers supprimés : `docs/retours-bruts.md` et `docs/retours-poolers.md` — remplacés par le flux dans l'app.
+
+`app/app/admin/feedback/actions.ts` (nouveau) :
+- `updateFeedbackStatusAction(id, status)` — change le statut d'un message.
+- `deleteFeedbackAction(id)` — supprime définitivement un message (avec confirmation UI).
+
+`app/app/admin/feedback/FeedbackAdminView.tsx` (réécrit) :
+- 4 onglets : Nouveau / Traité / Archivé / Tous, avec compteur par onglet.
+- Boutons par message selon le statut : Marquer traité, Rouvrir, Archiver, Supprimer.
+- Export .md et Copier s'appliquent uniquement aux messages visibles (filtre actif).
+- Bordure colorée par statut : bleu = nouveau, vert = traité, gris = archivé.
+
+`app/app/admin/feedback/page.tsx` : renommé "Boîte de réception", affiche le sous-titre avec le nombre de nouveaux.
+
+`app/app/admin/page.tsx` : carte renommée "Boîte de réception" + badge rouge avec le nombre de messages nouveaux.
+
+**Workflow documentaire recommandé :**
+1. Notification push reçue → ouvrir `/admin/feedback`.
+2. Lire et traiter le message (code, note, réponse).
+3. Cliquer "Marquer traité".
+4. Pour les bugs réglés → documenter dans `SUIVI_PROJET.md`.
+5. Périodiquement → archiver les messages traités.
+
+---
+
 ### 2026-04-25 (suite 2)
 
 **Bugfix — Activation notifications impossible pour les poolers non-admins**
