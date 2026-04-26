@@ -55,3 +55,21 @@ export async function getSubscriptionStatusAction() {
 
   return { subscribed: (data?.length ?? 0) > 0 }
 }
+
+export async function testPushAction(): Promise<{ error?: string; sent?: boolean }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non connecté' }
+
+  const { sendPushToUser } = await import('@/lib/push')
+  try {
+    await sendPushToUser(user.id, {
+      title: 'DB Hockey Manager — Test',
+      body: 'Les notifications fonctionnent correctement sur cet appareil.',
+      url: '/compte',
+    })
+    return { sent: true }
+  } catch (e: unknown) {
+    return { error: String(e) }
+  }
+}

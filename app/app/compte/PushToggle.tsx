@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { subscribePushAction, unsubscribePushAction } from './push-actions'
+import { subscribePushAction, unsubscribePushAction, testPushAction } from './push-actions'
 
 type State = 'loading' | 'unsupported' | 'denied' | 'subscribed' | 'unsubscribed'
 
@@ -89,22 +89,39 @@ export default function PushToggle() {
           {state === 'subscribed' ? 'Notifications activées sur cet appareil' : 'Notifications désactivées'}
         </span>
       </div>
-      <button
-        onClick={state === 'subscribed' ? handleUnsubscribe : handleSubscribe}
-        disabled={busy}
-        className={`px-4 py-2 rounded text-sm font-medium disabled:opacity-50 transition-colors ${
-          state === 'subscribed'
-            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            : 'bg-blue-600 text-white hover:bg-blue-700'
-        }`}
-      >
-        {busy
-          ? '...'
-          : state === 'subscribed'
-            ? 'Désactiver les notifications'
-            : 'Activer les notifications sur cet appareil'}
-      </button>
-      {msg && <p className="text-sm text-green-600">{msg}</p>}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={state === 'subscribed' ? handleUnsubscribe : handleSubscribe}
+          disabled={busy}
+          className={`px-4 py-2 rounded text-sm font-medium disabled:opacity-50 transition-colors ${
+            state === 'subscribed'
+              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
+        >
+          {busy
+            ? '...'
+            : state === 'subscribed'
+              ? 'Désactiver les notifications'
+              : 'Activer les notifications sur cet appareil'}
+        </button>
+        {state === 'subscribed' && (
+          <button
+            onClick={async () => {
+              setBusy(true)
+              setMsg(null)
+              const res = await testPushAction()
+              setBusy(false)
+              setMsg(res.error ? `Erreur : ${res.error}` : 'Notification test envoyée — vérifiez votre appareil.')
+            }}
+            disabled={busy}
+            className="px-4 py-2 rounded text-sm font-medium bg-gray-50 border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+          >
+            Tester
+          </button>
+        )}
+      </div>
+      {msg && <p className={`text-sm ${msg.startsWith('Erreur') ? 'text-red-600' : 'text-green-600'}`}>{msg}</p>}
     </div>
   )
 }
