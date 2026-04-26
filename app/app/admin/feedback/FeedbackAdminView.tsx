@@ -1,11 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
+import { updateFeedbackStatusAction, deleteFeedbackAction } from './actions'
+
+type Status = 'nouveau' | 'traité' | 'archivé'
 
 const TYPE_LABELS: Record<string, string> = {
   bug: 'Problème',
   suggestion: 'Suggestion',
-  autre: 'Autre',
+  autre: 'Commentaire',
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -13,6 +16,13 @@ const TYPE_COLORS: Record<string, string> = {
   suggestion: 'bg-blue-100 text-blue-700',
   autre: 'bg-gray-100 text-gray-700',
 }
+
+const STATUS_TABS: { key: Status | 'tous'; label: string }[] = [
+  { key: 'nouveau',  label: 'Nouveau' },
+  { key: 'traité',   label: 'Traité' },
+  { key: 'archivé',  label: 'Archivé' },
+  { key: 'tous',     label: 'Tous' },
+]
 
 type Feedback = {
   id: number
@@ -29,20 +39,102 @@ function getPoolerName(poolers: Feedback['poolers']): string {
   return poolers.name
 }
 
-export default function FeedbackAdminView({ feedbacks }: { feedbacks: Feedback[] }) {
+function FeedbackCard({
+  f,
+  onStatusChange,
+  onDelete,
+}: {
+  f: Feedback
+  onStatusChange: (id: number, status: Status) => void
+  onDelete: (id: number) => void
+}) {
+  const [pending, startTransition] = useTransition()
+
+  function handleStatus(status: Status) {
+    startTransition(() => onStatusChange(f.id, status))
+  }
+
+  function handleDelete() {
+    if (!confirm('Supprimer ce message définitivement ?')) return
+    startTransition(() => onDelete(f.id))
+  }
+
+  return (
+    <div className={`bg-white rounded-lg shadow p-5 border-l-4 ${f.status === 'nouveau' ? 'border-blue-400' : f.status === 'traité' ? 'border-green-400' : 'border-gray-200'}`}>
+      <div className="flex items-start gap-3 mb-3 flex-wrap">
+        <span className={`text-xs font-semibold px-2 py-1 rounded-full shrink-0 ${TYPE_COLORS[f.type] ?? 'bg-gray-100 text-gray-700'}`}>
+          {TYPE_LABELS[f.type] ?? f.type}
+        </span>
+        <span className="text-sm font-medium text-gray-700">{getPoolerName(f.poolers)}</span>
+        <span className="text-xs text-gray-400 ml-auto shrink-0">
+          {new Date(f.created_at).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}
+        </span>
+      </div>
+
+      <p className="text-gray-700 text-sm whitespace-pre-wrap mb-4">{f.description}</p>
+
+      <div className="flex flex-wrap gap-2">
+        {f.status !== 'traité' && (
+          <button onClick={() => handleStatus('traité')} disabled={pending}
+            className="px-3 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50 transition-colors">
+            Marquer traité
+          </button>
+        )}
+        {f.status !== 'nouveau' && (
+          <button onClick={() => handleStatus('nouveau')} disabled={pending}
+            className="px-3 py-1.5 text-xs font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50 transition-colors">
+            Rouvrir
+          </button>
+        )}
+        {f.status !== 'archivé' && (
+          <button onClick={() => handleStatus('archivé')} disabled={pending}
+            className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50 transition-colors">
+            Archiver
+          </button>
+        )}
+        <button onClick={handleDelete} disabled={pending}
+          className="px-3 py-1.5 text-xs font-medium bg-red-50 text-red-500 rounded hover:bg-red-100 disabled:opacity-50 transition-colors ml-auto">
+          Supprimer
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default function FeedbackAdminView({
+  feedbacks: initial,
+  counts,
+}: {
+  feedbacks: Feedback[]
+  counts: Record<string, number>
+}) {
+  const [feedbacks, setFeedbacks] = useState(initial)
+  const [activeTab, setActiveTab] = useState<Status | 'tous'>('nouveau')
   const [copied, setCopied] = useState(false)
 
+  const visible = activeTab === 'tous' ? feedbacks : feedbacks.filter(f => f.status === activeTab)
+
+  function handleStatusChange(id: number, status: Status) {
+    updateFeedbackStatusAction(id, status)
+    setFeedbacks(prev => prev.map(f => f.id === id ? { ...f, status } : f))
+  }
+
+  function handleDelete(id: number) {
+    deleteFeedbackAction(id)
+    setFeedbacks(prev => prev.filter(f => f.id !== id))
+  }
+
   const buildMarkdown = () => {
+    const tabLabel = STATUS_TABS.find(t => t.key === activeTab)?.label ?? activeTab
     const lines: string[] = [
-      '# Retours des poolers',
+      '# Boîte de réception — DB Hockey Manager',
       '',
-      `_Exporté le ${new Date().toLocaleDateString('fr-CA')}_`,
+      `_Exporté le ${new Date().toLocaleDateString('fr-CA')} — filtre : ${tabLabel}_`,
       '',
     ]
-    for (const f of feedbacks) {
+    for (const f of visible) {
       const date = new Date(f.created_at).toLocaleDateString('fr-CA')
-      const poolerName = getPoolerName(f.poolers)
-      lines.push(`## [${TYPE_LABELS[f.type] ?? f.type}] — ${poolerName} (${date})`)
+      lines.push(`## [${TYPE_LABELS[f.type] ?? f.type}] — ${getPoolerName(f.poolers)} (${date})`)
       lines.push('')
       lines.push(f.description)
       lines.push('')
@@ -57,13 +149,9 @@ export default function FeedbackAdminView({ feedbacks }: { feedbacks: Feedback[]
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `retours-poolers-${new Date().toISOString().slice(0, 10)}.md`
+    a.download = `boite-reception-${new Date().toISOString().slice(0, 10)}.md`
     a.click()
     URL.revokeObjectURL(url)
-  }
-
-  if (feedbacks.length === 0) {
-    return <p className="text-gray-400 text-sm">Aucun retour pour l&apos;instant.</p>
   }
 
   const copyMarkdown = async () => {
@@ -74,37 +162,56 @@ export default function FeedbackAdminView({ feedbacks }: { feedbacks: Feedback[]
 
   return (
     <div>
-      <div className="flex gap-3 mb-6">
-        <button
-          onClick={exportMarkdown}
-          className="px-4 py-2 bg-pool-navy text-white text-sm font-medium rounded-lg hover:bg-pool-navy-light transition-colors"
-        >
-          Exporter en .md
-        </button>
-        <button
-          onClick={copyMarkdown}
-          className="px-4 py-2 border border-pool-navy text-pool-navy text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          {copied ? 'Copié ✓' : 'Copier le contenu'}
-        </button>
+      {/* Onglets de filtre */}
+      <div className="flex border-b mb-6">
+        {STATUS_TABS.map(tab => {
+          const count = tab.key === 'tous'
+            ? feedbacks.length
+            : feedbacks.filter(f => f.status === tab.key).length
+          return (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
+                activeTab === tab.key
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}>
+              {tab.label}
+              {count > 0 && (
+                <span className={`text-xs rounded-full px-1.5 py-0.5 font-semibold ${
+                  activeTab === tab.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
-      <div className="flex flex-col gap-4">
-        {feedbacks.map(f => (
-          <div key={f.id} className="bg-white rounded-lg shadow p-5 border-l-4 border-gray-200">
-            <div className="flex items-center gap-3 mb-3 flex-wrap">
-              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${TYPE_COLORS[f.type] ?? 'bg-gray-100 text-gray-700'}`}>
-                {TYPE_LABELS[f.type] ?? f.type}
-              </span>
-              <span className="text-sm font-medium text-gray-700">{getPoolerName(f.poolers)}</span>
-              <span className="text-xs text-gray-400 ml-auto">
-                {new Date(f.created_at).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}
-              </span>
-            </div>
-            <p className="text-gray-700 text-sm whitespace-pre-wrap">{f.description}</p>
-          </div>
-        ))}
-      </div>
+      {/* Actions export — sur les messages visibles */}
+      {visible.length > 0 && (
+        <div className="flex gap-3 mb-6">
+          <button onClick={exportMarkdown}
+            className="px-4 py-2 bg-gray-800 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
+            Exporter en .md
+          </button>
+          <button onClick={copyMarkdown}
+            className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+            {copied ? 'Copié ✓' : 'Copier'}
+          </button>
+        </div>
+      )}
+
+      {/* Liste */}
+      {visible.length === 0 ? (
+        <p className="text-gray-400 text-sm py-8 text-center">Aucun message dans cette catégorie.</p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {visible.map(f => (
+            <FeedbackCard key={f.id} f={f} onStatusChange={handleStatusChange} onDelete={handleDelete} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

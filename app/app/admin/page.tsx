@@ -17,10 +17,11 @@ export default async function AdminPage() {
 
   if (!pooler?.is_admin) redirect('/')
 
-  const [{ count: nbJoueurs }, { count: nbPoolers }, { data: saison }] = await Promise.all([
+  const [{ count: nbJoueurs }, { count: nbPoolers }, { data: saison }, { count: nbNouveaux }] = await Promise.all([
     supabase.from('players').select('*', { count: 'exact', head: true }),
     supabase.from('poolers').select('*', { count: 'exact', head: true }),
     supabase.from('pool_seasons').select('*').eq('is_active', true).single(),
+    supabase.from('feedback').select('*', { count: 'exact', head: true }).eq('status', 'nouveau'),
   ])
 
   return (
@@ -80,8 +81,13 @@ export default async function AdminPage() {
           <p className="text-gray-500 text-sm mt-1">{'Cr\u00e9er et g\u00e9rer la saison playoffs, avancer les rondes'}</p>
         </Link>
         <Link href="/admin/feedback" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow group">
-          <h2 className="font-bold text-lg text-gray-800 group-hover:text-teal-700">Retours des poolers</h2>
-          <p className="text-gray-500 text-sm mt-1">Consulter et exporter les problèmes et suggestions soumis par les poolers</p>
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-bold text-lg text-gray-800 group-hover:text-teal-700">Boîte de réception</h2>
+            {(nbNouveaux ?? 0) > 0 && (
+              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{nbNouveaux}</span>
+            )}
+          </div>
+          <p className="text-gray-500 text-sm">Problèmes, suggestions et commentaires soumis par les poolers</p>
         </Link>
         <Link href="/admin/suivi" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow group">
           <h2 className="font-bold text-lg text-gray-800 group-hover:text-rose-700">Suivi de l&apos;activité</h2>
