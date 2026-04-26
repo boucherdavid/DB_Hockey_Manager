@@ -56,6 +56,22 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-26 (suite 2)
+
+**Statistiques LNH — mode Séries adapté au pool des séries**
+
+En mode "Séries", la colonne indicateur de disponibilité est remplacée par les initiales des poolers participants qui ont sélectionné ce joueur (plusieurs badges possibles, car plusieurs poolers peuvent choisir le même joueur). Le filtre "Disponibles" devient "Libres" (joueurs non sélectionnés par aucun participant). Le badge Recrue est masqué en mode séries. Le mode saison régulière est inchangé.
+
+Fichiers modifiés :
+- `app/app/statistiques/page.tsx` : ajout de `fetchPlayoffPicksMap()` — query `playoff_rosters` de la saison playoffs active, retourne `Record<string, string[]>` (nom normalisé → liste de poolers). Appelé uniquement en mode séries.
+- `app/app/statistiques/StatsTable.tsx` : nouveau composant `PoolerBadges`, prop optionnel `playoffPicksMap`, logique `isAvailable`/`getPickedBy` adaptée selon le `gameMode`.
+
+**Bug Jérôme — notifications push non reçues**
+
+Subscription confirmée en BD (endpoint FCM valide). Cause probable : paramètres Android bloquant les notifications pour l'app PWA (canal de notification de l'app installée désactivé dans les réglages Android). Étapes suggérées à Jérôme : Paramètres → Applications → Chrome/DB Hockey Manager → Notifications → activer, et retirer l'app de l'optimisation de batterie.
+
+---
+
 ### 2026-04-26 (suite)
 
 **Navbar — Boîte de réception admin avec badge**
