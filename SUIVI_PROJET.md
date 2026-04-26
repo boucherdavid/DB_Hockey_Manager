@@ -56,6 +56,28 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-26 (suite)
+
+**Navbar — Boîte de réception admin avec badge**
+- `app/app/layout.tsx` : fetch du count de messages `nouveau` pour les admins, passé comme `initialUnreadCount` au Navbar.
+- `app/components/Navbar.tsx` : lien "Boîte de réception" ajouté dans le dropdown profil (desktop) et le menu hamburger (mobile), visible uniquement pour les admins. Badge rouge affiche le nombre de messages non lus.
+
+**Boîte de réception — bouton "Copier ce message" par carte**
+- `FeedbackAdminView.tsx` : chaque carte a maintenant un bouton qui copie le type, pooler, date et description dans le presse-papier pour faciliter le transfert vers Claude.
+
+**Fix — Suivi de l'activité : soumissions séries manquantes**
+- Cause : `playoff_rosters` n'avait pas de colonne `created_at` — la requête retournait vide silencieusement.
+- Migration SQL exécutée : `ALTER TABLE playoff_rosters ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();`
+- `admin/suivi/page.tsx` : requête corrigée (sans FK hint, filtre `created_at not null`). Les soumissions futures apparaîtront correctement dans le fil d'activité.
+
+**Fix — Cache bracket NHL réduit à 5 minutes**
+- `series/picks/page.tsx` : `revalidate: 3600` → `revalidate: 300`. Les équipes éliminées sont retirées du sélecteur au plus tard 5 min après la mise à jour de l'API NHL.
+
+**Notification push — soumission retour pooler**
+- `app/signaler/actions.ts` : push aux admins quand un pooler soumet un bug, suggestion ou commentaire (nom du pooler + type + 80 premiers caractères).
+
+---
+
 ### 2026-04-26
 
 **Boîte de réception — refonte du flux de traitement des retours poolers**
