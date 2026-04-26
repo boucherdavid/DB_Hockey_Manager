@@ -56,6 +56,18 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-25 (suite 2)
+
+**Bugfix — Activation notifications impossible pour les poolers non-admins**
+
+Symptôme rapporté par Jérôme : `new row violates row-level security policy for table "push_subscriptions"` en tentant d'activer les notifications.
+
+Cause : la table `push_subscriptions` avait été créée avec une policy RLS admin-only. Les poolers ordinaires ne pouvaient pas insérer leur propre abonnement.
+
+Correction dans `app/app/compte/push-actions.ts` : utilisation de `createAdminClient()` dans `subscribePushAction`, `unsubscribePushAction` et `getSubscriptionStatusAction`. L'authentification de l'utilisateur est vérifiée avant chaque opération — le bypass RLS est sûr dans ce contexte serveur.
+
+---
+
 ### 2026-04-25 (suite)
 
 **Chantier H — Notifications push + page /admin/suivi**
