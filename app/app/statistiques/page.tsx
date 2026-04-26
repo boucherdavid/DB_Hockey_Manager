@@ -228,6 +228,40 @@ async function fetchTakenNames(): Promise<string[]> {
   }
 }
 
+// Retourne nom normalisé → liste des poolers qui ont sélectionné ce joueur
+// (plusieurs poolers peuvent choisir le même joueur dans le pool des séries)
+async function fetchPlayoffPicksMap(): Promise<Record<string, string[]>> {
+  try {
+    const supabase = await createClient()
+    const { data: season } = await supabase
+      .from('playoff_seasons')
+      .select('id')
+      .eq('is_active', true)
+      .single()
+    if (!season) return {}
+
+    const { data: picks } = await supabase
+      .from('playoff_rosters')
+      .select('players (first_name, last_name), poolers (name)')
+      .eq('playoff_season_id', season.id)
+      .eq('is_active', true)
+
+    const map: Record<string, string[]> = {}
+    for (const pick of picks ?? []) {
+      const player = pick.players as unknown as { first_name: string; last_name: string } | null
+      const pooler = pick.poolers as unknown as { name: string } | null
+      if (player && pooler) {
+        const key = normName(`${player.first_name} ${player.last_name}`)
+        if (!map[key]) map[key] = []
+        map[key].push(pooler.name)
+      }
+    }
+    return map
+  } catch {
+    return {}
+  }
+}
+
 export default async function StatistiquesPage({
   searchParams,
 }: {
@@ -236,12 +270,13 @@ export default async function StatistiquesPage({
   const { saison } = await searchParams
   const gameType = saison === 'series' ? 3 : 2
 
-  const [skaters, goalies, takenNames, rookieNames, currentTeamMap] = await Promise.all([
+  const [skaters, goalies, takenNames, rookieNames, currentTeamMap, playoffPicksMap] = await Promise.all([
     fetchSkaters(gameType),
     fetchGoalies(gameType),
     fetchTakenNames(),
     fetchRookieNames(),
     fetchCurrentTeamMap(),
+    gameType === 3 ? fetchPlayoffPicksMap() : Promise.resolve({} as Record<string, string[]>),
   ])
 
   // Replace multi-team abbrevs ("2 TM", "ANA,CGY", etc.) with the player's current team from DB
@@ -267,6 +302,7 @@ export default async function StatistiquesPage({
         takenNames={takenNames}
         rookieNames={rookieNames}
         gameMode={saison === 'series' ? 'series' : 'regular'}
+        playoffPicksMap={playoffPicksMap}
       />
     </div>
   )

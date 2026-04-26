@@ -16,6 +16,23 @@ function AvailDot({ available }: { available: boolean }) {
   )
 }
 
+function PoolerBadges({ poolers }: { poolers: string[] }) {
+  if (poolers.length === 0) return null
+  return (
+    <span className="flex gap-0.5 flex-wrap">
+      {poolers.map(name => {
+        const initials = name.split(' ').map((w: string) => w[0] ?? '').slice(0, 2).join('').toUpperCase()
+        return (
+          <span key={name} title={name}
+            className="inline-block px-1 py-0.5 rounded text-xs font-bold bg-indigo-100 text-indigo-700 leading-none">
+            {initials}
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
 function RookieBadge() {
   return (
     <span title="Recrue (ELC)" className="inline-block px-1 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700 leading-none">
@@ -41,12 +58,14 @@ export default function StatsTable({
   takenNames,
   rookieNames,
   gameMode,
+  playoffPicksMap = {},
 }: {
   skaters: SkaterStat[]
   goalies: GoalieStat[]
   takenNames: string[]
   rookieNames: string[]
   gameMode: 'regular' | 'series'
+  playoffPicksMap?: Record<string, string[]>
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -62,8 +81,17 @@ export default function StatsTable({
   const isRookie = (firstName: string, lastName: string) =>
     rookieSet.has(normName(`${firstName} ${lastName}`))
 
-  const isAvailable = (firstName: string, lastName: string) =>
-    !takenSet.has(normName(`${firstName} ${lastName}`))
+  // Saison régulière : pas dans un roster actif
+  // Séries : pas sélectionné par un participant du pool des séries
+  const isAvailable = (firstName: string, lastName: string) => {
+    const key = normName(`${firstName} ${lastName}`)
+    return gameMode === 'series'
+      ? !(key in playoffPicksMap)
+      : !takenSet.has(key)
+  }
+
+  const getPickedBy = (firstName: string, lastName: string): string[] =>
+    playoffPicksMap[normName(`${firstName} ${lastName}`)] ?? []
 
   const teamOptions = useMemo(() => {
     const all = [
@@ -184,7 +212,7 @@ export default function StatsTable({
           }`}
         >
           <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-          Disponibles
+          {gameMode === 'series' ? 'Libres' : 'Disponibles'}
         </button>
         {tab === 'skaters' && (
           <div className="flex gap-1">
@@ -244,17 +272,20 @@ export default function StatsTable({
               ) : (
                 filteredSkaters.map((s, i) => {
                   const avail = isAvailable(s.firstName, s.lastName)
+                  const pickedBy = gameMode === 'series' ? getPickedBy(s.firstName, s.lastName) : []
                   const ppm = s.gamesPlayed > 0 ? (s.points / s.gamesPlayed).toFixed(2) : '—'
                   return (
                     <tr key={s.id} className="border-b hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-2.5 text-gray-400 text-xs">{i + 1}</td>
                       <td className="px-4 py-2.5">
-                        <AvailDot available={avail} />
+                        {gameMode === 'series'
+                          ? <PoolerBadges poolers={pickedBy} />
+                          : <AvailDot available={avail} />}
                       </td>
                       <td className="px-4 py-2.5 font-medium text-gray-800">
                         <span className="inline-flex items-center gap-1.5">
                           {s.lastName}, {s.firstName}
-                          {isRookie(s.firstName, s.lastName) && <RookieBadge />}
+                          {gameMode === 'regular' && isRookie(s.firstName, s.lastName) && <RookieBadge />}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-gray-600">
@@ -307,16 +338,19 @@ export default function StatsTable({
               ) : (
                 filteredGoalies.map((g, i) => {
                   const avail = isAvailable(g.firstName, g.lastName)
+                  const pickedBy = gameMode === 'series' ? getPickedBy(g.firstName, g.lastName) : []
                   return (
                     <tr key={g.id} className="border-b hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-2.5 text-gray-400 text-xs">{i + 1}</td>
                       <td className="px-4 py-2.5">
-                        <AvailDot available={avail} />
+                        {gameMode === 'series'
+                          ? <PoolerBadges poolers={pickedBy} />
+                          : <AvailDot available={avail} />}
                       </td>
                       <td className="px-4 py-2.5 font-medium text-gray-800">
                         <span className="inline-flex items-center gap-1.5">
                           {g.lastName}, {g.firstName}
-                          {isRookie(g.firstName, g.lastName) && <RookieBadge />}
+                          {gameMode === 'regular' && isRookie(g.firstName, g.lastName) && <RookieBadge />}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-gray-600">
