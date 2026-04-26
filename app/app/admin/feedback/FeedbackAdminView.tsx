@@ -49,6 +49,15 @@ function FeedbackCard({
   onDelete: (id: number) => void
 }) {
   const [pending, startTransition] = useTransition()
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopyOne() {
+    const date = new Date(f.created_at).toLocaleDateString('fr-CA')
+    const text = `[${TYPE_LABELS[f.type] ?? f.type}] — ${getPoolerName(f.poolers)} (${date})\n\n${f.description}`
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   function handleStatus(status: Status) {
     startTransition(() => onStatusChange(f.id, status))
@@ -92,6 +101,10 @@ function FeedbackCard({
             Archiver
           </button>
         )}
+        <button onClick={handleCopyOne}
+          className="px-3 py-1.5 text-xs font-medium bg-gray-50 text-gray-500 rounded hover:bg-gray-100 transition-colors">
+          {copied ? 'Copié ✓' : 'Copier ce message'}
+        </button>
         <button onClick={handleDelete} disabled={pending}
           className="px-3 py-1.5 text-xs font-medium bg-red-50 text-red-500 rounded hover:bg-red-100 disabled:opacity-50 transition-colors ml-auto">
           Supprimer
