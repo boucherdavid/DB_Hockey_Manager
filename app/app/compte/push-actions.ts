@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function subscribePushAction(subscription: {
   endpoint: string
@@ -10,7 +11,10 @@ export async function subscribePushAction(subscription: {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non connecté' }
 
-  const { error } = await supabase.from('push_subscriptions').upsert(
+  // Admin client requis : RLS sur push_subscriptions ne permet pas l'insertion
+  // par les poolers non-admins. L'auth est vérifiée ci-dessus.
+  const admin = createAdminClient()
+  const { error } = await admin.from('push_subscriptions').upsert(
     {
       user_id: user.id,
       endpoint: subscription.endpoint,
@@ -28,7 +32,8 @@ export async function unsubscribePushAction(endpoint: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non connecté' }
 
-  await supabase
+  const admin = createAdminClient()
+  await admin
     .from('push_subscriptions')
     .delete()
     .eq('user_id', user.id)
@@ -42,7 +47,8 @@ export async function getSubscriptionStatusAction() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { subscribed: false }
 
-  const { data } = await supabase
+  const admin = createAdminClient()
+  const { data } = await admin
     .from('push_subscriptions')
     .select('endpoint')
     .eq('user_id', user.id)
