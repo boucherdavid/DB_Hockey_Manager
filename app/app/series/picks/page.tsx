@@ -48,7 +48,7 @@ export default async function SeriesPicksPage() {
   try {
     const bracketRes = await fetch(
       `https://api-web.nhle.com/v1/playoff-bracket/${playoffYear}`,
-      { next: { revalidate: 3600 } }
+      { next: { revalidate: 300 } }
     )
     if (bracketRes.ok) {
       const bracket = await bracketRes.json() as {
