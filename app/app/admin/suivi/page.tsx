@@ -31,6 +31,7 @@ const CHANGE_COLOR: Record<string, string> = {
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString('fr-CA', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/Toronto',
   })
 }
 
