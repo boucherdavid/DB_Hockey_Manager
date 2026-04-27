@@ -38,7 +38,7 @@ async function sendToSubscriptions(
   )
 }
 
-export async function sendPushToAdmins(payload: PushPayload) {
+export async function sendPushToAdmins(payload: PushPayload, excludeUserId?: string) {
   const supabase = createAdminClient()
 
   const { data: adminIds } = await supabase
@@ -48,7 +48,9 @@ export async function sendPushToAdmins(payload: PushPayload) {
 
   if (!adminIds || adminIds.length === 0) return
 
-  const ids = adminIds.map(p => p.id)
+  const ids = adminIds.map(p => p.id).filter(id => id !== excludeUserId)
+  if (ids.length === 0) return
+
   const { data: subs } = await supabase
     .from('push_subscriptions')
     .select('id, endpoint, p256dh, auth')

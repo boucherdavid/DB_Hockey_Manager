@@ -411,12 +411,12 @@ export async function savePicksAction(
   const { error: insertErr } = await supabase.from('playoff_rosters').insert(newRows)
   if (insertErr) return { error: insertErr.message }
 
-  // Notification push aux admins
+  // Notification push aux admins (excluant l'admin qui soumet ses propres choix)
   sendPushToAdmins({
     title: 'DB Hockey Manager — Pool des séries',
     body: `${pooler?.name ?? 'Un pooler'} a soumis ses choix (Ronde ${ps.current_round}).`,
     url: '/admin/series',
-  }).catch(() => {})
+  }, user.id).catch(() => {})
 
   REVALIDATE()
   return {}
