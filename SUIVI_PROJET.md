@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-04-24
+Derniere mise a jour: 2026-04-28
 
 ## Role du fichier
 
@@ -55,6 +55,22 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-04-28 (suite 2)
+
+**Chantier C — Page Calendrier LNH (`/calendrier`)**
+
+Fichiers créés/modifiés :
+- `app/app/calendrier/page.tsx` : server component. Fetch parallèle : semaine de navigation + 2 semaines pour l'analyse 7 jours. Calcul `next7Days: Record<teamCode, count>`. Roster actif du pooler connecté.
+- `app/app/calendrier/CalendrierClient.tsx` : client component complet.
+  - **Vue semaine** (défaut) : navigation prev/next semaine, filtre équipe (liste complète 32 équipes), badges joueurs actifs sur chaque match.
+  - **Vue calendrier mensuel** : activée via toggle quand un filtre équipe est sélectionné. Charge la saison complète via server action (`club-schedule-season/{abbrev}/{saison}`). Grille 7 colonnes (lun–dim), score final avec indicateur V/D, heure si à venir, indicateur "En cours". Cellules du pooler connecté surlignées en bleu.
+  - **Sélecteur de date** : `<input type="date">` — navigue à la semaine (vue semaine) ou au mois (vue calendrier).
+  - **Section analyse** : bloc bleu affiché si roster non vide — une carte par joueur actif avec badge équipe, nom, position, nombre de matchs dans les 7 prochains jours (code couleur vert ≥4, bleu ≥2, gris 0).
+- `app/app/calendrier/actions.ts` : server action `fetchTeamSeasonSchedule(abbrev)` → `api-web.nhle.com/v1/club-schedule-season`, cache 5 min.
+- `app/components/Navbar.tsx` : lien "Calendrier" ajouté desktop (entre Repêchage et Pool Séries) et mobile (section Autre).
+
+---
 
 ### 2026-04-28 (suite)
 
