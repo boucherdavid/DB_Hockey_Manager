@@ -4,15 +4,17 @@ import Link from 'next/link'
 import BanqueRecruesManager from './BanqueRecruesManager'
 import ErrorBoundary from '@/components/ErrorBoundary'
 
-async function fetchAllRookies(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function fetchAllRookies(supabase: Awaited<ReturnType<typeof createClient>>, draftYearCutoff: number) {
   const PAGE = 1000
   const all: any[] = []
   let offset = 0
+  // Inclure : NHL rookies actuels (is_rookie) + joueurs dans la fenêtre de protection du pool (draft_year >= cutoff)
+  const orFilter = `is_rookie.eq.true,draft_year.gte.${draftYearCutoff}`
   while (true) {
     const { data } = await supabase
       .from('players')
       .select('id, first_name, last_name, position, status, draft_year, draft_round, draft_overall, teams(code)')
-      .eq('is_rookie', true)
+      .or(orFilter)
       .range(offset, offset + PAGE - 1)
     all.push(...(data ?? []))
     if ((data ?? []).length < PAGE) break
@@ -29,10 +31,16 @@ export default async function AdminRecruesPage() {
   const { data: pooler } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
   if (!pooler?.is_admin) redirect('/')
 
-  const [poolersResult, rookies, saisonResult] = await Promise.all([
+  // Saison en premier pour calculer la fenêtre de protection du pool (5 saisons depuis le repêchage)
+  const saisonResult = await supabase.from('pool_seasons').select('id, season').eq('is_active', true).single()
+  const saisonFin = saisonResult.data
+    ? parseInt(saisonResult.data.season.split('-')[0], 10) + 1
+    : new Date().getFullYear()
+  const draftYearCutoff = saisonFin - 5  // ex. 2026 - 5 = 2021 pour la saison 2025-26
+
+  const [poolersResult, rookies] = await Promise.all([
     supabase.from('poolers').select('id, name').order('name'),
-    fetchAllRookies(supabase),
-    supabase.from('pool_seasons').select('id, season').eq('is_active', true).single(),
+    fetchAllRookies(supabase, draftYearCutoff),
   ])
 
   return (
