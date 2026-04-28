@@ -20,7 +20,7 @@ export default async function AdminSeriesPage() {
   const [{ data: seasons }, { count: totalPoolers }, { data: rawPicks }] = await Promise.all([
     supabase
       .from('playoff_seasons')
-      .select('id, season, current_round, is_active, cap_per_round, scoring_start_at')
+      .select('id, season, current_round, is_active, cap_per_round, scoring_start_at, picks_locked')
       .order('season', { ascending: false }),
     supabase.from('poolers').select('*', { count: 'exact', head: true }),
     supabase

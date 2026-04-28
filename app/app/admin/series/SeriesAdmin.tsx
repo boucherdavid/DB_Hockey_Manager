@@ -8,6 +8,7 @@ import {
   startScoringAction,
   deletePlayoffSeasonAction,
   updateCapAction,
+  togglePicksLockAction,
 } from '@/app/series/actions'
 
 const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
@@ -19,6 +20,7 @@ export type PlayoffSeason = {
   is_active: boolean
   cap_per_round: number
   scoring_start_at: string | null
+  picks_locked: boolean
 }
 
 export type PicksCount = {
@@ -93,6 +95,17 @@ export default function SeriesAdmin({
     setBusy(false)
     if (res.error) setMsg({ type: 'err', text: res.error })
     else setMsg({ type: 'ok', text: 'Ronde avancée.' })
+  }
+
+  async function handleToggleLock(id: number, locked: boolean) {
+    const label = locked ? 'verrouiller' : 'rouvrir'
+    if (!confirm(`${locked ? 'Verrouiller' : 'Rouvrir'} les choix des poolers ?`)) return
+    setBusy(true)
+    setMsg(null)
+    const res = await togglePicksLockAction(id, locked)
+    setBusy(false)
+    if (res.error) setMsg({ type: 'err', text: res.error })
+    else setMsg({ type: 'ok', text: `Choix ${label === 'verrouiller' ? 'verrouillés' : 'rouverts'}.` })
   }
 
   async function handleStartScoring(id: number, picksCount: PicksCount | undefined) {
@@ -187,6 +200,16 @@ export default function SeriesAdmin({
                         <button onClick={() => handleStartScoring(ps.id, pc)} disabled={busy}
                           className="text-sm bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 disabled:opacity-50">
                           Démarrer la comptabilisation
+                        </button>
+                      )}
+                      {ps.is_active && ps.scoring_start_at && (
+                        <button onClick={() => handleToggleLock(ps.id, !ps.picks_locked)} disabled={busy}
+                          className={`text-sm px-3 py-1.5 rounded disabled:opacity-50 ${
+                            ps.picks_locked
+                              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              : 'bg-amber-500 text-white hover:bg-amber-600'
+                          }`}>
+                          {ps.picks_locked ? 'Rouvrir les choix' : 'Verrouiller les choix'}
                         </button>
                       )}
                       {ps.is_active && ps.current_round < 4 && (

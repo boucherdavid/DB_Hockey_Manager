@@ -74,10 +74,10 @@ export async function startScoringAction(playoffSeasonId: number): Promise<{ err
     updated++
   }
 
-  // Enregistrer la date de départ
+  // Enregistrer la date de départ + verrouiller les picks
   await supabase
     .from('playoff_seasons')
-    .update({ scoring_start_at: new Date().toISOString() })
+    .update({ scoring_start_at: new Date().toISOString(), picks_locked: true })
     .eq('id', playoffSeasonId)
 
   // Notification : comptabilisation démarrée — uniquement aux poolers avec picks actifs
@@ -193,7 +193,7 @@ export async function advanceRoundAction(id: number): Promise<{ error?: string }
   const newRound = ps.current_round + 1
   const { error } = await supabase
     .from('playoff_seasons')
-    .update({ current_round: newRound })
+    .update({ current_round: newRound, picks_locked: false, scoring_start_at: null })
     .eq('id', id)
 
   if (error) return { error: error.message }
@@ -273,6 +273,23 @@ export async function advanceRoundAction(id: number): Promise<{ error?: string }
   return {}
 }
 
+export async function togglePicksLockAction(id: number, locked: boolean): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { error } = await supabase
+    .from('playoff_seasons')
+    .update({ picks_locked: locked })
+    .eq('id', id)
+  if (error) return { error: error.message }
+
+  REVALIDATE()
+  return {}
+}
+
 // ---------- Pooler : gestion des picks ----------
 
 export type PickInput = {
@@ -315,11 +332,12 @@ export async function savePicksAction(
 
   const { data: ps } = await supabase
     .from('playoff_seasons')
-    .select('current_round, is_active, scoring_start_at, season')
+    .select('current_round, is_active, scoring_start_at, season, picks_locked')
     .eq('id', playoffSeasonId)
     .single()
   if (!ps) return { error: 'Saison playoff introuvable.' }
   if (!ps.is_active) return { error: "Cette saison playoffs n'est pas active." }
+  if (ps.picks_locked) return { error: 'Les choix sont verrouillés. La comptabilisation est en cours.' }
 
   // Validation : 3F/2D/1G par conférence
   const errEst   = validateConf(picks, 'Est')

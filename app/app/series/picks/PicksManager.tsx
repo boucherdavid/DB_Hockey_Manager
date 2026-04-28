@@ -119,6 +119,7 @@ export default function PicksManager({
   currentPicks,
   activeTeamCount,
   scoringStarted,
+  picksLocked,
 }: {
   playoffSeasonId: number
   currentRound: number
@@ -127,9 +128,10 @@ export default function PicksManager({
   currentPicks: ActivePick[]
   activeTeamCount: number | null
   scoringStarted: boolean
+  picksLocked: boolean
 }) {
   const validPlayerIds = useMemo(() => new Set(players.map(p => p.id)), [players])
-  const hasEliminatedOnLoad = !scoringStarted && currentPicks.some(p => !validPlayerIds.has(p.playerId))
+  const hasEliminatedOnLoad = !scoringStarted && !picksLocked && currentPicks.some(p => !validPlayerIds.has(p.playerId))
 
   const [roster, setRoster] = useState<ActivePick[]>(currentPicks)
   const [search, setSearch] = useState('')
@@ -137,7 +139,7 @@ export default function PicksManager({
   const [confFilter, setConfFilter] = useState<Conference | ''>('')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
-  const [editMode, setEditMode] = useState(currentPicks.length === 0 || hasEliminatedOnLoad)
+  const [editMode, setEditMode] = useState(!picksLocked && (currentPicks.length === 0 || hasEliminatedOnLoad))
 
   const rosterEst   = roster.filter(p => p.conference === 'Est')
   const rosterOuest = roster.filter(p => p.conference === 'Ouest')
@@ -232,7 +234,7 @@ export default function PicksManager({
             )}
           </p>
         </div>
-        {!editMode && (
+        {!editMode && !picksLocked && (
           <button onClick={() => setEditMode(true)}
             className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700">
             Modifier mon alignement
@@ -240,8 +242,20 @@ export default function PicksManager({
         )}
       </div>
 
+      {/* Banner verrouillage */}
+      {picksLocked && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-4">
+          <p className="text-sm font-semibold text-amber-700">
+            Les choix sont verrouillés — la comptabilisation est en cours.
+          </p>
+          <p className="text-sm text-amber-600 mt-1">
+            Aucune modification n&apos;est possible pour l&apos;instant. L&apos;administrateur peut rouvrir les choix si nécessaire.
+          </p>
+        </div>
+      )}
+
       {/* Banner équipes éliminées */}
-      {hasEliminated && (
+      {!picksLocked && hasEliminated && (
         <div className="rounded-lg border border-red-300 bg-red-50 px-5 py-4">
           <p className="text-sm font-semibold text-red-700">
             Un ou plusieurs joueurs de votre alignement appartiennent à une équipe éliminée.

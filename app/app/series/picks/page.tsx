@@ -27,7 +27,7 @@ export default async function SeriesPicksPage() {
 
   const { data: ps } = await supabase
     .from('playoff_seasons')
-    .select('id, season, current_round, cap_per_round, scoring_start_at')
+    .select('id, season, current_round, cap_per_round, scoring_start_at, picks_locked')
     .eq('is_active', true)
     .single()
 
@@ -172,6 +172,7 @@ export default async function SeriesPicksPage() {
         currentPicks={currentPicks}
         activeTeamCount={activeTeamCodes?.size ?? null}
         scoringStarted={!!ps.scoring_start_at}
+        picksLocked={!!ps.picks_locked}
       />
     </div>
   )
