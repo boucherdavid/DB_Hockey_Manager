@@ -80,6 +80,7 @@ Routes utilisateur:
 - `/joueurs`
 - `/statistiques`
 - `/repechage`
+- `/calendrier`
 - `/poolers`
 - `/poolers/[id]`
 - `/transactions`

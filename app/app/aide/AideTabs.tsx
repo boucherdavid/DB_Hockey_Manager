@@ -181,6 +181,29 @@ const SECTIONS: Section[] = [
     ),
   },
   {
+    id: 'guide-calendrier',
+    tab: 'guide',
+    title: 'Calendrier LNH',
+    keywords: 'calendrier matchs semaine equipe vue mensuel analyse joueurs prochains jours schedule filtre',
+    content: (
+      <div>
+        <p className="text-sm text-gray-600 mb-3">
+          Accédez au calendrier via <strong>Calendrier</strong> dans la barre de navigation.
+        </p>
+        <ul className="text-sm text-gray-700 space-y-1.5 mb-4">
+          <li>• La vue par défaut affiche les matchs de la <strong>semaine en cours</strong>, naviguez avec les boutons précédent/suivant ou le sélecteur de date.</li>
+          <li>• Filtrez par <strong>équipe</strong> pour voir uniquement les matchs de cette équipe.</li>
+          <li>• Quand un filtre équipe est actif, le bouton <strong>Calendrier</strong> charge la saison complète sous forme de grille mensuelle — navigez mois par mois.</li>
+        </ul>
+        <h4 className="text-sm font-semibold text-gray-700 mb-1.5">Analyse 7 prochains jours</h4>
+        <ul className="text-sm text-gray-700 space-y-1.5">
+          <li>• Si vous êtes connecté, un bloc résumé affiche le nombre de matchs dans les 7 prochains jours pour chacun de vos joueurs actifs.</li>
+          <li>• Code couleur : <span className="text-green-600 font-medium">vert ≥ 4 matchs</span>, <span className="text-blue-600 font-medium">bleu ≥ 2</span>, gris = aucun.</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
     id: 'guide-statistiques',
     tab: 'guide',
     title: 'Statistiques LNH',
