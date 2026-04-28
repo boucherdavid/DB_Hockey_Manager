@@ -288,6 +288,12 @@ export default function Navbar({
                             )}
                           </span>
                         </Link>
+                        <Link href="/admin/suivi" className={dropdownLinkClass('/admin/suivi')}>
+                          <span className="flex items-center gap-2">
+                            <span className="text-xs bg-blue-100 text-blue-700 rounded px-1.5 py-0.5">Admin</span>
+                            Suivi de l&apos;activité
+                          </span>
+                        </Link>
                       </div>
                     )}
                     <div className="py-1 border-t">
@@ -356,6 +362,11 @@ export default function Navbar({
                         <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>
                       )}
                     </span>
+                  </Link>
+                )}
+                {isAdmin && (
+                  <Link href="/admin/suivi" className={mobileLinkClass('/admin/suivi')}>
+                    Suivi de l&apos;activité
                   </Link>
                 )}
                 <button onClick={handleLogout}

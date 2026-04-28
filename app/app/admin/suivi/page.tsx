@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import SuiviTable from './SuiviTable'
+import type { Event } from './SuiviTable'
 
 export const metadata = { title: 'Suivi — Admin' }
 export const dynamic = 'force-dynamic'
@@ -28,12 +30,6 @@ const CHANGE_COLOR: Record<string, string> = {
   signature_agent_libre:'bg-indigo-100 text-indigo-800',
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleString('fr-CA', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    timeZone: 'America/Toronto',
-  })
-}
 
 export default async function AdminSuiviPage() {
   const supabase = await createClient()
@@ -141,54 +137,10 @@ export default async function AdminSuiviPage() {
 
   events.sort((a, b) => b.at.localeCompare(a.at))
 
-  const CATEGORY_LABEL = { roster: 'Alignement', transaction: 'Transaction', series: 'Séries' }
-  const CATEGORY_DOT: Record<string, string> = {
-    roster:      'bg-green-500',
-    transaction: 'bg-slate-500',
-    series:      'bg-pink-500',
-  }
-
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
       <h1 className="text-2xl font-bold text-gray-800">Suivi de l&apos;activité</h1>
-
-      {events.length === 0 ? (
-        <p className="text-gray-400 text-sm">Aucune activité enregistrée.</p>
-      ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-36">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Catégorie</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Pooler</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-40">Action</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Détail</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {events.map(e => (
-                <tr key={e.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">{fmtDate(e.at)}</td>
-                  <td className="px-4 py-2.5">
-                    <span className="flex items-center gap-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${CATEGORY_DOT[e.category]}`} />
-                      <span className="text-xs text-gray-500">{CATEGORY_LABEL[e.category]}</span>
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-sm font-medium text-gray-700">{e.poolerName}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${e.color}`}>
-                      {e.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-sm text-gray-600">{e.detail}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <SuiviTable events={events} />
     </div>
   )
 }
