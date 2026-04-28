@@ -56,6 +56,26 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-28 (suite)
+
+**Pool des séries — verrouillage des choix après comptabilisation**
+
+Migration SQL exécutée :
+```sql
+ALTER TABLE playoff_seasons ADD COLUMN IF NOT EXISTS picks_locked BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE playoff_seasons SET picks_locked = TRUE WHERE scoring_start_at IS NOT NULL;
+```
+
+Comportement :
+- Démarrage comptabilisation (`startScoringAction`) → `picks_locked = true` automatiquement.
+- Avancement de ronde (`advanceRoundAction`) → `picks_locked = false` + `scoring_start_at = null` (réouverture auto pour la nouvelle ronde).
+- `savePicksAction` : bloque avec message d'erreur si `picks_locked = true`.
+- `togglePicksLockAction` : action admin pour basculer le verrou manuellement.
+- `PicksManager` : bannière ambre + bouton "Modifier" masqué quand verrouillé.
+- `SeriesAdmin` : bouton "Rouvrir les choix" / "Verrouiller les choix" visible dès que la comptabilisation est démarrée.
+
+---
+
 ### 2026-04-28
 
 **Suivi de l'activité — lien navbar + filtres**
