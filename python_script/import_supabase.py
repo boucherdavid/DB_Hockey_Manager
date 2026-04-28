@@ -268,6 +268,7 @@ def parse_cap(val):
 
 def _merge(supabase, keep_id, dup_id):
     supabase.table('pooler_rosters').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
+    supabase.table('playoff_rosters').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
     supabase.table('roster_changes').update({'player_in_id': keep_id}).eq('player_in_id', dup_id).execute()
     supabase.table('roster_changes').update({'player_out_id': keep_id}).eq('player_out_id', dup_id).execute()
     supabase.table('roster_change_log').update({'player_id': keep_id}).eq('player_id', dup_id).execute()
