@@ -222,6 +222,11 @@ export default function Navbar({
                 {'Rep\u00eachage'}
               </Link>
 
+              {/* Calendrier */}
+              <Link href="/calendrier" className={navBtnClass(isActive('/calendrier'))}>
+                Calendrier
+              </Link>
+
               {/* Pool Séries */}
               <div className="relative">
                 <button onClick={() => toggle('series')}
@@ -340,8 +345,9 @@ export default function Navbar({
             <span className="px-3 py-2 text-sm text-pool-silver opacity-50">AHL (à venir)</span>
 
             <MobileSection label="Autre" />
-            <Link href="/joueurs"   className={mobileLinkClass('/joueurs')}>Contrats LNH</Link>
-            <Link href="/repechage" className={mobileLinkClass('/repechage')}>{'Rep\u00eachage'}</Link>
+            <Link href="/joueurs"    className={mobileLinkClass('/joueurs')}>Contrats LNH</Link>
+            <Link href="/repechage"  className={mobileLinkClass('/repechage')}>{'Rep\u00eachage'}</Link>
+            <Link href="/calendrier" className={mobileLinkClass('/calendrier')}>Calendrier</Link>
 
             <MobileSection label={'Pool S\u00e9ries'} />
             {userName && <Link href="/series/picks" className={mobileLinkClass('/series/picks')}>Mes choix</Link>}
