@@ -56,6 +56,22 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-28
+
+**Suivi de l'activité — lien navbar + filtres**
+- `Navbar.tsx` : lien "Suivi de l'activité" ajouté dans le dropdown profil (desktop) et menu hamburger (mobile), admin uniquement, juste sous "Boîte de réception".
+- `admin/suivi/SuiviTable.tsx` (nouveau) : composant client avec onglets Tous / Alignement / Transaction / Séries (avec compteurs) et sélecteur de période 7j / 30j / Tout. Défaut : 30 derniers jours, tous types.
+- `admin/suivi/page.tsx` : simplifié, délègue l'affichage et le filtrage à `SuiviTable`.
+
+**Bugfix pipeline — FK violation `playoff_rosters` dans `_merge`**
+- `import_supabase.py` : ajout de `playoff_rosters` dans `_merge()` avant la suppression du doublon. Évite la violation de contrainte FK quand un doublon est référencé dans le pool des séries.
+
+**Idées traitées depuis brainstorm.md (2026-04-28) :**
+- Suivi de l'activité dans le menu → implémenté
+- Filtres par type et par date dans le suivi → implémenté
+
+---
+
 ### 2026-04-26 (suite 2)
 
 **Statistiques LNH — mode Séries adapté au pool des séries**
