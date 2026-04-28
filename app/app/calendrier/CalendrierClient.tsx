@@ -274,6 +274,8 @@ export default function CalendrierClient({
   prevDate,
   nextDate,
   myRoster,
+  mySeriesRoster,
+  hasPlayoffSeason,
   next7Days,
 }: {
   week: DaySchedule[]
@@ -282,6 +284,8 @@ export default function CalendrierClient({
   prevDate: string
   nextDate: string
   myRoster: RosterPlayer[]
+  mySeriesRoster: RosterPlayer[]
+  hasPlayoffSeason: boolean
   next7Days: Record<string, number>
 }) {
   const router = useRouter()
@@ -290,8 +294,13 @@ export default function CalendrierClient({
   const [seasonGames, setSeasonGames] = useState<SeasonGame[]>([])
   const [loadingCalendrier, setLoadingCalendrier] = useState(false)
   const [calendarMonth, setCalendarMonth] = useState(today.slice(0, 7))
+  const [gameMode, setGameMode] = useState<'saison' | 'series'>('saison')
 
-  const myTeamCodes = useMemo(() => new Set(myRoster.map(p => p.teamCode)), [myRoster])
+  const effectiveRoster = useMemo(
+    () => gameMode === 'series' ? mySeriesRoster : myRoster,
+    [gameMode, mySeriesRoster, myRoster],
+  )
+  const myTeamCodes = useMemo(() => new Set(effectiveRoster.map(p => p.teamCode)), [effectiveRoster])
 
   // Filtered week view
   const filtered = useMemo(() =>
@@ -355,7 +364,7 @@ export default function CalendrierClient({
   }
 
   const myPlayersFor = (game: Game) =>
-    myRoster.filter(p => p.teamCode === game.awayAbbrev || p.teamCode === game.homeAbbrev)
+    effectiveRoster.filter(p => p.teamCode === game.awayAbbrev || p.teamCode === game.homeAbbrev)
 
   const navBtnClass = 'px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors'
   const viewBtnClass = (active: boolean) =>
@@ -371,7 +380,7 @@ export default function CalendrierClient({
           <p className="text-sm text-gray-500 mt-0.5">
             {periodeLabel}
             {' · '}<span className="font-medium">{totalGames} match{totalGames > 1 ? 's' : ''}</span>
-            {myGames > 0 && myRoster.length > 0 && (
+            {myGames > 0 && effectiveRoster.length > 0 && (
               <> · <span className="text-blue-600 font-medium">{myGames} avec mes joueurs</span></>
             )}
           </p>
@@ -424,11 +433,27 @@ export default function CalendrierClient({
           </div>
         )}
 
+        {/* Mode Saison / Séries */}
+        {hasPlayoffSeason && (
+          <div className="flex rounded overflow-hidden border border-gray-300 ml-auto">
+            <button
+              onClick={() => setGameMode('saison')}
+              className={viewBtnClass(gameMode === 'saison')}>
+              Saison
+            </button>
+            <button
+              onClick={() => setGameMode('series')}
+              className={viewBtnClass(gameMode === 'series')}>
+              {'Séries'}
+            </button>
+          </div>
+        )}
+
         {/* Legend */}
-        {!teamFilter && myRoster.length > 0 && (
+        {!teamFilter && effectiveRoster.length > 0 && (
           <span className="text-xs text-gray-400">
             <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1" />
-            Badges = vos joueurs actifs
+            {gameMode === 'series' ? 'Badges = vos picks séries' : 'Badges = vos joueurs actifs'}
           </span>
         )}
       </div>
@@ -457,8 +482,8 @@ export default function CalendrierClient({
       )}
 
       {/* Analyse 7 jours */}
-      {myRoster.length > 0 && (
-        <AnalyseSection myRoster={myRoster} next7Days={next7Days} today={today} />
+      {effectiveRoster.length > 0 && (
+        <AnalyseSection myRoster={effectiveRoster} next7Days={next7Days} today={today} />
       )}
 
       {/* Content */}

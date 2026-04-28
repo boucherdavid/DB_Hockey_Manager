@@ -93,42 +93,57 @@ export default async function CalendrierPage({
     }
   }
 
-  // Roster du pooler connecté → joueurs actifs seulement
+  // Rosters du pooler connecté
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   type RosterPlayer = { name: string; position: string; teamCode: string }
   let myRoster: RosterPlayer[] = []
+  let mySeriesRoster: RosterPlayer[] = []
+  let hasPlayoffSeason = false
 
   if (user) {
-    const { data: activeSeason } = await supabase
-      .from('pool_seasons')
-      .select('id')
-      .eq('is_active', true)
-      .single()
+    // Fetch les deux saisons actives en parallèle
+    const [{ data: activeSeason }, { data: playoffSeason }] = await Promise.all([
+      supabase.from('pool_seasons').select('id').eq('is_active', true).single(),
+      supabase.from('playoff_seasons').select('id').eq('is_active', true).maybeSingle(),
+    ])
 
-    if (activeSeason) {
-      const { data: rows } = await supabase
-        .from('pooler_rosters')
-        .select('players (first_name, last_name, position, teams (code))')
-        .eq('pooler_id', user.id)
-        .eq('pool_season_id', activeSeason.id)
-        .eq('player_type', 'actif')
-        .eq('is_active', true)
+    hasPlayoffSeason = !!playoffSeason
 
-      myRoster = (rows ?? []).flatMap(r => {
-        const p = r.players as unknown as {
+    // Fetch les deux rosters en parallèle
+    const [seasonRows, seriesRows] = await Promise.all([
+      activeSeason
+        ? supabase
+            .from('pooler_rosters')
+            .select('players (first_name, last_name, position, teams (code))')
+            .eq('pooler_id', user.id)
+            .eq('pool_season_id', activeSeason.id)
+            .eq('player_type', 'actif')
+            .eq('is_active', true)
+        : Promise.resolve({ data: null }),
+      playoffSeason
+        ? supabase
+            .from('playoff_rosters')
+            .select('players (first_name, last_name, position, teams (code))')
+            .eq('pooler_id', user.id)
+            .eq('playoff_season_id', playoffSeason.id)
+            .eq('is_active', true)
+        : Promise.resolve({ data: null }),
+    ])
+
+    const mapRow = (rows: unknown) =>
+      ((rows as { data: unknown[] | null })?.data ?? []).flatMap((r: unknown) => {
+        const p = (r as { players: unknown }).players as {
           first_name: string; last_name: string; position: string | null
           teams: { code: string } | null
         } | null
         if (!p?.teams?.code) return []
-        return [{
-          name: `${p.last_name}, ${p.first_name}`,
-          position: p.position ?? '',
-          teamCode: p.teams.code,
-        }]
+        return [{ name: `${p.last_name}, ${p.first_name}`, position: p.position ?? '', teamCode: p.teams.code }]
       })
-    }
+
+    myRoster       = mapRow(seasonRows)
+    mySeriesRoster = mapRow(seriesRows)
   }
 
   return (
@@ -140,6 +155,8 @@ export default async function CalendrierPage({
         prevDate={addDays(refDate, -7)}
         nextDate={addDays(refDate, 7)}
         myRoster={myRoster}
+        mySeriesRoster={mySeriesRoster}
+        hasPlayoffSeason={hasPlayoffSeason}
         next7Days={next7Days}
       />
     </div>
