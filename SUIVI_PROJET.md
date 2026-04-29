@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-04-28
+Derniere mise a jour: 2026-04-29
 
 ## Role du fichier
 
@@ -55,6 +55,69 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-04-29 (suite)
+
+**Page `/transactions` — onglets par type de mouvement**
+
+Remplacement du split grossier Échanges/Ajustements par 5 onglets avec compteur badge :
+- **Tous** — toutes les transactions
+- **Échanges** — transactions contenant au moins un item `transfer`
+- **Signatures** — transactions `sign`
+- **LTIR** — transactions `reactivate` ou `type_change` impliquant ltir
+- **Gestion** — le reste (`promote`, `release`, `type_change` autres)
+
+Couleurs par type : bleu (échanges), vert (signatures), ambré (LTIR), gris (gestion). Dans l'onglet Tous, chaque carte est colorée selon son type classifié.
+
+Fichiers modifiés :
+- `app/app/transactions/TransactionsClient.tsx` : nouveau composant client avec les onglets, logique de classification et rendu des cartes.
+- `app/app/transactions/page.tsx` : simplifié au fetch Supabase uniquement, délègue à `TransactionsClient`.
+
+**Nettoyage `docs/brainstorm.md`**
+- Les deux idées (Chantier I — fiche joueur, Chantier J — classement en direct) retirées du brainstorm, déjà intégrées à la feuille de route.
+
+---
+
+### 2026-04-29
+
+**Classement mobile — vue simplifiée**
+- `app/app/classement/ClassementTable.tsx` : section "Détail par pooler" masquée sur mobile (`hidden sm:block`). Le `SummaryTable` suffit sur mobile (rang + nom + PTS).
+- `app/components/SummaryTable.tsx` : converti en composant client. Toute la ligne du tableau est maintenant cliquable sur mobile (`onClick` → `router.push(/poolers/[id])`). Feedback tactile `active:bg-gray-100`.
+
+**Calendrier LNH — refonte complète (`/calendrier`)**
+
+Remplacement de la vue semaine + calendrier mensuel par deux onglets :
+
+- **Onglet Matchs** (défaut) : vue journée avec navigation ← / Aujourd'hui / →, date picker, affichage de tous les matchs NHL du jour avec badges joueurs actifs. Navigation client-side dans la semaine chargée, URL (`?jour=YYYY-MM-DD`) uniquement aux frontières de semaine. Toggle Saison/Séries si pool des séries actif.
+- **Onglet Analyse** : sélecteur d'horizon 2J–7J avec plage de dates affichée, filtre par type (Tous / Actifs / Réservistes / Recrues), grille de tous les joueurs de l'organisation triés par matchs dans l'horizon. Code couleur vert (5+), bleu (3-4), gris (1-2), pâle (0).
+
+Fichiers modifiés :
+- `app/app/calendrier/page.tsx` : `?jour=` remplace `?semaine=`, fetch 3 semaines (jour courant + today + today+7). Construit `schedule7` (7 jours depuis aujourd'hui) pour l'onglet Analyse. Fetch `allOrgPlayers` (actifs + réservistes + recrues) ; `myRoster` dérivé côté serveur.
+- `app/app/calendrier/CalendrierClient.tsx` : réécriture complète avec les deux onglets.
+- `app/app/calendrier/actions.ts` : supprimé (vue calendrier mensuel retirée).
+
+**Idées ajoutées à la feuille de route**
+- **Chantier I — Fiche joueur** : panneau slide-over accessible partout dans le site au clic sur un nom de joueur. Stats de carrière via `api-web.nhle.com/v1/player/{nhl_id}/landing`. Dépend de Chantier B (nhl_id intégré).
+- **Chantier J — Classement en direct** : section page d'accueil avec revalidation 15 min (`revalidate: 900`), optionnellement `router.refresh()` toutes les 15 min côté client. Dépend de Chantier B.
+
+**Constat — Chantier B déjà complet**
+Tout le code du Chantier B est en place depuis une session précédente non documentée. La séquence en cours est donc à l'étape 3 (saisie des transactions historiques).
+
+**Analyse — module transactions et préparation saisie historique**
+
+Problème identifié : `submitTransactionAction` modifie les `pooler_rosters` mais **ne prend aucun snapshot**. Seul `admin/rosters/actions.ts` le fait. Les transactions saisies via `TransactionBuilder` (échanges, signatures, libérations) ne génèrent donc pas de snapshots → calcul de points par période incorrect pour ces mouvements.
+
+Amélioration identifiée pour la page publique `/transactions` : découpage en onglets par type de mouvement au lieu du split grossier Échanges/Ajustements actuel :
+- **Échanges** : `transfer` entre poolers (joueurs ou picks)
+- **Signatures** : `sign` (agents libres)
+- **LTIR** : `reactivate` + `type_change` impliquant ltir
+- **Gestion de joueurs** : `promote`, `release`, `type_change` (autres)
+- **Ballotage** : futur
+
+**Prochaine session**
+1. Ajouter les appels `takeSnapshot` dans `submitTransactionAction` (activation/désactivation selon les `action_type`)
+
+---
 
 ### 2026-04-28 (suite 2)
 
