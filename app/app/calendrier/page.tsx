@@ -21,6 +21,13 @@ export type DaySchedule = {
   games: Game[]
 }
 
+export type OrgPlayer = {
+  name: string
+  position: string
+  teamCode: string
+  playerType: 'actif' | 'reserviste' | 'recrue'
+}
+
 function todayET(): string {
   return new Intl.DateTimeFormat('fr-CA', {
     timeZone: 'America/Toronto',
@@ -66,44 +73,43 @@ async function fetchWeek(date: string): Promise<DaySchedule[]> {
 export default async function CalendrierPage({
   searchParams,
 }: {
-  searchParams: Promise<{ semaine?: string }>
+  searchParams: Promise<{ jour?: string }>
 }) {
-  const { semaine } = await searchParams
+  const { jour } = await searchParams
   const today = todayET()
-  const refDate = semaine ?? today
+  const selectedDay = jour ?? today
 
-  // Fetch display week + two weeks for 7-day analysis in parallel
-  const [week, week7a, week7b] = await Promise.all([
-    fetchWeek(refDate),
+  // Fetch week containing selected day + today's week + next week (for analysis tab)
+  const [week, weekToday, weekNext] = await Promise.all([
+    fetchWeek(selectedDay),
     fetchWeek(today),
     fetchWeek(addDays(today, 7)),
   ])
 
-  // Compute games-per-team in the next 7 days (today inclusive)
-  const todayMs = new Date(today + 'T12:00:00').getTime()
-  const limitMs = todayMs + 7 * 86400000
-  const next7Days: Record<string, number> = {}
-  for (const day of [...week7a, ...week7b]) {
-    const dayMs = new Date(day.date + 'T12:00:00').getTime()
-    if (dayMs >= todayMs && dayMs < limitMs) {
-      for (const g of day.games) {
-        next7Days[g.awayAbbrev] = (next7Days[g.awayAbbrev] ?? 0) + 1
-        next7Days[g.homeAbbrev] = (next7Days[g.homeAbbrev] ?? 0) + 1
-      }
+  // Build schedule7: days with games in the next 7 calendar days (starting today)
+  const todayDate = new Date(today + 'T12:00:00')
+  const limitDate = new Date(todayDate)
+  limitDate.setDate(limitDate.getDate() + 7)
+  const seen = new Set<string>()
+  const schedule7: DaySchedule[] = []
+  for (const day of [...weekToday, ...weekNext]) {
+    const d = new Date(day.date + 'T12:00:00')
+    if (d >= todayDate && d < limitDate && !seen.has(day.date)) {
+      seen.add(day.date)
+      schedule7.push(day)
     }
   }
+  schedule7.sort((a, b) => a.date.localeCompare(b.date))
 
-  // Rosters du pooler connecté
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  type RosterPlayer = { name: string; position: string; teamCode: string }
-  let myRoster: RosterPlayer[] = []
-  let mySeriesRoster: RosterPlayer[] = []
+  let myRoster: { name: string; position: string; teamCode: string }[] = []
+  let mySeriesRoster: { name: string; position: string; teamCode: string }[] = []
+  let allOrgPlayers: OrgPlayer[] = []
   let hasPlayoffSeason = false
 
   if (user) {
-    // Fetch les deux saisons actives en parallèle
     const [{ data: activeSeason }, { data: playoffSeason }] = await Promise.all([
       supabase.from('pool_seasons').select('id').eq('is_active', true).single(),
       supabase.from('playoff_seasons').select('id').eq('is_active', true).maybeSingle(),
@@ -111,15 +117,14 @@ export default async function CalendrierPage({
 
     hasPlayoffSeason = !!playoffSeason
 
-    // Fetch les deux rosters en parallèle
-    const [seasonRows, seriesRows] = await Promise.all([
+    const [orgRows, seriesRows] = await Promise.all([
       activeSeason
         ? supabase
             .from('pooler_rosters')
-            .select('players (first_name, last_name, position, teams (code))')
+            .select('player_type, players (first_name, last_name, position, teams (code))')
             .eq('pooler_id', user.id)
             .eq('pool_season_id', activeSeason.id)
-            .eq('player_type', 'actif')
+            .in('player_type', ['actif', 'reserviste', 'recrue'])
             .eq('is_active', true)
         : Promise.resolve({ data: null }),
       playoffSeason
@@ -132,18 +137,33 @@ export default async function CalendrierPage({
         : Promise.resolve({ data: null }),
     ])
 
-    const mapRow = (rows: unknown) =>
-      ((rows as { data: unknown[] | null })?.data ?? []).flatMap((r: unknown) => {
-        const p = (r as { players: unknown }).players as {
-          first_name: string; last_name: string; position: string | null
-          teams: { code: string } | null
-        } | null
-        if (!p?.teams?.code) return []
-        return [{ name: `${p.last_name}, ${p.first_name}`, position: p.position ?? '', teamCode: p.teams.code }]
-      })
+    allOrgPlayers = ((orgRows as { data: unknown[] | null })?.data ?? []).flatMap((r: unknown) => {
+      const row = r as { player_type: string; players: unknown }
+      const p = row.players as {
+        first_name: string; last_name: string; position: string | null
+        teams: { code: string } | null
+      } | null
+      if (!p?.teams?.code) return []
+      return [{
+        name: `${p.last_name}, ${p.first_name}`,
+        position: p.position ?? '',
+        teamCode: p.teams.code,
+        playerType: row.player_type as 'actif' | 'reserviste' | 'recrue',
+      }]
+    })
 
-    myRoster       = mapRow(seasonRows)
-    mySeriesRoster = mapRow(seriesRows)
+    myRoster = allOrgPlayers
+      .filter(p => p.playerType === 'actif')
+      .map(({ name, position, teamCode }) => ({ name, position, teamCode }))
+
+    mySeriesRoster = ((seriesRows as { data: unknown[] | null })?.data ?? []).flatMap((r: unknown) => {
+      const p = (r as { players: unknown }).players as {
+        first_name: string; last_name: string; position: string | null
+        teams: { code: string } | null
+      } | null
+      if (!p?.teams?.code) return []
+      return [{ name: `${p.last_name}, ${p.first_name}`, position: p.position ?? '', teamCode: p.teams.code }]
+    })
   }
 
   return (
@@ -151,13 +171,12 @@ export default async function CalendrierPage({
       <CalendrierClient
         week={week}
         today={today}
-        refDate={refDate}
-        prevDate={addDays(refDate, -7)}
-        nextDate={addDays(refDate, 7)}
+        selectedDay={selectedDay}
+        schedule7={schedule7}
         myRoster={myRoster}
         mySeriesRoster={mySeriesRoster}
+        allOrgPlayers={allOrgPlayers}
         hasPlayoffSeason={hasPlayoffSeason}
-        next7Days={next7Days}
       />
     </div>
   )

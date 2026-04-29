@@ -3,19 +3,16 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import TeamBadge from '@/components/TeamBadge'
-import { fetchTeamSeasonSchedule } from './actions'
-import type { SeasonGame } from './actions'
-import type { DaySchedule, Game } from './page'
-
-// All 32 NHL team abbreviations
-const NHL_TEAMS = [
-  'ANA', 'BOS', 'BUF', 'CAR', 'CBJ', 'CGY', 'CHI', 'COL', 'DAL', 'DET',
-  'EDM', 'FLA', 'LAK', 'MIN', 'MTL', 'NJD', 'NSH', 'NYI', 'NYR', 'OTT',
-  'PHI', 'PIT', 'SEA', 'SJS', 'STL', 'TBL', 'TOR', 'UTA', 'VAN', 'VGK',
-  'WSH', 'WPG',
-]
+import type { DaySchedule, Game, OrgPlayer } from './page'
 
 type RosterPlayer = { name: string; position: string; teamCode: string }
+type Tab = 'matchs' | 'analyse'
+
+function addDays(isoDate: string, n: number): string {
+  const d = new Date(isoDate + 'T12:00:00')
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
 
 function fmtTime(utcStr: string) {
   if (!utcStr) return ''
@@ -45,16 +42,7 @@ function fmtShortDate(isoDate: string) {
   } catch { return isoDate }
 }
 
-function fmtMonthYear(yearMonth: string) {
-  try {
-    return new Intl.DateTimeFormat('fr-CA', {
-      timeZone: 'America/Toronto',
-      month: 'long', year: 'numeric',
-    }).format(new Date(yearMonth + '-15T12:00:00'))
-  } catch { return yearMonth }
-}
-
-// ─── GameCard ────────────────────────────────────────────────────────────────
+// ─── GameCard ─────────────────────────────────────────────────────────────────
 
 function GameCard({ game, myPlayers }: { game: Game; myPlayers: RosterPlayer[] }) {
   const isFinal = ['FINAL', 'OFF'].includes(game.gameState)
@@ -101,45 +89,124 @@ function GameCard({ game, myPlayers }: { game: Game; myPlayers: RosterPlayer[] }
   )
 }
 
-// ─── AnalyseSection ──────────────────────────────────────────────────────────
+// ─── AnalyseTab ───────────────────────────────────────────────────────────────
 
-function AnalyseSection({
-  myRoster,
-  next7Days,
+const TYPE_BADGE: Record<string, string> = {
+  reserviste: 'RÉS',
+  recrue: 'REC',
+}
+
+const TYPE_LABEL: Record<string, string> = {
+  actif: 'Actifs',
+  reserviste: 'Réservistes',
+  recrue: 'Recrues',
+}
+
+const HORIZON_OPTIONS = [2, 3, 4, 5, 6, 7]
+
+function AnalyseTab({
+  allOrgPlayers,
+  schedule7,
   today,
 }: {
-  myRoster: RosterPlayer[]
-  next7Days: Record<string, number>
+  allOrgPlayers: OrgPlayer[]
+  schedule7: DaySchedule[]
   today: string
 }) {
-  const endDate = (() => {
-    const d = new Date(today + 'T12:00:00')
-    d.setDate(d.getDate() + 6)
-    return d.toISOString().slice(0, 10)
-  })()
+  const [horizon, setHorizon] = useState(7)
+  const [typeFilter, setTypeFilter] = useState<'all' | 'actif' | 'reserviste' | 'recrue'>('all')
 
-  const players = myRoster
-    .map(p => ({ ...p, games: next7Days[p.teamCode] ?? 0 }))
-    .sort((a, b) => b.games - a.games || a.name.localeCompare(b.name))
+  const endDate = addDays(today, horizon - 1)
+
+  const gamesPerTeam = useMemo(() => {
+    const limitStr = addDays(today, horizon)
+    const counts: Record<string, number> = {}
+    for (const day of schedule7) {
+      if (day.date >= today && day.date < limitStr) {
+        for (const g of day.games) {
+          counts[g.awayAbbrev] = (counts[g.awayAbbrev] ?? 0) + 1
+          counts[g.homeAbbrev] = (counts[g.homeAbbrev] ?? 0) + 1
+        }
+      }
+    }
+    return counts
+  }, [schedule7, horizon, today])
+
+  const players = useMemo(() => {
+    const filtered = typeFilter === 'all'
+      ? allOrgPlayers
+      : allOrgPlayers.filter(p => p.playerType === typeFilter)
+    return filtered
+      .map(p => ({ ...p, games: gamesPerTeam[p.teamCode] ?? 0 }))
+      .sort((a, b) => b.games - a.games || a.name.localeCompare(b.name))
+  }, [allOrgPlayers, gamesPerTeam, typeFilter])
+
+  const btnClass = (active: boolean) =>
+    `px-3 py-1.5 text-sm font-medium rounded border transition-colors ${
+      active
+        ? 'bg-blue-600 text-white border-blue-600'
+        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+    }`
+
+  if (allOrgPlayers.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-400 text-sm">
+        Connectez-vous pour accéder à l&apos;analyse de votre organisation.
+      </div>
+    )
+  }
 
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-      <h3 className="text-sm font-semibold text-blue-800 mb-3">
-        Mes joueurs actifs — matchs dans les 7 prochains jours
-        <span className="ml-2 text-xs font-normal text-blue-500">
-          ({fmtShortDate(today)} – {fmtShortDate(endDate)})
+    <div className="space-y-4">
+      {/* Horizon selector */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm text-gray-600 font-medium">Horizon :</span>
+        <div className="flex gap-1">
+          {HORIZON_OPTIONS.map(h => (
+            <button key={h} onClick={() => setHorizon(h)} className={btnClass(horizon === h)}>
+              {h}J
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-gray-400 capitalize">
+          {fmtShortDate(today)} – {fmtShortDate(endDate)}
         </span>
-      </h3>
+      </div>
+
+      {/* Type filter */}
+      <div className="flex flex-wrap gap-2">
+        {(['all', 'actif', 'reserviste', 'recrue'] as const).map(t => (
+          <button key={t} onClick={() => setTypeFilter(t)} className={btnClass(typeFilter === t)}>
+            {t === 'all' ? 'Tous' : TYPE_LABEL[t]}
+          </button>
+        ))}
+      </div>
+
+      {/* Player grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
         {players.map(p => (
           <div key={p.name}
-            className={`flex items-center gap-2 bg-white rounded border px-2.5 py-2 ${p.games === 0 ? 'border-gray-200 opacity-60' : 'border-blue-200'}`}>
+            className={`flex items-center gap-2 bg-white rounded-lg border px-3 py-2.5 ${
+              p.games === 0 ? 'border-gray-200 opacity-60' : 'border-gray-200'
+            }`}>
             <TeamBadge code={p.teamCode} size="sm" />
             <div className="min-w-0 flex-1">
               <div className="text-xs font-medium text-gray-800 truncate">{p.name.split(', ')[0]}</div>
-              <div className="text-xs text-gray-400">{p.position}</div>
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="text-xs text-gray-400">{p.position}</span>
+                {TYPE_BADGE[p.playerType] && (
+                  <span className="text-xs bg-gray-100 text-gray-500 rounded px-1">
+                    {TYPE_BADGE[p.playerType]}
+                  </span>
+                )}
+              </div>
             </div>
-            <div className={`text-xl font-bold tabular-nums leading-none ${p.games >= 4 ? 'text-green-600' : p.games >= 2 ? 'text-blue-600' : p.games === 0 ? 'text-gray-300' : 'text-gray-500'}`}>
+            <div className={`text-xl font-bold tabular-nums leading-none ${
+              p.games >= 5 ? 'text-green-600' :
+              p.games >= 3 ? 'text-blue-600' :
+              p.games >= 1 ? 'text-gray-600' :
+              'text-gray-300'
+            }`}>
               {p.games}
             </div>
           </div>
@@ -149,388 +216,158 @@ function AnalyseSection({
   )
 }
 
-// ─── MonthlyCalendar ─────────────────────────────────────────────────────────
-
-const DAYS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
-
-function MonthlyCalendar({
-  allGames,
-  teamFilter,
-  month,
-  myTeamCodes,
-  today,
-}: {
-  allGames: SeasonGame[]
-  teamFilter: string
-  month: string
-  myTeamCodes: Set<string>
-  today: string
-}) {
-  const [year, monthNum] = month.split('-').map(Number)
-
-  // Build game map: date → game (one per day for this team)
-  const gameMap = useMemo(() => {
-    const m = new Map<string, SeasonGame>()
-    for (const g of allGames) {
-      if (g.awayAbbrev === teamFilter || g.homeAbbrev === teamFilter) {
-        m.set(g.date, g)
-      }
-    }
-    return m
-  }, [allGames, teamFilter])
-
-  // Build day grid (Monday-first)
-  const firstDow = new Date(year, monthNum - 1, 1).getDay()
-  const startOffset = (firstDow + 6) % 7 // Mon=0 … Sun=6
-  const daysInMonth = new Date(year, monthNum, 0).getDate()
-  const cells: (number | null)[] = [
-    ...Array(startOffset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-  while (cells.length % 7 !== 0) cells.push(null)
-
-  return (
-    <div className="overflow-x-auto">
-      <div className="min-w-[560px]">
-        <div className="grid grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-lg overflow-hidden">
-          {DAYS_FR.map(d => (
-            <div key={d} className="bg-gray-50 text-center text-xs font-semibold text-gray-500 py-1.5">{d}</div>
-          ))}
-          {cells.map((day, i) => {
-            if (!day) return <div key={`e-${i}`} className="bg-white min-h-[72px]" />
-
-            const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-            const game = gameMap.get(dateStr)
-            const isHome = game?.homeAbbrev === teamFilter
-            const opponent = game ? (isHome ? game.awayAbbrev : game.homeAbbrev) : null
-            const isTodayCell = dateStr === today
-            const isPast = dateStr < today
-            const isFinal = game ? ['FINAL', 'OFF'].includes(game.gameState) : false
-            const isLive  = game ? ['LIVE',  'CRIT'].includes(game.gameState) : false
-            const myPlayerPlays = game
-              ? myTeamCodes.has(game.awayAbbrev) || myTeamCodes.has(game.homeAbbrev)
-              : false
-
-            return (
-              <div key={dateStr}
-                className={[
-                  'bg-white min-h-[72px] p-1.5 relative',
-                  isTodayCell ? 'ring-2 ring-inset ring-blue-400' : '',
-                  myPlayerPlays && game ? 'bg-blue-50' : '',
-                  isLive ? 'bg-green-50' : '',
-                ].join(' ')}>
-                <div className={`text-xs font-semibold mb-0.5 ${isTodayCell ? 'text-blue-600' : isPast ? 'text-gray-300' : 'text-gray-500'}`}>
-                  {day}
-                </div>
-                {game && opponent && (
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-0.5 flex-wrap">
-                      {!isHome && <span className="text-xs text-gray-400 leading-none">@</span>}
-                      <TeamBadge code={opponent} size="sm" />
-                      {game.gameType === 3 && (
-                        <span className="text-xs bg-purple-100 text-purple-700 rounded px-1 leading-tight">SÉR</span>
-                      )}
-                    </div>
-                    {isFinal && game.awayScore !== null ? (
-                      <div className="text-xs font-medium tabular-nums text-gray-600">
-                        {isHome
-                          ? `${game.homeScore}–${game.awayScore}`
-                          : `${game.awayScore}–${game.homeScore}`}
-                        {(() => {
-                          const mine = isHome ? game.homeScore! : game.awayScore!
-                          const opp  = isHome ? game.awayScore! : game.homeScore!
-                          if (mine > opp) return <span className="ml-1 text-green-600 font-bold">V</span>
-                          if (mine < opp) return <span className="ml-1 text-red-500 font-bold">D</span>
-                          return null
-                        })()}
-                      </div>
-                    ) : isLive && game.awayScore !== null ? (
-                      <div className="text-xs font-bold text-green-700 tabular-nums">
-                        {isHome
-                          ? `${game.homeScore}–${game.awayScore}`
-                          : `${game.awayScore}–${game.homeScore}`}
-                        <span className="ml-1 text-green-500">●</span>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-400">{fmtTime(game.startTimeUTC)}</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Main component ──────────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CalendrierClient({
   week,
   today,
-  refDate,
-  prevDate,
-  nextDate,
+  selectedDay,
+  schedule7,
   myRoster,
   mySeriesRoster,
+  allOrgPlayers,
   hasPlayoffSeason,
-  next7Days,
 }: {
   week: DaySchedule[]
   today: string
-  refDate: string
-  prevDate: string
-  nextDate: string
+  selectedDay: string
+  schedule7: DaySchedule[]
   myRoster: RosterPlayer[]
   mySeriesRoster: RosterPlayer[]
+  allOrgPlayers: OrgPlayer[]
   hasPlayoffSeason: boolean
-  next7Days: Record<string, number>
 }) {
   const router = useRouter()
-  const [teamFilter, setTeamFilter] = useState('')
-  const [viewMode, setViewMode] = useState<'semaine' | 'calendrier'>('semaine')
-  const [seasonGames, setSeasonGames] = useState<SeasonGame[]>([])
-  const [loadingCalendrier, setLoadingCalendrier] = useState(false)
-  const [calendarMonth, setCalendarMonth] = useState(today.slice(0, 7))
+  const [tab, setTab] = useState<Tab>('matchs')
+  const [currentDay, setCurrentDay] = useState(selectedDay)
   const [gameMode, setGameMode] = useState<'saison' | 'series'>('saison')
 
-  const effectiveRoster = useMemo(
-    () => gameMode === 'series' ? mySeriesRoster : myRoster,
-    [gameMode, mySeriesRoster, myRoster],
-  )
+  const effectiveRoster = gameMode === 'series' ? mySeriesRoster : myRoster
   const myTeamCodes = useMemo(() => new Set(effectiveRoster.map(p => p.teamCode)), [effectiveRoster])
 
-  // Filtered week view
-  const filtered = useMemo(() =>
-    week
-      .map(day => ({
-        ...day,
-        games: day.games.filter(g =>
-          !teamFilter || g.awayAbbrev === teamFilter || g.homeAbbrev === teamFilter
-        ),
-      }))
-      .filter(day => day.games.length > 0),
-  [week, teamFilter])
+  const firstDay = week[0]?.date
+  const lastDay  = week[week.length - 1]?.date
 
-  const totalGames = week.reduce((s, d) => s + d.games.length, 0)
-  const myGames = week.reduce((s, d) =>
-    s + d.games.filter(g => myTeamCodes.has(g.awayAbbrev) || myTeamCodes.has(g.homeAbbrev)).length, 0)
-
-  const firstDay = week[0]?.date ?? refDate
-  const lastDay  = week[week.length - 1]?.date ?? refDate
-  const periodeLabel = firstDay === lastDay
-    ? fmtDayHeader(firstDay)
-    : `${fmtShortDate(firstDay)} – ${fmtShortDate(lastDay)}`
-
-  // Handlers
-  const handleTeamFilterChange = (team: string) => {
-    setTeamFilter(team)
-    if (!team) {
-      setViewMode('semaine')
-      setSeasonGames([])
-    }
-  }
-
-  const handleSwitchToCalendrier = async () => {
-    if (!teamFilter) return
-    if (seasonGames.length > 0) { setViewMode('calendrier'); return }
-    setLoadingCalendrier(true)
-    const games = await fetchTeamSeasonSchedule(teamFilter)
-    setSeasonGames(games)
-    setLoadingCalendrier(false)
-    setViewMode('calendrier')
-  }
-
-  const prevMonth = () => {
-    const [y, m] = calendarMonth.split('-').map(Number)
-    const d = new Date(y, m - 2, 1)
-    setCalendarMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-  const nextMonth = () => {
-    const [y, m] = calendarMonth.split('-').map(Number)
-    const d = new Date(y, m, 1)
-    setCalendarMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-
-  const handleDatePick = (dateStr: string) => {
-    if (!dateStr) return
-    if (viewMode === 'calendrier') {
-      setCalendarMonth(dateStr.slice(0, 7))
-    } else {
-      router.push(`/calendrier?semaine=${dateStr}`)
-    }
-  }
+  const daySchedule = useMemo(
+    () => week.find(d => d.date === currentDay) ?? { date: currentDay, games: [] },
+    [week, currentDay],
+  )
 
   const myPlayersFor = (game: Game) =>
     effectiveRoster.filter(p => p.teamCode === game.awayAbbrev || p.teamCode === game.homeAbbrev)
 
-  const navBtnClass = 'px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors'
-  const viewBtnClass = (active: boolean) =>
-    `px-3 py-1.5 text-sm transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`
+  const goToDay = (day: string) => {
+    if (!firstDay || !lastDay || day < firstDay || day > lastDay) {
+      router.push(`/calendrier?jour=${day}`)
+    } else {
+      setCurrentDay(day)
+    }
+  }
+
+  const prevDay = addDays(currentDay, -1)
+  const nextDay = addDays(currentDay, 1)
+  const isToday = currentDay === today
+
+  const myGamesCount = daySchedule.games.filter(
+    g => myTeamCodes.has(g.awayAbbrev) || myTeamCodes.has(g.homeAbbrev)
+  ).length
+
+  const navBtnClass = 'px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-default'
+  const tabBtnClass = (active: boolean) =>
+    `px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+      active
+        ? 'border-blue-600 text-blue-600'
+        : 'border-transparent text-gray-500 hover:text-gray-700'
+    }`
 
   return (
     <div className="space-y-5">
 
       {/* Title */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Calendrier LNH</h1>
-        {viewMode === 'semaine' && totalGames > 0 && (
-          <p className="text-sm text-gray-500 mt-0.5">
-            {periodeLabel}
-            {' · '}<span className="font-medium">{totalGames} match{totalGames > 1 ? 's' : ''}</span>
-            {myGames > 0 && effectiveRoster.length > 0 && (
-              <> · <span className="text-blue-600 font-medium">{myGames} avec mes joueurs</span></>
-            )}
-          </p>
-        )}
-        {viewMode === 'calendrier' && (
-          <p className="text-sm text-gray-500 mt-0.5 capitalize">{fmtMonthYear(calendarMonth)}</p>
-        )}
+      <h1 className="text-2xl font-bold text-gray-800">Calendrier LNH</h1>
+
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200">
+        <button onClick={() => setTab('matchs')} className={tabBtnClass(tab === 'matchs')}>
+          Matchs
+        </button>
+        <button onClick={() => setTab('analyse')} className={tabBtnClass(tab === 'analyse')}>
+          Analyse
+        </button>
       </div>
 
-      {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Team filter */}
-        <select
-          value={teamFilter}
-          onChange={e => handleTeamFilterChange(e.target.value)}
-          className="border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">Toutes les équipes</option>
-          {NHL_TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-
-        {teamFilter && (
-          <button onClick={() => handleTeamFilterChange('')}
-            className="text-sm text-gray-500 hover:text-gray-700">
-            Effacer
-          </button>
-        )}
-
-        {/* Date picker */}
-        <input
-          type="date"
-          value={viewMode === 'calendrier' ? calendarMonth + '-01' : refDate}
-          onChange={e => handleDatePick(e.target.value)}
-          className="border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-
-        {/* View toggle — only when team filter active */}
-        {teamFilter && (
-          <div className="flex rounded overflow-hidden border border-gray-300">
-            <button
-              onClick={() => setViewMode('semaine')}
-              className={viewBtnClass(viewMode === 'semaine')}>
-              Semaine
-            </button>
-            <button
-              onClick={handleSwitchToCalendrier}
-              disabled={loadingCalendrier}
-              className={viewBtnClass(viewMode === 'calendrier')}>
-              {loadingCalendrier ? 'Chargement…' : 'Calendrier'}
-            </button>
-          </div>
-        )}
-
-        {/* Mode Saison / Séries */}
-        {hasPlayoffSeason && (
-          <div className="flex rounded overflow-hidden border border-gray-300 ml-auto">
-            <button
-              onClick={() => setGameMode('saison')}
-              className={viewBtnClass(gameMode === 'saison')}>
-              Saison
-            </button>
-            <button
-              onClick={() => setGameMode('series')}
-              className={viewBtnClass(gameMode === 'series')}>
-              {'Séries'}
-            </button>
-          </div>
-        )}
-
-        {/* Legend */}
-        {!teamFilter && effectiveRoster.length > 0 && (
-          <span className="text-xs text-gray-400">
-            <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1" />
-            {gameMode === 'series' ? 'Badges = vos picks séries' : 'Badges = vos joueurs actifs'}
-          </span>
-        )}
-      </div>
-
-      {/* Navigation */}
-      {viewMode === 'semaine' ? (
-        <div className="flex items-center gap-2">
-          <button onClick={() => router.push(`/calendrier?semaine=${prevDate}`)} className={navBtnClass}>
-            ← Sem. préc.
-          </button>
-          <button onClick={() => router.push('/calendrier')} className={navBtnClass}>
-            Aujourd&apos;hui
-          </button>
-          <button onClick={() => router.push(`/calendrier?semaine=${nextDate}`)} className={navBtnClass}>
-            Sem. suiv. →
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2">
-          <button onClick={prevMonth} className={navBtnClass}>← Mois préc.</button>
-          <button onClick={() => setCalendarMonth(today.slice(0, 7))} className={navBtnClass}>
-            Aujourd&apos;hui
-          </button>
-          <button onClick={nextMonth} className={navBtnClass}>Mois suiv. →</button>
-        </div>
-      )}
-
-      {/* Analyse 7 jours */}
-      {effectiveRoster.length > 0 && (
-        <AnalyseSection myRoster={effectiveRoster} next7Days={next7Days} today={today} />
-      )}
-
-      {/* Content */}
-      {viewMode === 'calendrier' ? (
-        <MonthlyCalendar
-          allGames={seasonGames}
-          teamFilter={teamFilter}
-          month={calendarMonth}
-          myTeamCodes={myTeamCodes}
-          today={today}
-        />
-      ) : (
+      {tab === 'matchs' ? (
         <>
-          {filtered.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-12">
-              {week.length === 0
-                ? 'Aucun match cette semaine.'
-                : 'Aucun match pour cette équipe cette semaine.'}
-            </p>
+          {/* Controls */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <button onClick={() => goToDay(prevDay)} className={navBtnClass}>←</button>
+              <button onClick={() => goToDay(today)} disabled={isToday} className={navBtnClass}>
+                Aujourd&apos;hui
+              </button>
+              <button onClick={() => goToDay(nextDay)} className={navBtnClass}>→</button>
+            </div>
+
+            <input
+              type="date"
+              value={currentDay}
+              onChange={e => e.target.value && goToDay(e.target.value)}
+              className="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+
+            {hasPlayoffSeason && (
+              <div className="flex rounded overflow-hidden border border-gray-300 ml-auto">
+                <button
+                  onClick={() => setGameMode('saison')}
+                  className={`px-3 py-1.5 text-sm transition-colors ${gameMode === 'saison' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                  Saison
+                </button>
+                <button
+                  onClick={() => setGameMode('series')}
+                  className={`px-3 py-1.5 text-sm transition-colors ${gameMode === 'series' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                  Séries
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Day header */}
+          <div className="flex items-center gap-3">
+            <h2 className={`text-lg font-semibold capitalize ${isToday ? 'text-blue-600' : 'text-gray-700'}`}>
+              {fmtDayHeader(currentDay)}
+            </h2>
+            {isToday && (
+              <span className="text-xs bg-blue-100 text-blue-700 rounded px-2 py-0.5 font-medium">
+                Aujourd&apos;hui
+              </span>
+            )}
+            {daySchedule.games.length > 0 && (
+              <span className="text-sm text-gray-400 ml-auto">
+                {daySchedule.games.length} match{daySchedule.games.length > 1 ? 's' : ''}
+                {myGamesCount > 0 && effectiveRoster.length > 0 && (
+                  <> · <span className="text-blue-600">{myGamesCount} avec mes joueurs</span></>
+                )}
+              </span>
+            )}
+          </div>
+
+          {/* Games */}
+          {daySchedule.games.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-12">Aucun match ce jour.</p>
           ) : (
-            filtered.map(day => {
-              const isToday = day.date === today
-              return (
-                <div key={day.date}>
-                  <div className={`flex items-center gap-2 mb-2 pb-1 border-b ${isToday ? 'border-blue-400' : 'border-gray-200'}`}>
-                    <h2 className={`text-sm font-semibold capitalize ${isToday ? 'text-blue-600' : 'text-gray-700'}`}>
-                      {fmtDayHeader(day.date)}
-                    </h2>
-                    {isToday && (
-                      <span className="text-xs bg-blue-100 text-blue-700 rounded px-1.5 py-0.5 font-medium">
-                        Aujourd&apos;hui
-                      </span>
-                    )}
-                    <span className="text-xs text-gray-400 ml-auto">
-                      {day.games.length} match{day.games.length > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {day.games.map(g => (
-                      <GameCard key={g.id} game={g} myPlayers={myPlayersFor(g)} />
-                    ))}
-                  </div>
-                </div>
-              )
-            })
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {daySchedule.games.map(g => (
+                <GameCard key={g.id} game={g} myPlayers={myPlayersFor(g)} />
+              ))}
+            </div>
           )}
         </>
+      ) : (
+        <AnalyseTab
+          allOrgPlayers={allOrgPlayers}
+          schedule7={schedule7}
+          today={today}
+        />
       )}
     </div>
   )
