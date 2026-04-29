@@ -90,8 +90,8 @@ export default function ClassementTable({ standings }: { standings: PoolerStandi
     <div>
       <SummaryTable standings={standings} />
 
-      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-6">Détail par pooler</h2>
-      <div className="space-y-2">
+      <h2 className="hidden sm:block text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-6">Détail par pooler</h2>
+      <div className="hidden sm:block space-y-2">
         {standings.map((pooler, i) => {
           const sorted = groupAndSort(pooler.players)
 

@@ -1,10 +1,15 @@
+'use client'
+
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { fmtPts } from '@/lib/nhl-stats'
 import type { PoolerStanding } from '@/lib/standings'
 
 const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
 
 export default function SummaryTable({ standings }: { standings: PoolerStanding[] }) {
+  const router = useRouter()
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="bg-slate-800 px-5 py-3">
@@ -33,7 +38,11 @@ export default function SummaryTable({ standings }: { standings: PoolerStanding[
               const otl      = active.reduce((s, p) => s + p.goalieOtl, 0)
               const shutouts = active.reduce((s, p) => s + p.goalieShutouts, 0)
               return (
-                <tr key={pooler.poolerId} className="hover:bg-gray-50">
+                <tr
+                  key={pooler.poolerId}
+                  className="hover:bg-gray-50 sm:cursor-default cursor-pointer active:bg-gray-100"
+                  onClick={() => router.push(`/poolers/${pooler.poolerId}`)}
+                >
                   <td className={`px-4 py-2.5 font-bold text-center ${RANK_COLOR[i] ?? 'text-gray-500'}`}>
                     {i + 1}
                   </td>
@@ -41,6 +50,7 @@ export default function SummaryTable({ standings }: { standings: PoolerStanding[
                     <Link
                       href={`/poolers/${pooler.poolerId}`}
                       className="font-semibold text-gray-800 hover:text-blue-600 hover:underline"
+                      onClick={e => e.stopPropagation()}
                     >
                       {pooler.poolerName}
                     </Link>
