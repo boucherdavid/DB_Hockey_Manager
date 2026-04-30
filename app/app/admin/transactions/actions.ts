@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { takeSnapshot } from '@/lib/snapshot'
 
 export type ActionType = 'transfer' | 'promote' | 'sign' | 'reactivate' | 'release' | 'type_change'
 
@@ -20,6 +21,14 @@ type VEntry = {
   player_type: string
   position: string | null
   cap_number: number
+  nhl_id: number | null
+}
+
+type SnapshotTask = {
+  playerId: number
+  nhlId: number | null
+  poolerId: string
+  snapshotType: 'activation' | 'deactivation'
 }
 
 function getPlayerBucket(position: string | null): 'forward' | 'defense' | 'goalie' {
@@ -31,7 +40,7 @@ function getPlayerBucket(position: string | null): 'forward' | 'defense' | 'goal
 
 const ACTIVE_LIMITS = { forward: 12, defense: 6, goalie: 2 }
 
-function validateFinalRoster(entries: VEntry[], poolCap: number, season: string): string | null {
+function validateFinalRoster(entries: VEntry[], poolCap: number): string | null {
   const actifs = entries.filter(e => e.player_type === 'actif')
   const reservistes = entries.filter(e => e.player_type === 'reserviste')
 
@@ -125,7 +134,7 @@ export async function submitTransactionAction(
   // Charger les rosters
   const { data: allRosters } = await supabase
     .from('pooler_rosters')
-    .select(`id, pooler_id, player_id, player_type, players (id, position, player_contracts (season, cap_number))`)
+    .select(`id, pooler_id, player_id, player_type, players (id, position, nhl_id, player_contracts (season, cap_number))`)
     .in('pooler_id', Array.from(affectedIds))
     .eq('pool_season_id', saisonId)
     .eq('is_active', true)
@@ -142,6 +151,7 @@ export async function submitTransactionAction(
       player_type: entry.player_type,
       position: entry.players?.position ?? null,
       cap_number: cap,
+      nhl_id: entry.players?.nhl_id ?? null,
     })
   }
 
@@ -153,13 +163,13 @@ export async function submitTransactionAction(
     for (const p of (picks ?? [])) pickMap.set(p.id, p)
   }
 
-  // Charger les joueurs signés (sign) pour cap
+  // Charger les joueurs signés (sign) pour cap + snapshot
   const signPlayerIds = items.filter(i => i.action_type === 'sign' && i.player_id).map(i => i.player_id!)
   const signPlayerMap = new Map<number, any>()
   if (signPlayerIds.length > 0) {
     const { data: sPlayers } = await supabase
       .from('players')
-      .select(`id, position, player_contracts (season, cap_number)`)
+      .select(`id, position, nhl_id, player_contracts (season, cap_number)`)
       .in('id', signPlayerIds)
     for (const p of (sPlayers ?? [])) signPlayerMap.set(p.id, p)
   }
@@ -180,7 +190,9 @@ export async function submitTransactionAction(
     }
   }
 
-  // Valider préconditions et simuler
+  // Valider préconditions, simuler et collecter les snapshots nécessaires
+  const snapshotTasks: SnapshotTask[] = []
+
   for (const item of items) {
     const { action_type, from_pooler_id, to_pooler_id, player_id, pick_id, old_player_type, new_player_type } = item
 
@@ -196,13 +208,13 @@ export async function submitTransactionAction(
       const fromRoster = virtual.get(from_pooler_id!)
       const entry = fromRoster?.find(e => e.player_id === player_id)
       if (!entry) return { error: `Joueur (id: ${player_id}) introuvable dans le roster source.` }
-      const cap = entry.cap_number
-      const pos = entry.position
-      // Remove from source
+      const destType = new_player_type ?? entry.player_type
+      if (entry.player_type === 'actif')
+        snapshotTasks.push({ playerId: player_id, nhlId: entry.nhl_id, poolerId: from_pooler_id!, snapshotType: 'deactivation' })
+      if (destType === 'actif')
+        snapshotTasks.push({ playerId: player_id, nhlId: entry.nhl_id, poolerId: to_pooler_id!, snapshotType: 'activation' })
       fromRoster!.splice(fromRoster!.indexOf(entry), 1)
-      // Add to dest
-      const toRoster = virtual.get(to_pooler_id!)!
-      toRoster.push({ roster_id: -1, player_id, player_type: new_player_type ?? entry.player_type, position: pos, cap_number: cap })
+      virtual.get(to_pooler_id!)!.push({ roster_id: -1, player_id, player_type: destType, position: entry.position, cap_number: entry.cap_number, nhl_id: entry.nhl_id })
       continue
     }
 
@@ -210,6 +222,8 @@ export async function submitTransactionAction(
       const roster = virtual.get(to_pooler_id!)!
       const entry = roster.find(e => e.player_id === player_id && e.player_type === 'recrue')
       if (!entry) return { error: `Recrue (id: ${player_id}) introuvable dans la banque.` }
+      if (new_player_type === 'actif')
+        snapshotTasks.push({ playerId: player_id!, nhlId: entry.nhl_id, poolerId: to_pooler_id!, snapshotType: 'activation' })
       entry.player_type = new_player_type!
       continue
     }
@@ -218,7 +232,9 @@ export async function submitTransactionAction(
       const p = signPlayerMap.get(player_id!)
       if (!p) return { error: `Joueur (id: ${player_id}) introuvable.` }
       const cap = p.player_contracts?.find((c: any) => c.season === saison.season)?.cap_number ?? 0
-      virtual.get(to_pooler_id!)!.push({ roster_id: -1, player_id: player_id!, player_type: new_player_type!, position: p.position, cap_number: cap })
+      if (new_player_type === 'actif')
+        snapshotTasks.push({ playerId: player_id!, nhlId: p.nhl_id ?? null, poolerId: to_pooler_id!, snapshotType: 'activation' })
+      virtual.get(to_pooler_id!)!.push({ roster_id: -1, player_id: player_id!, player_type: new_player_type!, position: p.position, cap_number: cap, nhl_id: p.nhl_id ?? null })
       continue
     }
 
@@ -226,6 +242,8 @@ export async function submitTransactionAction(
       const roster = virtual.get(to_pooler_id!)!
       const entry = roster.find(e => e.player_id === player_id && e.player_type === 'ltir')
       if (!entry) return { error: `Joueur (id: ${player_id}) non trouvé en LTIR.` }
+      if (new_player_type === 'actif')
+        snapshotTasks.push({ playerId: player_id!, nhlId: entry.nhl_id, poolerId: to_pooler_id!, snapshotType: 'activation' })
       entry.player_type = new_player_type!
       continue
     }
@@ -234,6 +252,8 @@ export async function submitTransactionAction(
       const roster = virtual.get(from_pooler_id!)!
       const entry = roster.find(e => e.player_id === player_id)
       if (!entry) return { error: `Joueur (id: ${player_id}) introuvable dans le roster.` }
+      if (entry.player_type === 'actif')
+        snapshotTasks.push({ playerId: player_id!, nhlId: entry.nhl_id, poolerId: from_pooler_id!, snapshotType: 'deactivation' })
       roster.splice(roster.indexOf(entry), 1)
       continue
     }
@@ -242,6 +262,11 @@ export async function submitTransactionAction(
       const roster = virtual.get(from_pooler_id!)!
       const entry = roster.find(e => e.player_id === player_id && e.player_type === old_player_type)
       if (!entry) return { error: `Joueur (id: ${player_id}) avec type "${old_player_type}" introuvable.` }
+      const poolerId = from_pooler_id!
+      if (old_player_type === 'actif')
+        snapshotTasks.push({ playerId: player_id!, nhlId: entry.nhl_id, poolerId, snapshotType: 'deactivation' })
+      if (new_player_type === 'actif')
+        snapshotTasks.push({ playerId: player_id!, nhlId: entry.nhl_id, poolerId, snapshotType: 'activation' })
       entry.player_type = new_player_type!
       continue
     }
@@ -249,7 +274,7 @@ export async function submitTransactionAction(
 
   // Valider état final
   for (const [poolerId, entries] of virtual) {
-    const err = validateFinalRoster(entries, saison.pool_cap, saison.season)
+    const err = validateFinalRoster(entries, saison.pool_cap)
     if (err) {
       const { data: p } = await supabase.from('poolers').select('name').eq('id', poolerId).single()
       return { error: `${p?.name ?? poolerId}: ${err}` }
@@ -350,6 +375,17 @@ export async function submitTransactionAction(
       if (error) return { error: error.message }
       continue
     }
+  }
+
+  // Snapshots fire-and-forget — ne bloquent pas la réponse
+  if (snapshotTasks.length > 0) {
+    Promise.all(snapshotTasks.map(t => takeSnapshot({
+      playerId:     t.playerId,
+      nhlId:        t.nhlId,
+      poolerId:     t.poolerId,
+      poolSeasonId: saisonId,
+      snapshotType: t.snapshotType,
+    }))).catch(() => {})
   }
 
   return {}
