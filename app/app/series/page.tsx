@@ -1,18 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { fetchNhlSkaters, fetchNhlGoalies, normName, fmtPts } from '@/lib/nhl-stats'
+import { fetchNhlSkaters, fetchNhlGoalies, normName } from '@/lib/nhl-stats'
+import { PoolerSeriesCard } from './PoolerSeriesCard'
+import type { PlayerLine } from './PoolerSeriesCard'
 
 export const metadata = { title: 'Pool des séries' }
 export const dynamic = 'force-dynamic'
 
 const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
-const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
-
-function posGroup(pos: string) {
-  if (pos === 'G') return 'G'
-  if (['D', 'LD', 'RD'].includes(pos)) return 'D'
-  return 'F'
-}
 
 export default async function SeriesPage() {
   const supabase = await createClient()
@@ -110,20 +105,6 @@ export default async function SeriesPage() {
     gwg:            pts.gwg            ?? 1,
   }
 
-  type PlayerLine = {
-    firstName: string
-    lastName: string
-    position: string
-    conference: string
-    goals: number
-    assists: number
-    gwg: number
-    goalieWins: number
-    goalieOtl: number
-    goalieShutouts: number
-    poolPoints: number
-  }
-
   const poolerMap = new Map<string, { name: string; players: PlayerLine[] }>()
 
   for (const row of rosterRows ?? []) {
@@ -178,55 +159,6 @@ export default async function SeriesPage() {
 
   const roundLabel = ROUND_LABEL[ps.current_round - 1] ?? `Ronde ${ps.current_round}`
 
-  function ConfTable({ players, conf }: { players: PlayerLine[]; conf: string }) {
-    const cp = players.filter(p => p.conference === conf)
-    const byGroup = { F: [] as PlayerLine[], D: [] as PlayerLine[], G: [] as PlayerLine[] }
-    for (const p of cp) byGroup[posGroup(p.position) as 'F' | 'D' | 'G'].push(p)
-    const confPts = cp.reduce((s, p) => s + p.poolPoints, 0)
-
-    return (
-      <div>
-        <div className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wide flex justify-between ${conf === 'Est' ? 'bg-blue-800 text-blue-100' : 'bg-orange-700 text-orange-100'}`}>
-          <span>Conférence {conf}</span>
-          <span>{fmtPts(confPts)} pts</span>
-        </div>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs text-gray-400 uppercase tracking-wide">
-            <tr>
-              <th className="px-4 py-1.5 text-left">Joueur</th>
-              <th className="px-2 py-1.5">B</th>
-              <th className="px-2 py-1.5">A</th>
-              <th className="px-2 py-1.5 hidden sm:table-cell" title="Buts gagnants">BG</th>
-              <th className="px-2 py-1.5 hidden sm:table-cell">V</th>
-              <th className="px-2 py-1.5 hidden sm:table-cell">DP</th>
-              <th className="px-2 py-1.5 hidden sm:table-cell">BL</th>
-              <th className="px-2 py-1.5 text-blue-500">Pts</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {(['F', 'D', 'G'] as const).map(group =>
-              [...byGroup[group]].sort((a, b) => b.poolPoints - a.poolPoints).map((pl, j) => (
-                <tr key={`${group}-${j}`} className="hover:bg-gray-50">
-                  <td className="px-4 py-2">
-                    <span className="font-medium text-gray-800">{pl.lastName}, {pl.firstName}</span>
-                    <span className="ml-1.5 text-xs text-gray-400">{pl.position}</span>
-                  </td>
-                  <td className="px-2 py-2 text-center text-gray-600">{pl.goals}</td>
-                  <td className="px-2 py-2 text-center text-gray-600">{pl.assists}</td>
-                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group !== 'G' ? (pl.gwg || '—') : '—'}</td>
-                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? pl.goalieWins : '—'}</td>
-                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? pl.goalieOtl : '—'}</td>
-                  <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{group === 'G' ? (pl.goalieShutouts || '—') : '—'}</td>
-                  <td className="px-2 py-2 text-center font-bold text-blue-600">{fmtPts(pl.poolPoints)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-start justify-between mb-6">
@@ -246,18 +178,7 @@ export default async function SeriesPage() {
       ) : (
         <div className="space-y-3">
           {standings.map((pooler, i) => (
-            <div key={pooler.poolerId} className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3 border-b">
-                <span className={`font-bold text-lg w-7 text-center ${RANK_COLOR[i] ?? 'text-gray-500'}`}>{i + 1}</span>
-                <span className="flex-1 font-semibold text-gray-800">{pooler.poolerName}</span>
-                <span className="text-xl font-bold text-blue-600">{fmtPts(pooler.totalPoints)}</span>
-                <span className="text-sm text-gray-400">pts</span>
-              </div>
-              <div className="overflow-x-auto divide-y">
-                <ConfTable players={pooler.players} conf="Est" />
-                <ConfTable players={pooler.players} conf="Ouest" />
-              </div>
-            </div>
+            <PoolerSeriesCard key={pooler.poolerId} pooler={pooler} rank={i} />
           ))}
         </div>
       )}

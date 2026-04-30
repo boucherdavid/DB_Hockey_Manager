@@ -56,6 +56,25 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-30 (suite)
+
+**Pool des séries — vue mobile réduite + tri par points global**
+
+Deux améliorations sur `/series` (classement du pool des séries) :
+
+1. **Mobile** : le détail des joueurs est masqué par défaut. Cliquer sur la rangée d'un pooler bascule l'affichage (▲/▼). Sur desktop (`sm:`), le détail reste toujours visible.
+2. **Tri** : les joueurs sont maintenant triés par points décroissants dans une liste plate, sans groupement par position (F/D/G supprimé) ni par conférence. Un seul classement : qui rapporte le plus de points parmi les sélections du pooler.
+
+Architecture : logique de toggle extraite dans un nouveau composant client `PoolerSeriesCard.tsx` ; `page.tsx` reste un server component pur.
+
+Fichiers créés :
+- `app/app/series/PoolerSeriesCard.tsx` : composant client (toggle mobile + tableau trié)
+
+Fichiers modifiés :
+- `app/app/series/page.tsx` : `ConfTable` et groupement par position supprimés, remplacé par `<PoolerSeriesCard>`
+
+---
+
 ### 2026-04-30
 
 **Correctif sécurité — RLS manquant sur `scoring_config`**
