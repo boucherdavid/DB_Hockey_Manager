@@ -44,7 +44,7 @@ function Avatar({ name }: { name: string }) {
   )
 }
 
-type DropdownKey = 'pool-saison' | 'classement' | 'statistiques' | 'series' | 'profile' | null
+type DropdownKey = 'pool-saison' | 'classement' | 'statistiques' | 'series' | 'admin' | 'profile' | null
 
 export default function Navbar({
   initialUserName,
@@ -241,6 +241,37 @@ export default function Navbar({
                 )}
               </div>
 
+              {/* Admin */}
+              {isAdmin && (
+                <div className="relative">
+                  <button onClick={() => toggle('admin')}
+                    className={navBtnClass(isActive('/admin'))}>
+                    <span className="text-xs bg-blue-500 text-white rounded px-1 py-0.5 mr-1">A</span>
+                    Admin <Chevron open={openDropdown === 'admin'} />
+                  </button>
+                  {openDropdown === 'admin' && (
+                    <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                      <Link href="/admin/transactions" className={dropdownLinkClass('/admin/transactions')}>Transactions</Link>
+                      <Link href="/admin/rosters"      className={dropdownLinkClass('/admin/rosters')}>Rosters</Link>
+                      <Link href="/admin/recrues"      className={dropdownLinkClass('/admin/recrues')}>Recrues</Link>
+                      <Link href="/admin/presaison"    className={dropdownLinkClass('/admin/presaison')}>{'Pré-saison'}</Link>
+                      <div className="border-t my-1" />
+                      <Link href="/admin/joueurs"      className={dropdownLinkClass('/admin/joueurs')}>Joueurs</Link>
+                      <Link href="/admin/poolers"      className={dropdownLinkClass('/admin/poolers')}>Poolers</Link>
+                      <div className="border-t my-1" />
+                      <Link href="/admin/config"       className={dropdownLinkClass('/admin/config')}>Configuration</Link>
+                      <Link href="/admin/suivi"        className={dropdownLinkClass('/admin/suivi')}>Suivi</Link>
+                      <Link href="/admin/feedback"     className={dropdownLinkClass('/admin/feedback')}>
+                        <span className="flex items-center justify-between">
+                          {'Boîte de réception'}
+                          {unreadCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>}
+                        </span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+
             </div>
           </div>
 
@@ -274,33 +305,6 @@ export default function Navbar({
                       <Link href="/aide"     className={dropdownLinkClass('/aide')}>Aide &amp; Règlements</Link>
                       <Link href="/signaler" className={dropdownLinkClass('/signaler')}>Signaler un problème</Link>
                     </div>
-                    {isAdmin && (
-                      <div className="py-1 border-t">
-                        <Link href="/admin" className={dropdownLinkClass('/admin')}>
-                          <span className="flex items-center gap-2">
-                            <span className="text-xs bg-blue-100 text-blue-700 rounded px-1.5 py-0.5">Admin</span>
-                            Panneau admin
-                          </span>
-                        </Link>
-                        <Link href="/admin/feedback" className={dropdownLinkClass('/admin/feedback')}>
-                          <span className="flex items-center justify-between">
-                            <span className="flex items-center gap-2">
-                              <span className="text-xs bg-blue-100 text-blue-700 rounded px-1.5 py-0.5">Admin</span>
-                              Boîte de réception
-                            </span>
-                            {unreadCount > 0 && (
-                              <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>
-                            )}
-                          </span>
-                        </Link>
-                        <Link href="/admin/suivi" className={dropdownLinkClass('/admin/suivi')}>
-                          <span className="flex items-center gap-2">
-                            <span className="text-xs bg-blue-100 text-blue-700 rounded px-1.5 py-0.5">Admin</span>
-                            Suivi de l&apos;activité
-                          </span>
-                        </Link>
-                      </div>
-                    )}
                     <div className="py-1 border-t">
                       <button onClick={handleLogout}
                         className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
@@ -359,20 +363,21 @@ export default function Navbar({
                 <Link href="/compte"   className={mobileLinkClass('/compte')}>Mon compte</Link>
                 <Link href="/aide"     className={mobileLinkClass('/aide')}>Aide &amp; Règlements</Link>
                 <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler un problème</Link>
-                {isAdmin && <Link href="/admin" className={mobileLinkClass('/admin')}>Admin</Link>}
+                {isAdmin && <MobileSection label="Admin" />}
+                {isAdmin && <Link href="/admin/transactions" className={mobileLinkClass('/admin/transactions')}>Transactions</Link>}
+                {isAdmin && <Link href="/admin/rosters"      className={mobileLinkClass('/admin/rosters')}>Rosters</Link>}
+                {isAdmin && <Link href="/admin/recrues"      className={mobileLinkClass('/admin/recrues')}>Recrues</Link>}
+                {isAdmin && <Link href="/admin/presaison"    className={mobileLinkClass('/admin/presaison')}>{'Pré-saison'}</Link>}
+                {isAdmin && <Link href="/admin/joueurs"      className={mobileLinkClass('/admin/joueurs')}>Joueurs</Link>}
+                {isAdmin && <Link href="/admin/poolers"      className={mobileLinkClass('/admin/poolers')}>Poolers</Link>}
+                {isAdmin && <Link href="/admin/config"       className={mobileLinkClass('/admin/config')}>Configuration</Link>}
+                {isAdmin && <Link href="/admin/suivi"        className={mobileLinkClass('/admin/suivi')}>Suivi</Link>}
                 {isAdmin && (
                   <Link href="/admin/feedback" className={mobileLinkClass('/admin/feedback')}>
                     <span className="flex items-center justify-between">
-                      Boîte de réception
-                      {unreadCount > 0 && (
-                        <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>
-                      )}
+                      {'Boîte de réception'}
+                      {unreadCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>}
                     </span>
-                  </Link>
-                )}
-                {isAdmin && (
-                  <Link href="/admin/suivi" className={mobileLinkClass('/admin/suivi')}>
-                    Suivi de l&apos;activité
                   </Link>
                 )}
                 <button onClick={handleLogout}

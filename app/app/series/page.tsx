@@ -205,7 +205,7 @@ export default async function SeriesPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {(['F', 'D', 'G'] as const).map(group =>
-              byGroup[group].map((pl, j) => (
+              [...byGroup[group]].sort((a, b) => b.poolPoints - a.poolPoints).map((pl, j) => (
                 <tr key={`${group}-${j}`} className="hover:bg-gray-50">
                   <td className="px-4 py-2">
                     <span className="font-medium text-gray-800">{pl.lastName}, {pl.firstName}</span>
