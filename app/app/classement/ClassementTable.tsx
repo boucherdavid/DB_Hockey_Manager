@@ -14,8 +14,9 @@ type Mode = 'saison'
 // Futurs modes : 'mensuel' | 'journee' | 'serie'
 
 function positionGroup(pos: string): number {
-  if (pos === 'G') return 2
-  if (pos === 'D' || pos === 'LD' || pos === 'RD') return 1
+  const p = (pos ?? '').toUpperCase()
+  if (p === 'G') return 2
+  if (p.includes('D')) return 1
   return 0
 }
 

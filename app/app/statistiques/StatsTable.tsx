@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import type { SkaterStat, GoalieStat } from './page'
 import TeamBadge from '@/components/TeamBadge'
+import PlayerLink from '@/components/PlayerLink'
 
 type Tab = 'skaters' | 'goalies'
 
@@ -284,7 +285,9 @@ export default function StatsTable({
                       </td>
                       <td className="px-4 py-2.5 font-medium text-gray-800">
                         <span className="inline-flex items-center gap-1.5">
-                          {s.lastName}, {s.firstName}
+                          <PlayerLink nhlId={s.id}>
+                            {s.lastName}, {s.firstName}
+                          </PlayerLink>
                           {gameMode === 'regular' && isRookie(s.firstName, s.lastName) && <RookieBadge />}
                         </span>
                       </td>
@@ -349,7 +352,9 @@ export default function StatsTable({
                       </td>
                       <td className="px-4 py-2.5 font-medium text-gray-800">
                         <span className="inline-flex items-center gap-1.5">
-                          {g.lastName}, {g.firstName}
+                          <PlayerLink nhlId={g.id}>
+                            {g.lastName}, {g.firstName}
+                          </PlayerLink>
                           {gameMode === 'regular' && isRookie(g.firstName, g.lastName) && <RookieBadge />}
                         </span>
                       </td>

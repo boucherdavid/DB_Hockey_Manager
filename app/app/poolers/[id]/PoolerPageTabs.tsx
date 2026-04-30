@@ -44,8 +44,9 @@ const CHANGE_COLOR: Record<string, string> = {
 }
 
 function positionGroup(pos: string): number {
-  if (pos === 'G') return 2
-  if (pos === 'D' || pos === 'LD' || pos === 'RD') return 1
+  const p = (pos ?? '').toUpperCase()
+  if (p === 'G') return 2
+  if (p.includes('D')) return 1
   return 0
 }
 
@@ -118,7 +119,7 @@ export default function PoolerPageTabs({
   alignementPlayers: PlayerContrib[]
   changeLog: ChangeLogEntry[]
 }) {
-  const [tab, setTab] = useState<Tab>('organisation')
+  const [tab, setTab] = useState<Tab>('alignement')
 
   const btnClass = (t: Tab) =>
     `px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -136,11 +137,11 @@ export default function PoolerPageTabs({
   return (
     <div>
       <div className="flex border-b border-gray-200 mb-6">
-        <button className={btnClass('organisation')} onClick={() => setTab('organisation')}>
-          Organisation
-        </button>
         <button className={btnClass('alignement')} onClick={() => setTab('alignement')}>
           Alignement
+        </button>
+        <button className={btnClass('organisation')} onClick={() => setTab('organisation')}>
+          Organisation
         </button>
         <button className={btnClass('historique')} onClick={() => setTab('historique')}>
           Historique
