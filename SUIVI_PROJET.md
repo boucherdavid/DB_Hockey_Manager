@@ -80,6 +80,23 @@ CREATE POLICY "Admin modifie scoring" ON scoring_config FOR ALL
 
 Toutes les autres tables (`feedback`, `player_contracts`, `player_stat_snapshots`, `players`, `playoff_rosters`, `playoff_seasons`, `pool_draft_picks`, `pool_seasons`, `pooler_rosters`, `poolers`, `push_subscriptions`, `roster_change_log`, `roster_changes`, `teams`, `transaction_items`, `transactions`) avaient déjà RLS activé.
 
+**Navigation — Classement fusionné dans Pool Saison**
+
+Le bouton "Classement" séparé dans la navbar est retiré. Son contenu (Saison complète, Hebdomadaire/Mensuel à venir) est intégré dans le dropdown "Pool Saison" avec un séparateur et un titre de section. Lien "Équipes" (`/poolers`) ajouté au même dropdown (il n'était pas accessible directement). Mobile mis à jour en conséquence.
+
+Fichier modifié : `app/components/Navbar.tsx`
+
+---
+
+**Corrections — Fiche joueur, positions, onglets**
+
+- `StatsTable.tsx` : `PlayerLink` ajouté sur les noms d'attaquants et gardiens (utilise `s.id` / `g.id` = `nhlId` NHL)
+- `PoolerPageTabs.tsx` + `ClassementTable.tsx` : `positionGroup` corrigé — utilise `includes('D')` au lieu d'égalité stricte, ce qui corrige les joueurs avec position combinée (ex: `LD,RD`) classés à tort comme attaquants (Lane Hutson)
+- `PoolerPageTabs.tsx` : onglet **Alignement** déplacé en premier, ouvert par défaut
+- `PlayerSlideOver.tsx` : photos de joueurs retirées (droits image NHL/NHLPA)
+
+---
+
 **Chantier I — Fiche joueur slide-over**
 
 Panneau latéral global accessible au clic sur n'importe quel nom de joueur dans l'application. Architecture URL-based : `?joueur={nhlId}` contrôle l'affichage ; fermeture via ×, ESC ou backdrop.
