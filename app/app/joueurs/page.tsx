@@ -15,6 +15,7 @@ export type PlayerContract = {
 
 export type PlayerRow = {
   id: string
+  nhl_id: number | null
   first_name: string
   last_name: string
   position: string | null

@@ -1,6 +1,7 @@
 import { fetchNhlSkatersByNhlId, fetchNhlGoaliesByNhlId, fetchNhlSkaters, fetchNhlGoalies, normName } from './nhl-stats'
 
 export type PlayerContrib = {
+  nhlId: number | null
   firstName: string
   lastName: string
   position: string
@@ -224,6 +225,7 @@ export async function buildStandings(supabase: any, seasonId: string): Promise<P
     const poolPoints = calcPoints(earned, pts)
 
     poolerMap.get(pooler.id)!.players.push({
+      nhlId:          player.nhl_id,
       firstName:      player.first_name,
       lastName:       player.last_name,
       position:       player.position,

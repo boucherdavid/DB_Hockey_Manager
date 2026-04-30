@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { fmtPts } from '@/lib/nhl-stats'
 import SummaryTable from '@/components/SummaryTable'
+import PlayerLink from '@/components/PlayerLink'
 import type { PoolerStanding, PlayerContrib } from '@/lib/standings'
 
 const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
@@ -49,9 +50,11 @@ function PlayerRow({ p }: { p: PlayerContrib }) {
   return (
     <tr className={isActif ? 'hover:bg-gray-50' : 'hover:bg-gray-50 opacity-60'}>
       <td className="px-4 py-2">
-        <span className={`font-medium ${isActif ? 'text-gray-800' : 'text-gray-500'}`}>
-          {p.lastName}, {p.firstName}
-        </span>
+        <PlayerLink nhlId={p.nhlId}>
+          <span className={`font-medium ${isActif ? 'text-gray-800' : 'text-gray-500'}`}>
+            {p.lastName}, {p.firstName}
+          </span>
+        </PlayerLink>
         {badge && (
           <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">{badge}</span>
         )}

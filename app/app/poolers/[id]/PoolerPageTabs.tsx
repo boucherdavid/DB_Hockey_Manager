@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { fmtPts } from '@/lib/nhl-stats'
+import PlayerLink from '@/components/PlayerLink'
 import type { PlayerContrib } from '@/lib/standings'
 
 type Tab = 'organisation' | 'alignement' | 'historique'
@@ -75,9 +76,11 @@ function PlayerStatsRow({ p }: { p: PlayerContrib }) {
   return (
     <tr className={isActif ? 'hover:bg-gray-50' : 'hover:bg-gray-50 opacity-60'}>
       <td className="px-4 py-2">
-        <span className={`font-medium ${isActif ? 'text-gray-800' : 'text-gray-500'}`}>
-          {p.lastName}, {p.firstName}
-        </span>
+        <PlayerLink nhlId={p.nhlId}>
+          <span className={`font-medium ${isActif ? 'text-gray-800' : 'text-gray-500'}`}>
+            {p.lastName}, {p.firstName}
+          </span>
+        </PlayerLink>
         {badge && <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">{badge}</span>}
       </td>
       <td className="px-2 py-2 hidden sm:table-cell text-gray-500 text-center text-xs">{p.teamAbbrev}</td>

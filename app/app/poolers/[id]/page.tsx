@@ -4,6 +4,7 @@ import TeamBadge from '@/components/TeamBadge'
 import PoolerSwitcher from '@/components/PoolerSwitcher'
 import PoolerPageTabs from './PoolerPageTabs'
 import OrganisationToggle from './OrganisationToggle'
+import PlayerLink from '@/components/PlayerLink'
 import { buildStandings } from '@/lib/standings'
 
 const DASH = '\u2014'
@@ -24,6 +25,7 @@ const isProtected = (row: RosterRow, saisonFin: number): boolean => {
 
 type PlayerRow = {
   id: number
+  nhl_id: number | null
   first_name: string
   last_name: string
   position: string | null
@@ -168,7 +170,9 @@ function RosterTable({ rows, title, season, nextSeason, salaryCounts, showDraft,
       <tr key={row.id} className="border-b hover:bg-gray-50">
         <td className="px-3 py-2 font-medium text-gray-800">
           {player?.is_rookie && <span className="text-yellow-500 mr-1">{STAR}</span>}
-          {player?.last_name}, {player?.first_name}
+          <PlayerLink nhlId={player?.nhl_id}>
+            {player?.last_name}, {player?.first_name}
+          </PlayerLink>
         </td>
         <td className="px-3 py-2 w-14"><TeamBadge code={player?.teams?.code} size="sm" /></td>
         <td className="px-3 py-2 w-10 text-gray-500">{player?.position ?? DASH}</td>
@@ -353,7 +357,7 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     .select(`
       id, player_type, rookie_type, pool_draft_year,
       players (
-        id, first_name, last_name, position, status, is_rookie,
+        id, nhl_id, first_name, last_name, position, status, is_rookie,
         draft_year, draft_round, draft_overall,
         teams (code),
         player_contracts (season, cap_number)

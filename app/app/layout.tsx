@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import './globals.css'
 import Navbar from '@/components/Navbar'
 import InstallBanner from '@/components/InstallBanner'
 import ServiceWorkerProvider from '@/components/ServiceWorkerProvider'
+import PlayerSlideOver from '@/components/PlayerSlideOver'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = {
@@ -73,6 +75,9 @@ export default async function RootLayout({
         <main className="max-w-7xl mx-auto px-4 py-6">
           {children}
         </main>
+        <Suspense>
+          <PlayerSlideOver />
+        </Suspense>
       </body>
     </html>
   )

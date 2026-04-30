@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from 'react'
 import type { PlayerContract, PlayerRow } from './page'
 import { teamColor } from '@/lib/nhl-colors'
 import TeamBadge from '@/components/TeamBadge'
+import PlayerLink from '@/components/PlayerLink'
 
 const CURRENT_SEASON = '2025-26'
 const SEASONS = ['2025-26', '2026-27', '2027-28', '2028-29', '2029-30']
@@ -304,7 +305,9 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                           title={player.is_available ? 'Disponible' : 'Dans un pool'}
                           className={`inline-block w-2 h-2 rounded-full shrink-0 ${player.is_available ? 'bg-green-500' : 'bg-slate-300'}`}
                         />
-                        {player.last_name}, {player.first_name}
+                        <PlayerLink nhlId={player.nhl_id}>
+                          {player.last_name}, {player.first_name}
+                        </PlayerLink>
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -388,7 +391,9 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                     <tr key={player.id} className="border-b hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 font-medium text-gray-800">
                         <span className="text-yellow-500 mr-1">{STAR}</span>
-                        {player.last_name}, {player.first_name}
+                        <PlayerLink nhlId={player.nhl_id}>
+                          {player.last_name}, {player.first_name}
+                        </PlayerLink>
                       </td>
                       <td className="px-4 py-3"><TeamBadge code={player.teams?.code} /></td>
                       <td className="px-4 py-3 text-gray-600">{player.position ?? DASH}</td>
