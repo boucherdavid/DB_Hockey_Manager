@@ -56,6 +56,24 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-29 (session 3)
+
+**Chantier B — snapshots dans `submitTransactionAction` (commit)**
+- `app/app/admin/transactions/actions.ts` : intégration complète des snapshots fire-and-forget à chaque changement de statut actif. Le `nhl_id` est maintenant inclus dans les rosters virtuels de validation. Couvre tous les types : `transfer`, `promote`, `sign`, `reactivate`, `release`, `type_change`.
+
+**Type `ballotage` — réclamation sans contrepartie**
+- `ActionType` étendu avec `'ballotage'` : même logique que `transfer` joueur (déplacement de roster + snapshots activation/désactivation).
+- `TransactionBuilder.tsx` : bouton "Ballotage" orange à côté de "Donner" dans chaque liste de joueurs. Section dédiée dans le résumé de transaction.
+- `TransactionsClient.tsx` : nouvel onglet "Ballotage" (fond orange) entre Échanges et Signatures, classification et description propres.
+
+**Menu Admin accessible partout**
+- `Navbar.tsx` : dropdown "Admin" avec badge bleu ajouté dans la barre desktop pour les admins. Accès direct aux 9 sous-menus : Transactions, Rosters, Recrues, Pré-saison, Joueurs, Poolers, Configuration, Suivi, Boîte de réception. Menu hamburger mobile étendu de même. Liens admin retirés du dropdown de profil (doublons).
+
+**Tri par points dans le pool des séries**
+- `app/app/series/page.tsx` : dans `ConfTable`, les joueurs de chaque groupe (F/D/G) sont maintenant triés par `poolPoints` décroissant — les plus performants apparaissent en premier.
+
+---
+
 ### 2026-04-29 (suite)
 
 **Page `/transactions` — onglets par type de mouvement**
@@ -114,8 +132,16 @@ Amélioration identifiée pour la page publique `/transactions` : découpage en 
 - **Gestion de joueurs** : `promote`, `release`, `type_change` (autres)
 - **Ballotage** : futur
 
-**Prochaine session**
-1. Ajouter les appels `takeSnapshot` dans `submitTransactionAction` (activation/désactivation selon les `action_type`)
+**Snapshots dans `submitTransactionAction` — complété**
+
+`app/app/admin/transactions/actions.ts` :
+- `nhl_id` ajouté à la query roster et à la query `signPlayerMap`.
+- `VEntry` enrichi avec `nhl_id: number | null`.
+- `SnapshotTask` type ajouté (playerId, nhlId, poolerId, snapshotType).
+- Collecte des tâches pendant la simulation : snapshot `activation` quand un joueur **devient actif**, snapshot `deactivation` quand il **quitte actif**, pour chaque `action_type` (`transfer`, `promote`, `sign`, `reactivate`, `release`, `type_change`).
+- Exécution fire-and-forget après l'apply (ne bloque pas la réponse).
+- Import de `takeSnapshot` depuis `@/lib/snapshot`.
+- Paramètre `season` inutilisé retiré de `validateFinalRoster`.
 
 ---
 
