@@ -4,11 +4,10 @@ export type StreakType = 'hot' | 'cold' | null
 
 export type StreakInfo = {
   type: StreakType
-  pts: number  // total pts dans les derniers N matchs
-  gp: number   // matchs joués dans la fenêtre
+  count: number  // matchs consécutifs dans la séquence
 }
 
-const N = 3  // fenêtre de matchs
+const MIN_STREAK = 3  // minimum pour afficher l'indicateur
 
 async function fetchGameLog(nhlId: number, gameType: 2 | 3): Promise<unknown[]> {
   try {
@@ -24,25 +23,34 @@ async function fetchGameLog(nhlId: number, gameType: 2 | 3): Promise<unknown[]> 
   }
 }
 
+function gamePts(g: Record<string, unknown>, isGoalie: boolean): number {
+  if (isGoalie) {
+    const wins     = typeof g.wins === 'number' ? g.wins : (g.decision === 'W' ? 1 : 0)
+    const otLosses = typeof g.otLosses === 'number' ? g.otLosses : (g.decision === 'O' ? 1 : 0)
+    const shutouts = typeof g.shutouts === 'number' ? g.shutouts : 0
+    return wins * 2 + otLosses + shutouts * 2
+  }
+  return (typeof g.goals === 'number' ? g.goals : 0)
+       + (typeof g.assists === 'number' ? g.assists : 0)
+}
+
 function computeFromLog(log: unknown[], isGoalie: boolean): StreakInfo {
-  const recent = (log as Record<string, unknown>[]).slice(-N)
-  if (recent.length === 0) return { type: null, pts: 0, gp: 0 }
+  const games = (log as Record<string, unknown>[]).slice().reverse()  // du plus récent au plus ancien
+  if (games.length === 0) return { type: null, count: 0 }
 
-  const pts = recent.reduce((sum, g) => {
-    if (isGoalie) {
-      const wins     = typeof g.wins === 'number' ? g.wins : (g.decision === 'W' ? 1 : 0)
-      const otLosses = typeof g.otLosses === 'number' ? g.otLosses : (g.decision === 'O' ? 1 : 0)
-      const shutouts = typeof g.shutouts === 'number' ? g.shutouts : 0
-      return sum + wins * 2 + otLosses + shutouts * 2
-    }
-    return sum + (typeof g.goals === 'number' ? g.goals : 0)
-               + (typeof g.assists === 'number' ? g.assists : 0)
-  }, 0)
+  const firstPts = gamePts(games[0], isGoalie)
+  const isHot = firstPts >= 1
 
-  const gp = recent.length
-  // Chaud : ≥ 1 pt/match en moyenne ; Froid : ≤ 0.33 pt/match (≤ 1 pt sur 3 matchs)
-  const type: StreakType = pts / gp >= 1 ? 'hot' : pts <= 1 ? 'cold' : null
-  return { type, pts, gp }
+  let count = 0
+  for (const g of games) {
+    const pts = gamePts(g, isGoalie)
+    if (isHot && pts >= 1) count++
+    else if (!isHot && pts === 0) count++
+    else break
+  }
+
+  if (count < MIN_STREAK) return { type: null, count }
+  return { type: isHot ? 'hot' : 'cold', count }
 }
 
 export async function fetchStreak(

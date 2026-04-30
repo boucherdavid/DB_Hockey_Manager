@@ -60,12 +60,13 @@ Je l'utiliserai pour:
 
 **Indicateurs de séquences chaudes/froides**
 
-Badge `▲` orange (chaud) ou `▼` bleu (froid) affiché après le nom du joueur dans l'onglet Alignement de la fiche pooler et dans le classement du pool des séries.
+Pastille colorée avec le nombre de matchs consécutifs, affichée après le nom du joueur dans l'onglet Alignement de la fiche pooler et dans le classement du pool des séries. Orange = chaud, bleu = froid. Minimum 3 matchs pour afficher.
 
-Logique (fenêtre de 3 matchs) :
-- Skaters : goals + assists ; chaud si moyenne ≥ 1 pt/match, froid si ≤ 1 pt total
-- Gardiens : wins × 2 + OTL × 1 + shutouts × 2 ; mêmes seuils
-- Tooltip au survol : `X pts en Y matchs`
+Logique (séquence consécutive réelle, pas de fenêtre fixe) :
+- On remonte le game-log du match le plus récent vers le plus ancien et on compte les matchs consécutifs qui respectent le critère.
+- Skaters : chaud si ≥ 1 pt/match consécutif ; froid si 0 pt consécutif
+- Gardiens : pts pool = wins × 2 + OTL × 1 + shutouts × 2 ; mêmes seuils
+- Tooltip au survol : description de la séquence
 
 Pool saison → game-log gameType=2 (saison régulière). Pool des séries → gameType=3 (playoffs).
 Cache 30 min (`revalidate: 1800`). Tous les joueurs d'une page sont fetchés en parallèle.

@@ -74,8 +74,8 @@ function formatDate(iso: string): string {
 function StreakBadge({ info }: { info: StreakInfo | undefined }) {
   if (!info || info.type === null) return null
   if (info.type === 'hot')
-    return <span className="ml-1.5 text-xs font-bold text-orange-500" title={`${info.pts} pts en ${info.gp} matchs`}>▲</span>
-  return <span className="ml-1.5 text-xs font-bold text-sky-500" title={`${info.pts} pts en ${info.gp} matchs`}>▼</span>
+    return <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-orange-100 text-orange-600 text-xs font-bold" title={`Séquence chaude : ${info.count} matchs consécutifs avec ≥ 1 pt`}>{info.count}</span>
+  return <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-100 text-sky-600 text-xs font-bold" title={`Séquence froide : ${info.count} matchs consécutifs sans point`}>{info.count}</span>
 }
 
 function PlayerStatsRow({ p, streaks }: { p: PlayerContrib; streaks: Record<number, StreakInfo> }) {
