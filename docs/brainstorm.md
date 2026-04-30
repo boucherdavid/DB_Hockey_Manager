@@ -6,5 +6,3 @@ Quand tu es prêt à en discuter, dis-le moi et je lis ce fichier pour les analy
 ---
 
 <!-- Ajoute tes idées ci-dessous, avec la date si possible -->
-
-
