@@ -71,8 +71,9 @@ Le `backfill_nhl_ids.py` (étape 4 du pipeline) avait deux bugs :
 Corrections :
 - Pagination ajoutée sur la query `player_contracts` dans le backfill.
 - Le backfill cible maintenant aussi tous les joueurs des `pooler_rosters` actifs.
-- 88 `nhl_id` mis à jour (dont McDavid, Larkin, Granlund, Burns, etc.).
-- Granlund (id=3) corrigé manuellement (nhl_id=8475798).
+- 1ère passe (avant fix pagination) : 88 `nhl_id` mis à jour + Granlund corrigé manuellement (8475798).
+- 2ème passe (après fix pagination) : 260 `nhl_id` supplémentaires mis à jour — dont Johnston, et la majorité des joueurs NHL actifs dans le pool.
+- Total : ~348 joueurs corrigés. Les ~577 restants sans correspondance sont des prospects/AHL sans match NHL cette saison (comportement attendu).
 
 Fichier modifié :
 - `python_script/backfill_nhl_ids.py` : pagination + scope élargi aux rostres pool actifs
