@@ -80,6 +80,27 @@ CREATE POLICY "Admin modifie scoring" ON scoring_config FOR ALL
 
 Toutes les autres tables (`feedback`, `player_contracts`, `player_stat_snapshots`, `players`, `playoff_rosters`, `playoff_seasons`, `pool_draft_picks`, `pool_seasons`, `pooler_rosters`, `poolers`, `push_subscriptions`, `roster_change_log`, `roster_changes`, `teams`, `transaction_items`, `transactions`) avaient déjà RLS activé.
 
+**Chantier I — Fiche joueur slide-over**
+
+Panneau latéral global accessible au clic sur n'importe quel nom de joueur dans l'application. Architecture URL-based : `?joueur={nhlId}` contrôle l'affichage ; fermeture via ×, ESC ou backdrop.
+
+Contenu : stats NHL saison régulière (8 dernières saisons max) — attaquants : MJ/B/A/PTS ; gardiens : MJ/V/BL/MB/%A. Photo de tête via NHL API.
+
+Fichiers créés :
+- `app/lib/nhl-player.ts` : server action fetch `api-web.nhle.com/v1/player/{id}/landing` (cache 1h)
+- `app/components/PlayerLink.tsx` : bouton client qui ajoute `?joueur={nhlId}` à l'URL
+- `app/components/PlayerSlideOver.tsx` : panneau client global
+
+Fichiers modifiés :
+- `app/app/layout.tsx` : `<PlayerSlideOver />` dans `<Suspense>` après `<main>`
+- `app/lib/standings.ts` : `nhlId` ajouté à `PlayerContrib`
+- `app/app/joueurs/page.tsx` + `JoueursTable.tsx` : `nhl_id` dans `PlayerRow` + `PlayerLink` sur les noms (LNH + prospects)
+- `app/app/classement/ClassementTable.tsx` : `PlayerLink` sur les noms
+- `app/app/poolers/[id]/PoolerPageTabs.tsx` : `PlayerLink` dans l'onglet Alignement
+- `app/app/poolers/[id]/page.tsx` : `nhl_id` dans la query + `PlayerLink` dans `RosterTable`
+
+---
+
 **Chantier A — Vue masse salariale / organisation dans `/poolers/[id]`**
 
 Nouveau composant `OrganisationToggle.tsx` (client) : toggle pill "Masse salariale / Organisation" dans l'onglet Organisation de la fiche pooler. Par défaut : vue masse salariale (actifs + réservistes uniquement). Clic sur "Organisation" révèle LTIR + banque de recrues + activation obligatoire. Cap bar et picks toujours visibles dans les deux vues.
