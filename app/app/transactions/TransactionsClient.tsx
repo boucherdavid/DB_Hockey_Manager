@@ -8,11 +8,12 @@ const typeLabel: Record<string, string> = {
   actif: 'Actif', reserviste: 'Réserviste', ltir: 'LTIR', recrue: 'Recrue',
 }
 
-type TabKey = 'tous' | 'echanges' | 'signatures' | 'ltir' | 'gestion'
+type TabKey = 'tous' | 'echanges' | 'ballotage' | 'signatures' | 'ltir' | 'gestion'
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'tous', label: 'Tous' },
   { key: 'echanges', label: 'Échanges' },
+  { key: 'ballotage', label: 'Ballotage' },
   { key: 'signatures', label: 'Signatures' },
   { key: 'ltir', label: 'LTIR' },
   { key: 'gestion', label: 'Gestion' },
@@ -21,6 +22,7 @@ const TABS: { key: TabKey; label: string }[] = [
 const TAB_COLORS: Record<TabKey, string> = {
   tous: 'bg-slate-50',
   echanges: 'bg-blue-50',
+  ballotage: 'bg-orange-50',
   signatures: 'bg-green-50',
   ltir: 'bg-amber-50',
   gestion: 'bg-slate-50',
@@ -28,6 +30,7 @@ const TAB_COLORS: Record<TabKey, string> = {
 
 function classifyTx(items: any[]): TabKey {
   const types = items.map((i: any) => i.action_type)
+  if (types.includes('ballotage')) return 'ballotage'
   if (types.includes('transfer')) return 'echanges'
   if (types.includes('sign')) return 'signatures'
   if (
@@ -47,6 +50,8 @@ function itemDescription(item: any): string {
   const newT = item.new_player_type ? typeLabel[item.new_player_type] ?? item.new_player_type : null
 
   switch (item.action_type) {
+    case 'ballotage':
+      return `${from} cède ${player} à ${to} (ballotage)`
     case 'transfer': {
       if (item.pick) {
         const isOwn = item.pick.original_owner?.name === from
@@ -87,6 +92,7 @@ export default function TransactionsClient({ transactions, saison }: { transacti
   const counts: Record<TabKey, number> = {
     tous: classified.length,
     echanges: classified.filter(tx => tx._tab === 'echanges').length,
+    ballotage: classified.filter(tx => tx._tab === 'ballotage').length,
     signatures: classified.filter(tx => tx._tab === 'signatures').length,
     ltir: classified.filter(tx => tx._tab === 'ltir').length,
     gestion: classified.filter(tx => tx._tab === 'gestion').length,
@@ -144,7 +150,7 @@ export default function TransactionsClient({ transactions, saison }: { transacti
             </div>
             <ul className="space-y-1">
               {(tx.transaction_items ?? []).map((item: any) => {
-                const bg = tab === 'tous' ? TAB_COLORS[tx._tab] : itemBg
+                const bg = tab === 'tous' ? TAB_COLORS[tx._tab as TabKey] : itemBg
                 return (
                   <li key={item.id} className={`text-sm text-gray-700 ${bg} px-3 py-1.5 rounded`}>
                     {itemDescription(item)}

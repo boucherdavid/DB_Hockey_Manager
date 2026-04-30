@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { takeSnapshot } from '@/lib/snapshot'
 
-export type ActionType = 'transfer' | 'promote' | 'sign' | 'reactivate' | 'release' | 'type_change'
+export type ActionType = 'transfer' | 'promote' | 'sign' | 'reactivate' | 'release' | 'type_change' | 'ballotage'
 
 export type TxItemPayload = {
   action_type: ActionType
@@ -204,7 +204,7 @@ export async function submitTransactionAction(
       continue
     }
 
-    if (action_type === 'transfer' && player_id) {
+    if ((action_type === 'transfer' || action_type === 'ballotage') && player_id) {
       const fromRoster = virtual.get(from_pooler_id!)
       const entry = fromRoster?.find(e => e.player_id === player_id)
       if (!entry) return { error: `Joueur (id: ${player_id}) introuvable dans le roster source.` }
@@ -315,7 +315,7 @@ export async function submitTransactionAction(
       continue
     }
 
-    if (action_type === 'transfer' && player_id) {
+    if ((action_type === 'transfer' || action_type === 'ballotage') && player_id) {
       // Retirer du roster source
       const { error: e1 } = await supabase
         .from('pooler_rosters')
