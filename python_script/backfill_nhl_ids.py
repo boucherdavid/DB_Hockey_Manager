@@ -86,17 +86,41 @@ def main():
     print('[INFO] Connexion à Supabase...')
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    # Joueurs avec contrat actif cette saison
-    contrats = (
-        supabase
-        .table('player_contracts')
-        .select('player_id')
-        .eq('season', SEASON_LABEL)
-        .gt('cap_number', 0)
-        .execute()
-        .data
-    )
-    ids_avec_contrat = {c['player_id'] for c in contrats}
+    # Joueurs avec contrat actif cette saison (paginé pour dépasser la limite de 1000 lignes)
+    ids_avec_contrat: set = set()
+    offset_c = 0
+    while True:
+        batch = (
+            supabase
+            .table('player_contracts')
+            .select('player_id')
+            .eq('season', SEASON_LABEL)
+            .gt('cap_number', 0)
+            .range(offset_c, offset_c + 999)
+            .execute()
+            .data
+        )
+        ids_avec_contrat.update(c['player_id'] for c in batch)
+        if len(batch) < 1000:
+            break
+        offset_c += 1000
+
+    # Joueurs actuellement dans un roster pool actif (saison active)
+    saison_active = supabase.table('pool_seasons').select('id').eq('is_active', True).maybe_single().execute()
+    ids_en_pool: set = set()
+    if saison_active.data:
+        pool_season_id = saison_active.data['id']
+        rosters = (
+            supabase
+            .table('pooler_rosters')
+            .select('player_id')
+            .eq('pool_season_id', pool_season_id)
+            .eq('is_active', True)
+            .execute()
+            .data
+        )
+        ids_en_pool = {r['player_id'] for r in rosters}
+        print(f'[INFO] {len(ids_en_pool)} joueur(s) dans un roster pool actif')
 
     # Joueurs sans nhl_id
     print(f'\n[INFO] Recherche des joueurs sans nhl_id (saison {SEASON_LABEL})...')
@@ -116,8 +140,8 @@ def main():
             break
         offset += 1000
 
-    joueurs = [j for j in tous if j['id'] in ids_avec_contrat]
-    print(f'[INFO] {len(joueurs)} joueur(s) sans nhl_id avec contrat {SEASON_LABEL}\n')
+    joueurs = [j for j in tous if j['id'] in ids_avec_contrat or j['id'] in ids_en_pool]
+    print(f'[INFO] {len(joueurs)} joueur(s) sans nhl_id (contrat {SEASON_LABEL} ou en pool actif)\n')
 
     if not joueurs:
         print('[INFO] Rien à faire.')

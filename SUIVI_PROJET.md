@@ -56,6 +56,29 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-30 (suite 3)
+
+**Correctif — PlayerLink non cliquable pour certains joueurs (nhl_id null)**
+
+Symptôme : certains joueurs non cliquables dans la page organisation/contrats d'un pooler, alors qu'ils l'étaient dans la page statistiques.
+
+Cause : `PlayerLink` ne génère un lien que si `nhl_id` est non-null. Dans la page stats, l'ID vient de l'API NHL directement (toujours présent). Dans la page pooler, il vient du champ `players.nhl_id` en base, qui était null pour certains.
+
+Le `backfill_nhl_ids.py` (étape 4 du pipeline) avait deux bugs :
+1. La query `player_contracts` n'était pas paginée → seulement les 1000 premières lignes lues, les joueurs plus loin (ex : Granlund, id=3) étaient ignorés même avec un contrat actif.
+2. Le scope ne couvrait que les joueurs avec un contrat 2025-26, pas ceux dans un roster pool actif (recrues, LTIR, joueurs libérés récemment).
+
+Corrections :
+- Pagination ajoutée sur la query `player_contracts` dans le backfill.
+- Le backfill cible maintenant aussi tous les joueurs des `pooler_rosters` actifs.
+- 88 `nhl_id` mis à jour (dont McDavid, Larkin, Granlund, Burns, etc.).
+- Granlund (id=3) corrigé manuellement (nhl_id=8475798).
+
+Fichier modifié :
+- `python_script/backfill_nhl_ids.py` : pagination + scope élargi aux rostres pool actifs
+
+---
+
 ### 2026-04-30 (suite 2)
 
 **Page Équipes — cartes sommaires par pooler**
