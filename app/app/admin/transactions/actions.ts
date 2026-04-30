@@ -112,6 +112,7 @@ export async function submitTransactionAction(
   saisonId: number,
   notes: string,
   items: TxItemPayload[],
+  transactionDate?: string,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
 
@@ -285,9 +286,12 @@ export async function submitTransactionAction(
   // Ainsi, si une mutation échoue à mi-chemin, l'intent est toujours tracé
   // et un admin peut identifier et corriger l'état partiel.
   // (Une atomicité complète nécessiterait une fonction PostgreSQL via rpc().)
+  const txPayload: Record<string, unknown> = { pool_season_id: saisonId, notes: notes || null, created_by: user.id }
+  if (transactionDate) txPayload.created_at = `${transactionDate}T12:00:00Z`
+
   const { data: tx, error: txErr } = await supabase
     .from('transactions')
-    .insert({ pool_season_id: saisonId, notes: notes || null, created_by: user.id })
+    .insert(txPayload)
     .select('id')
     .single()
   if (txErr) return { error: txErr.message }

@@ -56,6 +56,54 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-30
+
+**Correctif sécurité — RLS manquant sur `scoring_config`**
+
+Alerte Supabase reçue : table `scoring_config` publiquement accessible (RLS désactivé).
+
+Cause : la migration `supabase_migrations/scoring_config.sql` avait créé la table sans `ENABLE ROW LEVEL SECURITY`, contrairement au `schema.sql` de référence qui l'incluait.
+
+Diagnostic exécuté dans le SQL Editor :
+```sql
+SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;
+```
+Résultat : seule `scoring_config` avait `rowsecurity = false`.
+
+Correctif appliqué :
+```sql
+ALTER TABLE scoring_config ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Lecture publique scoring" ON scoring_config FOR SELECT USING (true);
+CREATE POLICY "Admin modifie scoring" ON scoring_config FOR ALL
+  USING (EXISTS (SELECT 1 FROM poolers WHERE id = auth.uid() AND is_admin = true));
+```
+
+Toutes les autres tables (`feedback`, `player_contracts`, `player_stat_snapshots`, `players`, `playoff_rosters`, `playoff_seasons`, `pool_draft_picks`, `pool_seasons`, `pooler_rosters`, `poolers`, `push_subscriptions`, `roster_change_log`, `roster_changes`, `teams`, `transaction_items`, `transactions`) avaient déjà RLS activé.
+
+**Chantier A — Vue masse salariale / organisation dans `/poolers/[id]`**
+
+Nouveau composant `OrganisationToggle.tsx` (client) : toggle pill "Masse salariale / Organisation" dans l'onglet Organisation de la fiche pooler. Par défaut : vue masse salariale (actifs + réservistes uniquement). Clic sur "Organisation" révèle LTIR + banque de recrues + activation obligatoire. Cap bar et picks toujours visibles dans les deux vues.
+
+Fichiers modifiés :
+- `app/app/poolers/[id]/OrganisationToggle.tsx` : nouveau composant client (toggle)
+- `app/app/poolers/[id]/page.tsx` : `organisationContent` découpé en `capAndPicksContent` + `masseSalarialeRosters` + `orgCompleteRosters`, passés à `OrganisationToggle`
+
+**Date de transaction dans le TransactionBuilder**
+
+Champ date ajouté au formulaire de soumission de transaction (admin). Pré-rempli avec aujourd'hui, modifiable pour les transactions historiques. Si la date est modifiée, elle écrase le `created_at` (midi UTC du jour sélectionné) plutôt que d'utiliser `NOW()`. Remis à aujourd'hui après chaque soumission réussie.
+
+Fichiers modifiés :
+- `app/app/admin/transactions/TransactionBuilder.tsx` : state `transactionDate`, input date dans le résumé, reset post-soumission
+- `app/app/admin/transactions/actions.ts` : paramètre `transactionDate?` ajouté à `submitTransactionAction`, injecté dans le payload d'insert si fourni
+
+---
+
+**Analyse brainstorm — Actions self-service des poolers (Chantier 5)**
+
+Chantier 5 reformulé et précisé dans la feuille de route. Portée : échanges, signatures et libérations sont tous self-service avec approbation admin. LTIR reste admin-only jusqu'à ce qu'un système de blessures existe dans l'app. Pour les échanges, flux en deux temps : acceptation du destinataire → approbation admin. Double validation cap. Nouvelles tables : `pooler_requests` + `pooler_request_items`. Dépendances : Chantier H (notifications) + Transition. Complexité haute — positionné post-transition.
+
+---
+
 ### 2026-04-29 (session 3)
 
 **Chantier B — snapshots dans `submitTransactionAction` (commit)**

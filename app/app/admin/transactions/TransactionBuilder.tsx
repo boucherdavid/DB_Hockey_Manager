@@ -285,6 +285,7 @@ export default function TransactionBuilder({ poolers, saison }: { poolers: Poole
   const [selectedA, setSelectedA] = useState('')
   const [selectedB, setSelectedB] = useState('')
   const [notes, setNotes] = useState('')
+  const [transactionDate, setTransactionDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -294,13 +295,14 @@ export default function TransactionBuilder({ poolers, saison }: { poolers: Poole
   const handleSubmit = async () => {
     if (items.length === 0) return
     setSubmitting(true)
-    const result = await submitTransactionAction(saison.id, notes, items)
+    const result = await submitTransactionAction(saison.id, notes, items, transactionDate)
     setSubmitting(false)
     if (result.error) {
       setMessage({ type: 'error', text: result.error })
     } else {
       setItems([])
       setNotes('')
+      setTransactionDate(new Date().toISOString().slice(0, 10))
       setMessage({ type: 'success', text: 'Transaction enregistrée.' })
     }
     setTimeout(() => setMessage(null), 5000)
@@ -365,6 +367,15 @@ export default function TransactionBuilder({ poolers, saison }: { poolers: Poole
           )}
 
           <div className="border-t pt-4 mt-4 space-y-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1 block">Date de la transaction</label>
+              <input
+                type="date"
+                value={transactionDate}
+                onChange={e => setTransactionDate(e.target.value)}
+                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             <div>
               <label className="text-xs font-medium text-gray-500 mb-1 block">Notes (optionnel)</label>
               <textarea
