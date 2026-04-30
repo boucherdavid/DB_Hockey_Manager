@@ -56,6 +56,24 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-30 (suite 2)
+
+**Page Équipes — cartes sommaires par pooler**
+
+La page `/poolers` (menu "Équipes") ne montre plus un doublon du classement. Elle affiche une grille de cartes (2 colonnes desktop, 1 mobile), une par pooler, avec :
+- Rang + nom + total de points de la saison
+- Barre de masse salariale (vert/orange/rouge selon proximité du cap) avec montant utilisé / cap du pool
+- Liste compacte des noms de famille des joueurs actifs (triés A → D → G)
+- Ligne secondaire : nombre de réservistes, recrues (banque protégée), LTIR (masqués si 0)
+- Choix de repêchage non utilisés avec détail par saison (ex : `25-26: R1, R3`)
+
+Clic sur une carte → page organisation du pooler (`/poolers/[id]`).
+
+Fichier modifié :
+- `app/app/poolers/page.tsx` : réécriture complète (suppression de `ClassementTable`, nouvelles queries roster + picks, agrégation par pooler, rendu en cartes)
+
+---
+
 ### 2026-04-30 (suite)
 
 **Pool des séries — vue mobile réduite + tri par points global**
