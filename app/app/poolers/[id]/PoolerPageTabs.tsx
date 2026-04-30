@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { fmtPts } from '@/lib/nhl-stats'
 import PlayerLink from '@/components/PlayerLink'
 import type { PlayerContrib } from '@/lib/standings'
+import type { StreakInfo } from '@/lib/streaks'
 
 type Tab = 'organisation' | 'alignement' | 'historique'
 
@@ -70,7 +71,14 @@ function formatDate(iso: string): string {
   }).format(new Date(iso))
 }
 
-function PlayerStatsRow({ p }: { p: PlayerContrib }) {
+function StreakBadge({ info }: { info: StreakInfo | undefined }) {
+  if (!info || info.type === null) return null
+  if (info.type === 'hot')
+    return <span className="ml-1.5 text-xs font-bold text-orange-500" title={`${info.pts} pts en ${info.gp} matchs`}>▲</span>
+  return <span className="ml-1.5 text-xs font-bold text-sky-500" title={`${info.pts} pts en ${info.gp} matchs`}>▼</span>
+}
+
+function PlayerStatsRow({ p, streaks }: { p: PlayerContrib; streaks: Record<number, StreakInfo> }) {
   const isGoalie = p.position === 'G'
   const isActif = p.playerType === 'actif'
   const badge = TYPE_BADGE[p.playerType]
@@ -82,6 +90,7 @@ function PlayerStatsRow({ p }: { p: PlayerContrib }) {
             {p.lastName}, {p.firstName}
           </span>
         </PlayerLink>
+        <StreakBadge info={p.nhlId ? streaks[p.nhlId] : undefined} />
         {badge && <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">{badge}</span>}
       </td>
       <td className="px-2 py-2 hidden sm:table-cell text-gray-500 text-center text-xs">{p.teamAbbrev}</td>
@@ -113,10 +122,12 @@ function PlayerStatsRow({ p }: { p: PlayerContrib }) {
 export default function PoolerPageTabs({
   organisationContent,
   alignementPlayers,
+  streaks,
   changeLog,
 }: {
   organisationContent: React.ReactNode
   alignementPlayers: PlayerContrib[]
+  streaks: Record<number, StreakInfo>
   changeLog: ChangeLogEntry[]
 }) {
   const [tab, setTab] = useState<Tab>('alignement')
@@ -187,7 +198,7 @@ export default function PoolerPageTabs({
                             </td>
                           </tr>
                         )}
-                        <PlayerStatsRow key={i} p={p} />
+                        <PlayerStatsRow key={i} p={p} streaks={streaks} />
                       </>
                     )
                   })}

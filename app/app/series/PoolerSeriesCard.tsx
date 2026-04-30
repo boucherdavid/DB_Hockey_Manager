@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { fmtPts } from '@/lib/nhl-stats'
+import type { StreakInfo } from '@/lib/streaks'
 
 const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
 
@@ -9,6 +10,7 @@ export type PlayerLine = {
   firstName: string
   lastName: string
   position: string
+  nhlId: number | null
   conference: string
   goals: number
   assists: number
@@ -19,6 +21,13 @@ export type PlayerLine = {
   poolPoints: number
 }
 
+function StreakBadge({ info }: { info: StreakInfo | undefined }) {
+  if (!info || info.type === null) return null
+  if (info.type === 'hot')
+    return <span className="ml-1.5 text-xs font-bold text-orange-500" title={`${info.pts} pts en ${info.gp} matchs`}>▲</span>
+  return <span className="ml-1.5 text-xs font-bold text-sky-500" title={`${info.pts} pts en ${info.gp} matchs`}>▼</span>
+}
+
 type Props = {
   pooler: {
     poolerId: string
@@ -27,9 +36,10 @@ type Props = {
     players: PlayerLine[]
   }
   rank: number
+  streaks: Record<number, StreakInfo>
 }
 
-export function PoolerSeriesCard({ pooler, rank }: Props) {
+export function PoolerSeriesCard({ pooler, rank, streaks }: Props) {
   const [expanded, setExpanded] = useState(false)
 
   const sortedPlayers = [...pooler.players].sort(
@@ -72,6 +82,7 @@ export function PoolerSeriesCard({ pooler, rank }: Props) {
                 <td className="px-4 py-2">
                   <span className="font-medium text-gray-800">{pl.lastName}, {pl.firstName}</span>
                   <span className="ml-1.5 text-xs text-gray-400">{pl.position}</span>
+                  <StreakBadge info={pl.nhlId ? streaks[pl.nhlId] : undefined} />
                 </td>
                 <td className="px-2 py-2 text-center text-gray-600">{pl.goals}</td>
                 <td className="px-2 py-2 text-center text-gray-600">{pl.assists}</td>

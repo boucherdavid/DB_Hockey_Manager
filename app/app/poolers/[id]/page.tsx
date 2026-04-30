@@ -6,6 +6,8 @@ import PoolerPageTabs from './PoolerPageTabs'
 import OrganisationToggle from './OrganisationToggle'
 import PlayerLink from '@/components/PlayerLink'
 import { buildStandings } from '@/lib/standings'
+import { fetchStreaks } from '@/lib/streaks'
+import type { StreakInfo } from '@/lib/streaks'
 
 const DASH = '\u2014'
 const STAR = '\u2605'
@@ -534,6 +536,17 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     />
   )
 
+  const alignementPlayers = saison
+    ? (await buildStandings(supabase, saison.id)).find(s => s.poolerId === id)?.players ?? []
+    : []
+
+  const streaksMap = await fetchStreaks(
+    alignementPlayers.map(p => ({ nhlId: p.nhlId, isGoalie: p.position === 'G' })),
+    2,
+  )
+  const streaks: Record<number, StreakInfo> = {}
+  streaksMap.forEach((v, k) => { streaks[k] = v })
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -547,7 +560,8 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
       </div>
       <PoolerPageTabs
         organisationContent={organisationContent}
-        alignementPlayers={saison ? (await buildStandings(supabase, saison.id)).find(s => s.poolerId === id)?.players ?? [] : []}
+        alignementPlayers={alignementPlayers}
+        streaks={streaks}
         changeLog={changeLog}
       />
     </div>

@@ -56,6 +56,31 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-30 (suite 4)
+
+**Indicateurs de séquences chaudes/froides**
+
+Badge `▲` orange (chaud) ou `▼` bleu (froid) affiché après le nom du joueur dans l'onglet Alignement de la fiche pooler et dans le classement du pool des séries.
+
+Logique (fenêtre de 3 matchs) :
+- Skaters : goals + assists ; chaud si moyenne ≥ 1 pt/match, froid si ≤ 1 pt total
+- Gardiens : wins × 2 + OTL × 1 + shutouts × 2 ; mêmes seuils
+- Tooltip au survol : `X pts en Y matchs`
+
+Pool saison → game-log gameType=2 (saison régulière). Pool des séries → gameType=3 (playoffs).
+Cache 30 min (`revalidate: 1800`). Tous les joueurs d'une page sont fetchés en parallèle.
+
+Fichiers créés :
+- `app/lib/streaks.ts` : fetch game-log NHL + calcul chaud/froid
+
+Fichiers modifiés :
+- `app/app/poolers/[id]/page.tsx` : calcul streaks (gameType=2) passé à `PoolerPageTabs`
+- `app/app/poolers/[id]/PoolerPageTabs.tsx` : prop `streaks`, composant `StreakBadge`, badge dans `PlayerStatsRow`
+- `app/app/series/page.tsx` : `nhl_id` ajouté à la query, calcul streaks (gameType=3) passé aux cartes
+- `app/app/series/PoolerSeriesCard.tsx` : `nhlId` dans `PlayerLine`, prop `streaks`, badge dans le tableau
+
+---
+
 ### 2026-04-30 (suite 3)
 
 **Correctif — PlayerLink non cliquable pour certains joueurs (nhl_id null)**

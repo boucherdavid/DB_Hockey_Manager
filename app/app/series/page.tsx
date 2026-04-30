@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { fetchNhlSkaters, fetchNhlGoalies, normName } from '@/lib/nhl-stats'
+import { fetchStreaks } from '@/lib/streaks'
+import type { StreakInfo } from '@/lib/streaks'
 import { PoolerSeriesCard } from './PoolerSeriesCard'
 import type { PlayerLine } from './PoolerSeriesCard'
 
@@ -84,7 +86,7 @@ export default async function SeriesPage() {
         pooler_id, conference,
         snap_goals, snap_assists, snap_goalie_wins, snap_goalie_otl, snap_goalie_shutouts, snap_gwg,
         poolers (id, name),
-        players (first_name, last_name, position)
+        players (first_name, last_name, position, nhl_id)
       `)
       .eq('playoff_season_id', ps.id)
       .eq('is_active', true),
@@ -109,7 +111,7 @@ export default async function SeriesPage() {
 
   for (const row of rosterRows ?? []) {
     const pooler = row.poolers as unknown as { id: string; name: string } | null
-    const player = row.players as unknown as { first_name: string; last_name: string; position: string } | null
+    const player = row.players as unknown as { first_name: string; last_name: string; position: string; nhl_id: number | null } | null
     if (!pooler || !player) continue
 
     if (!poolerMap.has(pooler.id)) poolerMap.set(pooler.id, { name: pooler.name, players: [] })
@@ -127,6 +129,7 @@ export default async function SeriesPage() {
       const assists  = Math.max(0, (stat?.assists ?? 0)  - row.snap_assists)
       line = {
         firstName: player.first_name, lastName: player.last_name, position: 'G',
+        nhlId: player.nhl_id,
         conference: row.conference ?? '',
         goals, assists, gwg: 0, goalieWins: wins, goalieOtl: otl, goalieShutouts: shutouts,
         poolPoints: wins * p.goalie_win + otl * p.goalie_otl + shutouts * p.goalie_shutout
@@ -139,6 +142,7 @@ export default async function SeriesPage() {
       const gwg     = Math.max(0, (stat?.gameWinningGoals ?? 0)     - row.snap_gwg)
       line = {
         firstName: player.first_name, lastName: player.last_name, position: player.position,
+        nhlId: player.nhl_id,
         conference: row.conference ?? '',
         goals, assists, gwg, goalieWins: 0, goalieOtl: 0, goalieShutouts: 0,
         poolPoints: goals * p.goal + assists * p.assist + gwg * p.gwg,
@@ -159,6 +163,14 @@ export default async function SeriesPage() {
 
   const roundLabel = ROUND_LABEL[ps.current_round - 1] ?? `Ronde ${ps.current_round}`
 
+  const allPlayers = standings.flatMap(s => s.players)
+  const streaksMap = await fetchStreaks(
+    allPlayers.map(p => ({ nhlId: p.nhlId, isGoalie: p.position === 'G' })),
+    3,
+  )
+  const streaks: Record<number, StreakInfo> = {}
+  streaksMap.forEach((v, k) => { streaks[k] = v })
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-start justify-between mb-6">
@@ -178,7 +190,7 @@ export default async function SeriesPage() {
       ) : (
         <div className="space-y-3">
           {standings.map((pooler, i) => (
-            <PoolerSeriesCard key={pooler.poolerId} pooler={pooler} rank={i} />
+            <PoolerSeriesCard key={pooler.poolerId} pooler={pooler} rank={i} streaks={streaks} />
           ))}
         </div>
       )}
