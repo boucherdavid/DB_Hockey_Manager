@@ -88,13 +88,6 @@ export default function PlayerSlideOver() {
       <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            {player?.headshot && (
-              <img
-                src={player.headshot}
-                alt=""
-                className="w-12 h-12 rounded-full object-cover border border-gray-200 shrink-0"
-              />
-            )}
             {loading && (
               <div className="space-y-1.5">
                 <div className="h-5 w-36 bg-gray-200 rounded animate-pulse" />
