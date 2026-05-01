@@ -56,6 +56,47 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-01 (suite 2)
+
+**Toggle d'accès + Pool des séries (Phase 1)**
+
+**Toggle `gestion_effectifs_ouvert`** : l'admin peut désactiver l'outil `/gestion-effectifs` pour les poolers depuis `/admin/config`. L'admin y a toujours accès. Message d'indisponibilité côté pooler.
+
+**Toggle `is_playoff`** : marque une saison comme "séries" dans `/admin/config`. Déclenche les mécaniques spéciales dans l'outil séries.
+
+**Migration BD (déjà exécutée) :**
+```sql
+ALTER TABLE pool_seasons
+  ADD COLUMN IF NOT EXISTS gestion_effectifs_ouvert boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS is_playoff boolean NOT NULL DEFAULT false;
+-- + playoff_rounds, playoff_rosters, playoff_eliminations (avec RLS)
+```
+
+**Pool des séries — Phase 1** (`/gestion-series` pooler, `/admin/series` admin) :
+
+Mécaniques :
+- Alignement par ronde : 3F / 2D / 1G
+- Avant la deadline : modifications libres
+- Après la deadline (gel automatique) : N changements discrétionnaires max (configurable par ronde)
+- Remplacement d'urgence : joueur sur équipe éliminée remplaçable sans compter dans le budget, même après gel
+
+Admin (`/admin/series`) — 3 onglets :
+- **Rondes** : créer, modifier deadline/max changements, activer, transitionner vers la ronde suivante (copie des alignements)
+- **Éliminations** : marquer/retirer des équipes éliminées (déclenche les slots d'urgence chez les poolers concernés)
+- **Alignements** : vue en lecture seule de tous les alignements pour la ronde active
+
+Fichiers créés :
+- `app/app/gestion-series/actions.ts` : toutes les server actions (rondes, rosters, éliminations, search)
+- `app/app/gestion-series/GestionSeriesManager.tsx` : composant pooler
+- `app/app/gestion-series/page.tsx` : page pooler
+- `app/app/admin/series/page.tsx` + `SeriesAdminManager.tsx` : page admin
+
+Navbar : lien `/gestion-series` dans Pool Séries (desktop + mobile) + `/admin/series` dans Admin.
+
+**Phase 2 (plus tard)** : changements discrétionnaires post-deadline avec approbation admin, snapshots d'activation/désactivation par ronde.
+
+---
+
 ### 2026-05-01 (suite)
 
 **Gestion d'effectifs — délai de réactivation + budget de signatures**
