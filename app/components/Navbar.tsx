@@ -218,12 +218,13 @@ export default function Navbar({
               {/* Pool Séries */}
               <div className="relative">
                 <button onClick={() => toggle('series')}
-                  className={navBtnClass(isActive('/series'))}>
+                  className={navBtnClass(isActive('/series', '/gestion-series'))}>
                   {'Pool S\u00e9ries'} <Chevron open={openDropdown === 'series'} />
                 </button>
                 {openDropdown === 'series' && (
-                  <div className="absolute left-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
-                    {userName && <Link href="/series/picks" className={dropdownLinkClass('/series/picks')}>Mes choix</Link>}
+                  <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                    {userName && <Link href="/gestion-series" className={dropdownLinkClass('/gestion-series')}>Gestion d&apos;effectifs</Link>}
+                    {userName && <Link href="/series/picks"   className={dropdownLinkClass('/series/picks')}>Mes choix</Link>}
                     <Link href="/series" className={dropdownLinkClass('/series')}>Classement</Link>
                   </div>
                 )}
@@ -241,6 +242,7 @@ export default function Navbar({
                     <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
                       <Link href="/admin/transactions" className={dropdownLinkClass('/admin/transactions')}>Transactions</Link>
                       <Link href="/admin/mouvements"  className={dropdownLinkClass('/admin/mouvements')}>Gestion d&apos;effectifs</Link>
+                      <Link href="/admin/series"      className={dropdownLinkClass('/admin/series')}>Pool des séries</Link>
                       <Link href="/admin/rosters"      className={dropdownLinkClass('/admin/rosters')}>Rosters</Link>
                       <Link href="/admin/recrues"      className={dropdownLinkClass('/admin/recrues')}>Recrues</Link>
                       <Link href="/admin/presaison"    className={dropdownLinkClass('/admin/presaison')}>{'Pré-saison'}</Link>
@@ -340,7 +342,8 @@ export default function Navbar({
             <Link href="/calendrier" className={mobileLinkClass('/calendrier')}>Calendrier</Link>
 
             <MobileSection label={'Pool S\u00e9ries'} />
-            {userName && <Link href="/series/picks" className={mobileLinkClass('/series/picks')}>Mes choix</Link>}
+            {userName && <Link href="/gestion-series" className={mobileLinkClass('/gestion-series')}>Gestion d&apos;effectifs</Link>}
+            {userName && <Link href="/series/picks"   className={mobileLinkClass('/series/picks')}>Mes choix</Link>}
             <Link href="/series" className={mobileLinkClass('/series')}>Classement</Link>
 
             {userName && (
@@ -352,6 +355,7 @@ export default function Navbar({
                 {isAdmin && <MobileSection label="Admin" />}
                 {isAdmin && <Link href="/admin/transactions" className={mobileLinkClass('/admin/transactions')}>Transactions</Link>}
                 {isAdmin && <Link href="/admin/mouvements"  className={mobileLinkClass('/admin/mouvements')}>Gestion d&apos;effectifs</Link>}
+                {isAdmin && <Link href="/admin/series"      className={mobileLinkClass('/admin/series')}>Pool des séries</Link>}
                 {isAdmin && <Link href="/admin/rosters"      className={mobileLinkClass('/admin/rosters')}>Rosters</Link>}
                 {isAdmin && <Link href="/admin/recrues"      className={mobileLinkClass('/admin/recrues')}>Recrues</Link>}
                 {isAdmin && <Link href="/admin/presaison"    className={mobileLinkClass('/admin/presaison')}>{'Pré-saison'}</Link>}

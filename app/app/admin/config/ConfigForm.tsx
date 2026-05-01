@@ -13,6 +13,8 @@ type Saison = {
   delai_reactivation_jours?: number | null
   max_signatures_al?: number | null
   max_signatures_ltir?: number | null
+  gestion_effectifs_ouvert?: boolean | null
+  is_playoff?: boolean | null
 }
 
 const fmt = (n: number) =>
@@ -30,6 +32,8 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
   const [delaiReactivation, setDelaiReactivation] = useState(String(saison.delai_reactivation_jours ?? 7))
   const [maxAl, setMaxAl] = useState(String(saison.max_signatures_al ?? 10))
   const [maxLtir, setMaxLtir] = useState(String(saison.max_signatures_ltir ?? 2))
+  const [toolOuvert, setToolOuvert] = useState(saison.gestion_effectifs_ouvert ?? true)
+  const [isPlayoff, setIsPlayoff] = useState(saison.is_playoff ?? false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -54,6 +58,8 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
         delaiReactivationJours: Math.max(0, parseInt(delaiReactivation) || 0),
         maxSignaturesAl: Math.max(0, parseInt(maxAl) || 0),
         maxSignaturesLtir: Math.max(0, parseInt(maxLtir) || 0),
+        gestionEffectifsOuvert: toolOuvert,
+        isPlayoff,
       },
     )
     setSaving(false)
@@ -157,6 +163,32 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
           <span className="text-slate-600 text-sm font-bold">Règles de transactions</span>
         </div>
         <div className="divide-y divide-gray-100">
+          <div className="px-3 py-3 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Outil gestion d&apos;effectifs ouvert</p>
+              <p className="text-xs text-gray-400 mt-0.5">Si désactivé, seul l&apos;admin y a accès.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToolOuvert(v => !v)}
+              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${toolOuvert ? 'bg-blue-600' : 'bg-gray-300'}`}
+            >
+              <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${toolOuvert ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+          <div className="px-3 py-3 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Saison de type séries (playoffs)</p>
+              <p className="text-xs text-gray-400 mt-0.5">Active les mécaniques spéciales du pool des séries.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsPlayoff(v => !v)}
+              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${isPlayoff ? 'bg-blue-600' : 'bg-gray-300'}`}
+            >
+              <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${isPlayoff ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
           <div className="px-3 py-3">
             <p className="text-xs text-gray-500 mb-1">
               Délai de réactivation <span className="text-gray-400">(jours)</span>

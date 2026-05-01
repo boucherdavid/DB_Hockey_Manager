@@ -347,7 +347,7 @@ export async function updateCapAction(
   nhlCap: number,
   capMultiplier: number,
   nextNhlCap?: number | null,
-  opts?: { delaiReactivationJours?: number; maxSignaturesAl?: number; maxSignaturesLtir?: number },
+  opts?: { delaiReactivationJours?: number; maxSignaturesAl?: number; maxSignaturesLtir?: number; gestionEffectifsOuvert?: boolean; isPlayoff?: boolean },
 ): Promise<{ error?: string }> {
   if (!nhlCap || nhlCap < 1_000_000) return { error: 'Cap NHL invalide.' }
   if (!capMultiplier || capMultiplier <= 0) return { error: 'Facteur invalide.' }
@@ -358,6 +358,8 @@ export async function updateCapAction(
   if (opts?.delaiReactivationJours !== undefined) updates.delai_reactivation_jours = opts.delaiReactivationJours
   if (opts?.maxSignaturesAl !== undefined) updates.max_signatures_al = opts.maxSignaturesAl
   if (opts?.maxSignaturesLtir !== undefined) updates.max_signatures_ltir = opts.maxSignaturesLtir
+  if (opts?.gestionEffectifsOuvert !== undefined) updates.gestion_effectifs_ouvert = opts.gestionEffectifsOuvert
+  if (opts?.isPlayoff !== undefined) updates.is_playoff = opts.isPlayoff
 
   const { error } = await supabase
     .from('pool_seasons')

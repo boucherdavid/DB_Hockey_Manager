@@ -53,6 +53,8 @@ export type SaisonInfo = {
   delaiReactivationJours: number
   maxSignaturesAl: number
   maxSignaturesLtir: number
+  gestionEffectifsOuvert: boolean
+  isPlayoff: boolean
 }
 
 export type SigningCounts = {
@@ -79,7 +81,7 @@ export async function getActiveSaisonAction(): Promise<SaisonInfo | null> {
   const supabase = await createClient()
   const { data } = await supabase
     .from('pool_seasons')
-    .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir')
+    .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir, gestion_effectifs_ouvert, is_playoff')
     .eq('is_active', true)
     .single()
   if (!data) return null
@@ -90,6 +92,8 @@ export async function getActiveSaisonAction(): Promise<SaisonInfo | null> {
     delaiReactivationJours: data.delai_reactivation_jours ?? 7,
     maxSignaturesAl: data.max_signatures_al ?? 10,
     maxSignaturesLtir: data.max_signatures_ltir ?? 2,
+    gestionEffectifsOuvert: data.gestion_effectifs_ouvert ?? true,
+    isPlayoff: data.is_playoff ?? false,
   }
 }
 

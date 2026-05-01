@@ -17,7 +17,7 @@ export default async function AdminMouvementsPage() {
   const [{ data: poolers }, { data: saison }] = await Promise.all([
     supabase.from('poolers').select('id, name').order('name'),
     supabase.from('pool_seasons')
-      .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir')
+      .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir, gestion_effectifs_ouvert, is_playoff')
       .eq('is_active', true).single(),
   ])
 

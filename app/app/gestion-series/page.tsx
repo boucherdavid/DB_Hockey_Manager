@@ -1,0 +1,71 @@
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import GestionSeriesManager from './GestionSeriesManager'
+import { getActivePlayoffSaisonAction, getActiveRoundAction } from './actions'
+
+export const metadata = { title: 'Gestion d\'effectifs — Séries' }
+export const dynamic = 'force-dynamic'
+
+export default async function GestionSeriesPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: pooler } = await supabase
+    .from('poolers').select('id, name, is_admin').eq('id', user.id).single()
+  if (!pooler) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <p className="text-gray-500">Votre compte n&apos;est pas lié à un pooler.</p>
+      </div>
+    )
+  }
+
+  const saison = await getActivePlayoffSaisonAction()
+  if (!saison) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Pool des séries</h1>
+        <p className="text-gray-500">Aucune saison de séries active.</p>
+      </div>
+    )
+  }
+
+  const isAdmin = pooler.is_admin ?? false
+
+  if (!isAdmin && !saison.gestionEffectifsOuvert) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Pool des séries</h1>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-5 text-sm text-yellow-800">
+          L&apos;outil de gestion des séries est temporairement indisponible. Contactez l&apos;administrateur.
+        </div>
+      </div>
+    )
+  }
+
+  const round = await getActiveRoundAction(saison.id)
+  if (!round) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Pool des séries — {saison.season}</h1>
+        <p className="text-gray-500">Aucune ronde active pour l&apos;instant. Revenez bientôt.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold text-gray-800 mb-1">Pool des séries — {saison.season}</h1>
+      <p className="text-sm text-gray-500 mb-6">Ronde {round.roundNumber}</p>
+      <GestionSeriesManager
+        isAdmin={isAdmin}
+        poolerId={pooler.id}
+        poolerName={pooler.name}
+        round={round}
+        poolSeasonId={saison.id}
+        season={saison.season}
+      />
+    </div>
+  )
+}

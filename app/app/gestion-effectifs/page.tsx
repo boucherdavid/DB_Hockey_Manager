@@ -13,7 +13,7 @@ export default async function GestionEffectifsPage() {
   const [{ data: pooler }, { data: saison }] = await Promise.all([
     supabase.from('poolers').select('id, name, is_admin').eq('id', user.id).single(),
     supabase.from('pool_seasons')
-      .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir')
+      .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir, gestion_effectifs_ouvert, is_playoff')
       .eq('is_active', true).single(),
   ])
 
@@ -34,6 +34,20 @@ export default async function GestionEffectifsPage() {
     )
   }
 
+  const isAdmin = pooler.is_admin ?? false
+  const toolOuvert = saison.gestion_effectifs_ouvert ?? true
+
+  if (!isAdmin && !toolOuvert) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Gestion d&apos;effectifs</h1>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-5 text-sm text-yellow-800">
+          L&apos;outil de gestion d&apos;effectifs est temporairement indisponible. Contactez l&apos;administrateur pour plus d&apos;informations.
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-gray-800 mb-1">Gestion d&apos;effectifs</h1>
@@ -41,7 +55,7 @@ export default async function GestionEffectifsPage() {
         Ajoutez une ou plusieurs actions, vérifiez l&apos;état projeté, puis soumettez en une seule opération.
       </p>
       <GestionEffectifsManager
-        isAdmin={false}
+        isAdmin={isAdmin}
         selfPoolerId={pooler.id}
         selfPoolerName={pooler.name}
         saisonId={saison.id}
