@@ -56,6 +56,38 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-04-30 (suite 5)
+
+**Nouvel outil admin — Mouvements d'alignement (`/admin/mouvements`)**
+
+Outil parallèle au RosterManager, orienté action plutôt qu'orienté joueur. L'admin choisit d'abord le type de mouvement, puis les joueurs concernés. Chaque soumission est atomique (tous les changements ou aucun), journalisée avec snapshot NHL.
+
+7 types de mouvements (extensibles) :
+- **Ajustement d'alignement** : interchanger un actif et un réserviste
+- **Activation recrue** : recrue → actif, actif → réserviste
+- **Mise sur LTIR** : actif → LTIR (snapshot désactivation)
+- **Retour LTIR** : LTIR → actif, actif → réserviste
+- **Agent libre + LTIR** : joueur → LTIR + nouveau joueur signé actif
+- **Signature agent libre** : nouveau joueur ajouté (actif ou réserviste)
+- **Libération** : joueur retiré du roster
+
+Détection automatique de la date effective :
+- Si un joueur concerné a déjà joué aujourd'hui → avertissement + date = demain
+- Sinon → date = aujourd'hui
+- L'admin peut toujours surpasser la date (transactions historiques)
+
+Notifications push supprimées pour les transactions historiques (date ≠ aujourd'hui).
+
+Fichiers créés :
+- `app/app/admin/mouvements/page.tsx`
+- `app/app/admin/mouvements/MouvementsManager.tsx`
+- `app/app/admin/mouvements/actions.ts`
+
+Fichiers modifiés :
+- `app/components/Navbar.tsx` : lien "Mouvements" ajouté dans le menu admin (desktop + mobile)
+
+---
+
 ### 2026-04-30 (suite 4)
 
 **Indicateurs de séquences chaudes/froides**

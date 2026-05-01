@@ -239,6 +239,7 @@ export default function Navbar({
                   {openDropdown === 'admin' && (
                     <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
                       <Link href="/admin/transactions" className={dropdownLinkClass('/admin/transactions')}>Transactions</Link>
+                      <Link href="/admin/mouvements"  className={dropdownLinkClass('/admin/mouvements')}>Mouvements</Link>
                       <Link href="/admin/rosters"      className={dropdownLinkClass('/admin/rosters')}>Rosters</Link>
                       <Link href="/admin/recrues"      className={dropdownLinkClass('/admin/recrues')}>Recrues</Link>
                       <Link href="/admin/presaison"    className={dropdownLinkClass('/admin/presaison')}>{'Pré-saison'}</Link>
@@ -348,6 +349,7 @@ export default function Navbar({
                 <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler un problème</Link>
                 {isAdmin && <MobileSection label="Admin" />}
                 {isAdmin && <Link href="/admin/transactions" className={mobileLinkClass('/admin/transactions')}>Transactions</Link>}
+                {isAdmin && <Link href="/admin/mouvements"  className={mobileLinkClass('/admin/mouvements')}>Mouvements</Link>}
                 {isAdmin && <Link href="/admin/rosters"      className={mobileLinkClass('/admin/rosters')}>Rosters</Link>}
                 {isAdmin && <Link href="/admin/recrues"      className={mobileLinkClass('/admin/recrues')}>Recrues</Link>}
                 {isAdmin && <Link href="/admin/presaison"    className={mobileLinkClass('/admin/presaison')}>{'Pré-saison'}</Link>}
