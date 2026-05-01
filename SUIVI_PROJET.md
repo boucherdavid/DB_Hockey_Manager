@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-04-29
+Derniere mise a jour: 2026-05-01
 
 ## Role du fichier
 
@@ -55,6 +55,42 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-05-01
+
+**Gestion d'effectifs — outil multi-actions accessible aux poolers**
+
+Refonte complète de l'outil `/admin/mouvements` :
+
+**Accès poolers** : nouvelle page `/gestion-effectifs` accessible à tous les poolers connectés. Chaque pooler voit et modifie uniquement son propre roster (détection automatique via session). La date effective est fixée côté serveur au moment de la soumission (pas de champ date visible).
+
+**Accès admin** : `/admin/mouvements` utilise désormais le même composant partagé avec `isAdmin=true`. L'admin peut sélectionner n'importe quel pooler et activer un toggle "Forcer une date effective" si nécessaire (rattrapage, entente convenue, etc.).
+
+**Multi-actions (panier)** : l'utilisateur ajoute plusieurs actions une par une (chaque ajout remet le formulaire à zéro). Toutes les actions sont soumises en une seule opération. Les selects de chaque nouvelle action reflètent le roster projeté après les actions déjà en panier (ex. : un actif déplacé en réserviste par la première action disparaît de la liste des actifs pour la suivante).
+
+**Validation en temps réel** :
+- Masse salariale projetée (actifs + réservistes, LTIR exclus) vs cap du pool — barre visuelle, blocage si dépassement.
+- Composition des actifs 12A / 6D / 2G — affichage coloré, blocage si incorrecte.
+- Minimum 2 réservistes — blocage si non respecté.
+
+**Actions disponibles** :
+- Poolers : Ajustement (actif ↔ réserviste), Activation recrue, Signature agent libre, Libération.
+- Admin uniquement (LTIR non implémenté côté pooler pour l'instant) : LTIR, Retour LTIR, LTIR + Signature.
+
+**Sécurité** : la server action `submitBatchAction` vérifie l'identité de l'utilisateur — un pooler ne peut soumettre que pour son propre roster. Les écritures utilisent `createAdminClient()` (bypass RLS) mais l'autorisation est gérée applicativement.
+
+**Notification push** : si c'est l'admin qui soumet, le pooler est notifié (message adapté selon le nombre d'actions).
+
+Fichiers créés :
+- `app/app/gestion-effectifs/actions.ts` : server actions partagées (roster avec `cap_number`, recherche joueurs, batch submit)
+- `app/app/gestion-effectifs/GestionEffectifsManager.tsx` : composant principal (panier, projection, validation)
+- `app/app/gestion-effectifs/page.tsx` : page pooler
+
+Fichiers modifiés :
+- `app/app/admin/mouvements/page.tsx` : utilise désormais `GestionEffectifsManager` avec `isAdmin=true`
+- `app/components/Navbar.tsx` : "Gestion d'effectifs" ajouté dans Pool Saison (poolers connectés, desktop + mobile) ; renommé dans le menu Admin
+
+---
 
 ### 2026-04-30 (suite 5)
 
