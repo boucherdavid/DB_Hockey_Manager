@@ -26,6 +26,7 @@ export type RosterEntry = {
   teamCode: string | null
   nhlId: number | null
   capNumber: number | null
+  lastDeactivatedAt: string | null  // ISO timestamp de la dernière désactivation (actif→res ou ltir)
 }
 
 export type RosterForPooler = {
@@ -49,6 +50,14 @@ export type SaisonInfo = {
   id: number
   season: string
   poolCap: number
+  delaiReactivationJours: number
+  maxSignaturesAl: number
+  maxSignaturesLtir: number
+}
+
+export type SigningCounts = {
+  al: number
+  ltir: number
 }
 
 export type BatchActionInput = {
@@ -64,15 +73,24 @@ export type BatchActionInput = {
   releaseEntryId?: number
 }
 
+// ─── Read actions ─────────────────────────────────────────────────────────────
+
 export async function getActiveSaisonAction(): Promise<SaisonInfo | null> {
   const supabase = await createClient()
   const { data } = await supabase
     .from('pool_seasons')
-    .select('id, season, pool_cap')
+    .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir')
     .eq('is_active', true)
     .single()
   if (!data) return null
-  return { id: data.id, season: data.season, poolCap: Number(data.pool_cap) }
+  return {
+    id: data.id,
+    season: data.season,
+    poolCap: Number(data.pool_cap),
+    delaiReactivationJours: data.delai_reactivation_jours ?? 7,
+    maxSignaturesAl: data.max_signatures_al ?? 10,
+    maxSignaturesLtir: data.max_signatures_ltir ?? 2,
+  }
 }
 
 export async function getPoolerRosterAction(
@@ -81,22 +99,38 @@ export async function getPoolerRosterAction(
   season: string,
 ): Promise<RosterForPooler> {
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('pooler_rosters')
-    .select(`
-      id, player_id, player_type,
-      players (
-        first_name, last_name, position, nhl_id,
-        teams (code),
-        player_contracts (season, cap_number)
-      )
-    `)
-    .eq('pooler_id', poolerId)
-    .eq('pool_season_id', saisonId)
-    .eq('is_active', true)
-    .order('player_type')
 
-  const entries: RosterEntry[] = (data ?? []).map((r: any) => ({
+  const [{ data: rosterData }, { data: deactRows }] = await Promise.all([
+    supabase
+      .from('pooler_rosters')
+      .select(`
+        id, player_id, player_type,
+        players (
+          first_name, last_name, position, nhl_id,
+          teams (code),
+          player_contracts (season, cap_number)
+        )
+      `)
+      .eq('pooler_id', poolerId)
+      .eq('pool_season_id', saisonId)
+      .eq('is_active', true)
+      .order('player_type'),
+    supabase
+      .from('roster_change_log')
+      .select('player_id, changed_at')
+      .eq('pooler_id', poolerId)
+      .eq('pool_season_id', saisonId)
+      .in('change_type', ['deactivation', 'ltir'])
+      .order('changed_at', { ascending: false }),
+  ])
+
+  // most recent deactivation date per player
+  const deactMap = new Map<number, string>()
+  for (const row of (deactRows ?? [])) {
+    if (!deactMap.has(row.player_id)) deactMap.set(row.player_id, row.changed_at)
+  }
+
+  const entries: RosterEntry[] = (rosterData ?? []).map((r: any) => ({
     id: r.id,
     playerId: r.player_id,
     playerType: (r.player_type === 'agent_libre' ? 'reserviste' : r.player_type) as PlayerType,
@@ -106,6 +140,7 @@ export async function getPoolerRosterAction(
     teamCode: r.players?.teams?.code ?? null,
     nhlId: r.players?.nhl_id ?? null,
     capNumber: r.players?.player_contracts?.find((c: any) => c.season === season)?.cap_number ?? null,
+    lastDeactivatedAt: deactMap.get(r.player_id) ?? null,
   }))
 
   return {
@@ -140,6 +175,26 @@ export async function searchPlayersAction(
   }))
 }
 
+export async function getSigningCountsAction(
+  poolerId: string,
+  saisonId: number,
+): Promise<SigningCounts> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('roster_change_log')
+    .select('change_type')
+    .eq('pooler_id', poolerId)
+    .eq('pool_season_id', saisonId)
+    .in('change_type', ['signature_agent_libre', 'signature_ltir'])
+  const rows = data ?? []
+  return {
+    al:   rows.filter(r => r.change_type === 'signature_agent_libre').length,
+    ltir: rows.filter(r => r.change_type === 'signature_ltir').length,
+  }
+}
+
+// ─── Submit action ────────────────────────────────────────────────────────────
+
 export async function submitBatchAction(input: {
   poolerId: string
   saisonId: number
@@ -163,6 +218,30 @@ export async function submitBatchAction(input: {
     : new Date().toISOString()
   const changedBy = isAdmin ? null : user.id
 
+  // Fetch config
+  const { data: saisonConfig } = await db
+    .from('pool_seasons')
+    .select('delai_reactivation_jours, max_signatures_al, max_signatures_ltir')
+    .eq('id', input.saisonId)
+    .single()
+
+  const delaiJours    = saisonConfig?.delai_reactivation_jours ?? 7
+  const maxAl         = saisonConfig?.max_signatures_al ?? 10
+  const maxLtir       = saisonConfig?.max_signatures_ltir ?? 2
+
+  // Count existing signings
+  const { data: existingSigns } = await db
+    .from('roster_change_log')
+    .select('change_type')
+    .eq('pooler_id', input.poolerId)
+    .eq('pool_season_id', input.saisonId)
+    .in('change_type', ['signature_agent_libre', 'signature_ltir'])
+
+  let alUsed   = (existingSigns ?? []).filter(s => s.change_type === 'signature_agent_libre').length
+  let ltirUsed = (existingSigns ?? []).filter(s => s.change_type === 'signature_ltir').length
+
+  // ─── Helpers ───────────────────────────────────────────────────────────────
+
   async function getEntry(entryId: number) {
     const { data } = await db
       .from('pooler_rosters')
@@ -184,6 +263,29 @@ export async function submitBatchAction(input: {
     await takeSnapshot({ playerId, nhlId, poolerId: input.poolerId, poolSeasonId: input.saisonId, snapshotType: type })
   }
 
+  async function checkReactivationDelay(playerId: number) {
+    if (isAdmin) return  // les admins ne sont pas soumis au délai
+    const { data: lastDeact } = await db
+      .from('roster_change_log')
+      .select('changed_at')
+      .eq('player_id', playerId)
+      .eq('pooler_id', input.poolerId)
+      .eq('pool_season_id', input.saisonId)
+      .in('change_type', ['deactivation', 'ltir'])
+      .order('changed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (!lastDeact) return
+    const daysDiff = (Date.now() - new Date(lastDeact.changed_at).getTime()) / 86_400_000
+    if (daysDiff < delaiJours) {
+      const unlock = new Date(lastDeact.changed_at)
+      unlock.setDate(unlock.getDate() + delaiJours)
+      throw new Error(
+        `Ce joueur ne peut pas être réactivé avant le ${unlock.toLocaleDateString('fr-CA')} (délai de ${delaiJours} j)`,
+      )
+    }
+  }
+
   async function deactivate(entryId: number, toType: 'reserviste' | 'ltir') {
     const e = await getEntry(entryId)
     if (!e) throw new Error('Entrée introuvable')
@@ -192,16 +294,30 @@ export async function submitBatchAction(input: {
     await snap(e.player_id, e.players?.nhl_id ?? null, 'deactivation')
   }
 
-  async function activate(entryId: number, fromType: string) {
+  async function activate(entryId: number, fromType: string, withDelayCheck = false) {
     const e = await getEntry(entryId)
     if (!e) throw new Error('Entrée introuvable')
+    if (withDelayCheck) await checkReactivationDelay(e.player_id)
     await db.from('pooler_rosters').update({ player_type: 'actif' }).eq('id', entryId)
-    const changeType = fromType === 'ltir' ? 'retour_ltir' : 'activation'
-    await log(e.player_id, changeType, fromType, 'actif')
+    await log(e.player_id, fromType === 'ltir' ? 'retour_ltir' : 'activation', fromType, 'actif')
     await snap(e.player_id, e.players?.nhl_id ?? null, 'activation')
   }
 
-  async function addNewPlayer(playerId: number, playerType: 'actif' | 'reserviste') {
+  async function addNewPlayer(playerId: number, playerType: 'actif' | 'reserviste', signingType: 'al' | 'ltir') {
+    // Validate budget (non-admins seulement)
+    if (!isAdmin) {
+      if (signingType === 'ltir') {
+        // Budget LTIR dispo ou débord sur AL ?
+        const ltirRoom = maxLtir - ltirUsed
+        const alRoom   = maxAl - alUsed
+        if (ltirRoom <= 0 && alRoom <= 0)
+          throw new Error(`Budgets d'agents libres épuisés (AL : ${alUsed}/${maxAl}, LTIR : ${ltirUsed}/${maxLtir})`)
+      } else {
+        if (alUsed >= maxAl)
+          throw new Error(`Budget d'agents libres standard épuisé (${alUsed}/${maxAl})`)
+      }
+    }
+
     const { data: existing } = await db
       .from('pooler_rosters').select('id')
       .eq('pooler_id', input.poolerId).eq('player_id', playerId)
@@ -215,10 +331,24 @@ export async function submitBatchAction(input: {
         pool_season_id: input.saisonId, player_type: playerType, is_active: true,
       })
     }
+
     const { data: p } = await db.from('players').select('nhl_id').eq('id', playerId).single()
-    await log(playerId, 'signature_agent_libre', null, playerType)
+
+    // Choisir le bon budget et type de log
+    let logType: string
+    if (signingType === 'ltir' && ltirUsed < maxLtir) {
+      logType = 'signature_ltir'
+      ltirUsed++
+    } else {
+      logType = 'signature_agent_libre'
+      alUsed++
+    }
+
+    await log(playerId, logType, null, playerType)
     if (playerType === 'actif') await snap(playerId, p?.nhl_id ?? null, 'activation')
   }
+
+  // ─── Process actions ────────────────────────────────────────────────────────
 
   try {
     for (const action of input.actions) {
@@ -226,7 +356,7 @@ export async function submitBatchAction(input: {
         case 'swap':
           if (!action.swapActifId || !action.swapReservisteId) throw new Error('Joueurs manquants (échange)')
           await deactivate(action.swapActifId, 'reserviste')
-          await activate(action.swapReservisteId, 'reserviste')
+          await activate(action.swapReservisteId, 'reserviste', /* withDelayCheck */ true)
           break
 
         case 'activate_rookie':
@@ -243,18 +373,18 @@ export async function submitBatchAction(input: {
         case 'return_ltir':
           if (!action.returnLtirEntryId || !action.deactivateActifId) throw new Error('Joueurs manquants (retour LTIR)')
           await deactivate(action.deactivateActifId, 'reserviste')
-          await activate(action.returnLtirEntryId, 'ltir')
+          await activate(action.returnLtirEntryId, 'ltir', /* withDelayCheck */ true)
           break
 
         case 'ltir_sign':
           if (!action.ltirEntryId || !action.newPlayerId) throw new Error('Joueurs manquants (LTIR + signature)')
           await deactivate(action.ltirEntryId, 'ltir')
-          await addNewPlayer(action.newPlayerId, 'actif')
+          await addNewPlayer(action.newPlayerId, 'actif', 'ltir')
           break
 
         case 'sign':
           if (!action.newPlayerId || !action.newPlayerType) throw new Error('Joueur manquant (signature)')
-          await addNewPlayer(action.newPlayerId, action.newPlayerType)
+          await addNewPlayer(action.newPlayerId, action.newPlayerType, 'al')
           break
 
         case 'release': {
@@ -269,7 +399,7 @@ export async function submitBatchAction(input: {
         }
 
         default:
-          throw new Error(`Action inconnue`)
+          throw new Error('Action inconnue')
       }
     }
 

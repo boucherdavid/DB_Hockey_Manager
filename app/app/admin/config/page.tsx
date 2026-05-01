@@ -21,7 +21,7 @@ export default async function AdminConfigPage() {
 
   const { data: saisons } = await supabase
     .from('pool_seasons')
-    .select('id, season, nhl_cap, cap_multiplier, pool_cap, is_active, next_nhl_cap')
+    .select('id, season, nhl_cap, cap_multiplier, pool_cap, is_active, next_nhl_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir')
     .order('season', { ascending: false })
 
   const activeSaison = (saisons ?? []).find(s => s.is_active) ?? null

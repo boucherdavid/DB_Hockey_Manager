@@ -347,6 +347,7 @@ export async function updateCapAction(
   nhlCap: number,
   capMultiplier: number,
   nextNhlCap?: number | null,
+  opts?: { delaiReactivationJours?: number; maxSignaturesAl?: number; maxSignaturesLtir?: number },
 ): Promise<{ error?: string }> {
   if (!nhlCap || nhlCap < 1_000_000) return { error: 'Cap NHL invalide.' }
   if (!capMultiplier || capMultiplier <= 0) return { error: 'Facteur invalide.' }
@@ -354,6 +355,10 @@ export async function updateCapAction(
   const supabase = await createClient()
   const updates: Record<string, unknown> = { nhl_cap: nhlCap, cap_multiplier: capMultiplier }
   if (nextNhlCap !== undefined) updates.next_nhl_cap = nextNhlCap ?? null
+  if (opts?.delaiReactivationJours !== undefined) updates.delai_reactivation_jours = opts.delaiReactivationJours
+  if (opts?.maxSignaturesAl !== undefined) updates.max_signatures_al = opts.maxSignaturesAl
+  if (opts?.maxSignaturesLtir !== undefined) updates.max_signatures_ltir = opts.maxSignaturesLtir
+
   const { error } = await supabase
     .from('pool_seasons')
     .update(updates)

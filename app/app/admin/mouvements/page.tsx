@@ -16,7 +16,9 @@ export default async function AdminMouvementsPage() {
 
   const [{ data: poolers }, { data: saison }] = await Promise.all([
     supabase.from('poolers').select('id, name').order('name'),
-    supabase.from('pool_seasons').select('id, season, pool_cap').eq('is_active', true).single(),
+    supabase.from('pool_seasons')
+      .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir')
+      .eq('is_active', true).single(),
   ])
 
   if (!saison) {
@@ -40,6 +42,9 @@ export default async function AdminMouvementsPage() {
         saisonId={saison.id}
         season={saison.season}
         poolCap={Number(saison.pool_cap)}
+        delaiReactivationJours={saison.delai_reactivation_jours ?? 7}
+        maxSignaturesAl={saison.max_signatures_al ?? 10}
+        maxSignaturesLtir={saison.max_signatures_ltir ?? 2}
       />
     </div>
   )

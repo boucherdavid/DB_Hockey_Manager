@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useTransition } from 'react'
 import {
   getPoolerRosterAction,
   searchPlayersAction,
+  getSigningCountsAction,
   submitBatchAction,
 } from './actions'
 import type {
@@ -12,6 +13,7 @@ import type {
   RosterForPooler,
   PlayerSearchResult,
   BatchActionInput,
+  SigningCounts,
 } from './actions'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -27,9 +29,9 @@ type CartItem = {
   ltirEntry?: RosterEntry
   returnLtirEntry?: RosterEntry
   releaseEntry?: RosterEntry
-  newPlayerEntry?: RosterEntry  // fake entry (id < 0) for projection only
+  newPlayerEntry?: RosterEntry
   newPlayerType?: 'actif' | 'reserviste'
-  newPlayerId?: number           // real players.id for DB submission
+  newPlayerId?: number
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -56,14 +58,25 @@ function posCategory(pos: string | null): 'F' | 'D' | 'G' {
   return 'F'
 }
 
+function isLocked(entry: RosterEntry | undefined, delaiJours: number): boolean {
+  if (!entry?.lastDeactivatedAt) return false
+  const days = (Date.now() - new Date(entry.lastDeactivatedAt).getTime()) / 86_400_000
+  return days < delaiJours
+}
+
+function unlockDate(entry: RosterEntry | undefined, delaiJours: number): string {
+  if (!entry?.lastDeactivatedAt) return ''
+  const d = new Date(entry.lastDeactivatedAt)
+  d.setDate(d.getDate() + delaiJours)
+  return d.toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' })
+}
+
 function projectRoster(roster: RosterForPooler, cart: CartItem[]): RosterForPooler {
   const map = new Map<number, RosterEntry>()
   for (const e of [...roster.actifs, ...roster.reservistes, ...roster.ltir, ...roster.recrues]) {
     map.set(e.id, { ...e })
   }
-
-  let fakeIdCounter = -1
-
+  let fakeId = -1
   for (const item of cart) {
     switch (item.type) {
       case 'swap':
@@ -91,23 +104,18 @@ function projectRoster(roster: RosterForPooler, cart: CartItem[]): RosterForPool
       case 'ltir_sign':
         if (item.ltirEntry && map.has(item.ltirEntry.id))
           map.get(item.ltirEntry.id)!.playerType = 'ltir'
-        if (item.newPlayerEntry) {
-          const id = fakeIdCounter--
-          map.set(id, { ...item.newPlayerEntry, id, playerType: 'actif' })
-        }
+        if (item.newPlayerEntry)
+          map.set(fakeId--, { ...item.newPlayerEntry, id: fakeId, playerType: 'actif' })
         break
       case 'sign':
-        if (item.newPlayerEntry) {
-          const id = fakeIdCounter--
-          map.set(id, { ...item.newPlayerEntry, id, playerType: item.newPlayerType ?? 'actif' })
-        }
+        if (item.newPlayerEntry)
+          map.set(fakeId--, { ...item.newPlayerEntry, id: fakeId, playerType: item.newPlayerType ?? 'actif' })
         break
       case 'release':
         if (item.releaseEntry) map.delete(item.releaseEntry.id)
         break
     }
   }
-
   const all = [...map.values()]
   return {
     actifs:      all.filter(e => e.playerType === 'actif'),
@@ -117,9 +125,8 @@ function projectRoster(roster: RosterForPooler, cart: CartItem[]): RosterForPool
   }
 }
 
-function computeCap(roster: RosterForPooler): number {
-  return [...roster.actifs, ...roster.reservistes]
-    .reduce((sum, e) => sum + (Number(e.capNumber) || 0), 0)
+function computeCap(roster: RosterForPooler) {
+  return [...roster.actifs, ...roster.reservistes].reduce((s, e) => s + (Number(e.capNumber) || 0), 0)
 }
 
 function cartItemToInput(item: CartItem): BatchActionInput {
@@ -137,17 +144,34 @@ function cartItemToInput(item: CartItem): BatchActionInput {
   }
 }
 
+// Computes how many AL / LTIR budget slots the current cart will consume
+function cartSigningUsage(cart: CartItem[], dbLtir: number, maxLtir: number) {
+  let alFromCart = 0
+  let ltirFromCart = 0
+  let ltirBudgetRemaining = Math.max(0, maxLtir - dbLtir)
+
+  for (const item of cart) {
+    if (item.type === 'sign') {
+      alFromCart++
+    } else if (item.type === 'ltir_sign') {
+      if (ltirBudgetRemaining > 0) {
+        ltirFromCart++
+        ltirBudgetRemaining--
+      } else {
+        alFromCart++  // débord sur le budget AL
+      }
+    }
+  }
+  return { alFromCart, ltirFromCart }
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function EntrySelect({
   label, entries, value, onChange,
 }: {
-  label: string
-  entries: RosterEntry[]
-  value: number
-  onChange: (v: number) => void
+  label: string; entries: RosterEntry[]; value: number; onChange: (v: number) => void
 }) {
-  const valid = entries.filter(e => e.id > 0)
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
@@ -157,7 +181,7 @@ function EntrySelect({
         className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
       >
         <option value="">— Choisir —</option>
-        {valid.map(e => (
+        {entries.filter(e => e.id > 0).map(e => (
           <option key={e.id} value={e.id}>{entryLabel(e)}</option>
         ))}
       </select>
@@ -168,21 +192,18 @@ function EntrySelect({
 function PlayerSearch({
   label, season, onSelect,
 }: {
-  label: string
-  season: string
-  onSelect: (p: PlayerSearchResult) => void
+  label: string; season: string; onSelect: (p: PlayerSearchResult) => void
 }) {
-  const [query, setQuery]     = useState('')
-  const [results, setResults] = useState<PlayerSearchResult[]>([])
+  const [query, setQuery]       = useState('')
+  const [results, setResults]   = useState<PlayerSearchResult[]>([])
   const [selected, setSelected] = useState<PlayerSearchResult | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]   = useState(false)
 
   useEffect(() => {
     if (query.length < 2) { setResults([]); return }
     const t = setTimeout(async () => {
       setLoading(true)
-      const r = await searchPlayersAction(query, season)
-      setResults(r)
+      setResults(await searchPlayersAction(query, season))
       setLoading(false)
     }, 300)
     return () => clearTimeout(t)
@@ -194,13 +215,8 @@ function PlayerSearch({
         <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
         <div className="flex items-center gap-2 border border-green-300 bg-green-50 rounded px-3 py-2 text-sm">
           <span className="flex-1 font-medium text-gray-800">{selected.lastName}, {selected.firstName}</span>
-          {selected.capNumber != null && (
-            <span className="text-xs text-gray-500">{capFmt(selected.capNumber)}</span>
-          )}
-          <button
-            onClick={() => { setSelected(null); setQuery('') }}
-            className="text-gray-400 hover:text-gray-600 text-xs"
-          >✕</button>
+          {selected.capNumber != null && <span className="text-xs text-gray-500">{capFmt(selected.capNumber)}</span>}
+          <button onClick={() => { setSelected(null); setQuery('') }} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
         </div>
       </div>
     )
@@ -210,9 +226,7 @@ function PlayerSearch({
     <div className="relative">
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       <input
-        type="text"
-        value={query}
-        onChange={e => setQuery(e.target.value)}
+        type="text" value={query} onChange={e => setQuery(e.target.value)}
         placeholder="Rechercher par nom..."
         className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
       />
@@ -220,8 +234,7 @@ function PlayerSearch({
       {results.length > 0 && (
         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-48 overflow-y-auto">
           {results.map(p => (
-            <button
-              key={p.id}
+            <button key={p.id}
               onClick={() => { setSelected(p); setResults([]); setQuery(''); onSelect(p) }}
               className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"
             >
@@ -261,6 +274,9 @@ export default function GestionEffectifsManager({
   saisonId,
   season,
   poolCap,
+  delaiReactivationJours,
+  maxSignaturesAl,
+  maxSignaturesLtir,
 }: {
   isAdmin: boolean
   poolers?: { id: string; name: string }[]
@@ -269,26 +285,30 @@ export default function GestionEffectifsManager({
   saisonId: number
   season: string
   poolCap: number
+  delaiReactivationJours: number
+  maxSignaturesAl: number
+  maxSignaturesLtir: number
 }) {
-  const [poolerId, setPoolerId]         = useState(selfPoolerId ?? '')
-  const [roster, setRoster]             = useState<RosterForPooler | null>(null)
+  const [poolerId, setPoolerId]           = useState(selfPoolerId ?? '')
+  const [roster, setRoster]               = useState<RosterForPooler | null>(null)
   const [loadingRoster, setLoadingRoster] = useState(false)
+  const [dbCounts, setDbCounts]           = useState<SigningCounts>({ al: 0, ltir: 0 })
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>([])
 
-  // Add-action form state
-  const [addType, setAddType]                   = useState<ActionType | null>(null)
-  const [addSwapActifId, setAddSwapActifId]     = useState(0)
-  const [addSwapResId, setAddSwapResId]         = useState(0)
-  const [addRecruId, setAddRecruId]             = useState(0)
-  const [addDeactifId, setAddDeactifId]         = useState(0)
-  const [addLtirId, setAddLtirId]               = useState(0)
-  const [addReturnLtirId, setAddReturnLtirId]   = useState(0)
-  const [addReleaseId, setAddReleaseId]         = useState(0)
-  const [addNewPlayer, setAddNewPlayer]         = useState<PlayerSearchResult | null>(null)
+  // Add-form fields
+  const [addType, setAddType]               = useState<ActionType | null>(null)
+  const [addSwapActifId, setAddSwapActifId] = useState(0)
+  const [addSwapResId, setAddSwapResId]     = useState(0)
+  const [addRecruId, setAddRecruId]         = useState(0)
+  const [addDeactifId, setAddDeactifId]     = useState(0)
+  const [addLtirId, setAddLtirId]           = useState(0)
+  const [addReturnLtirId, setAddReturnLtirId] = useState(0)
+  const [addReleaseId, setAddReleaseId]     = useState(0)
+  const [addNewPlayer, setAddNewPlayer]     = useState<PlayerSearchResult | null>(null)
   const [addNewPlayerType, setAddNewPlayerType] = useState<'actif' | 'reserviste'>('actif')
-  const [searchKey, setSearchKey]               = useState(0)  // forces PlayerSearch remount
+  const [searchKey, setSearchKey]           = useState(0)
 
   // Admin date override
   const [forceDateEnabled, setForceDateEnabled] = useState(false)
@@ -299,28 +319,45 @@ export default function GestionEffectifsManager({
   const [error, setError]   = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  // Projected roster (memo)
+  // ── Derived ────────────────────────────────────────────────────────────────
+
   const projected = useMemo(
     () => roster ? projectRoster(roster, cart) : null,
     [roster, cart],
   )
 
-  const capUsed = useMemo(() => projected ? computeCap(projected) : 0, [projected])
-  const capOver = capUsed > poolCap
+  const capUsed  = useMemo(() => projected ? computeCap(projected) : 0, [projected])
+  const capOver  = capUsed > poolCap
 
   const actifCounts = useMemo(() => {
     if (!projected) return { F: 0, D: 0, G: 0 }
-    return projected.actifs.reduce(
-      (acc, e) => { acc[posCategory(e.position)]++; return acc },
-      { F: 0, D: 0, G: 0 },
-    )
+    return projected.actifs.reduce((acc, e) => { acc[posCategory(e.position)]++; return acc }, { F: 0, D: 0, G: 0 })
   }, [projected])
+
+  // Signing budget
+  const { alFromCart, ltirFromCart } = useMemo(
+    () => cartSigningUsage(cart, dbCounts.ltir, maxSignaturesLtir),
+    [cart, dbCounts.ltir, maxSignaturesLtir],
+  )
+  const totalAlUsed   = dbCounts.al + alFromCart
+  const totalLtirUsed = dbCounts.ltir + ltirFromCart
+  const alRemaining   = maxSignaturesAl - totalAlUsed
+  const ltirRemaining = maxSignaturesLtir - totalLtirUsed
+
+  // Can we add one more sign / ltir_sign?
+  const canAddSign = alRemaining > 0
+  const canAddLtirSign = ltirRemaining > 0 || alRemaining > 0
+
+  // Reactivation lock for currently selected entries (non-admins)
+  const swapResLocked     = !isAdmin && isLocked(projected ? findEntry(addSwapResId) : undefined, delaiReactivationJours)
+  const returnLtirLocked  = !isAdmin && isLocked(projected ? findEntry(addReturnLtirId) : undefined, delaiReactivationJours)
 
   const compositionOk = actifCounts.F === 12 && actifCounts.D === 6 && actifCounts.G === 2
   const reservistesOk = (projected?.reservistes.length ?? 0) >= 2
-  const canSubmit = cart.length > 0 && !capOver && compositionOk && reservistesOk && !isPending
+  const canSubmit     = cart.length > 0 && !capOver && compositionOk && reservistesOk && !isPending
 
-  // Load roster when pooler selection changes
+  // ── Effects ────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!poolerId) { setRoster(null); return }
     setLoadingRoster(true)
@@ -328,8 +365,12 @@ export default function GestionEffectifsManager({
     resetAddForm()
     setSuccess(false)
     setError(null)
-    getPoolerRosterAction(poolerId, saisonId, season).then(r => {
+    Promise.all([
+      getPoolerRosterAction(poolerId, saisonId, season),
+      getSigningCountsAction(poolerId, saisonId),
+    ]).then(([r, counts]) => {
       setRoster(r)
+      setDbCounts(counts)
       setLoadingRoster(false)
     })
   }, [poolerId, saisonId, season])
@@ -339,8 +380,7 @@ export default function GestionEffectifsManager({
     setAddSwapActifId(0); setAddSwapResId(0)
     setAddRecruId(0); setAddDeactifId(0)
     setAddLtirId(0); setAddReturnLtirId(0)
-    setAddReleaseId(0)
-    setAddNewPlayer(null)
+    setAddReleaseId(0); setAddNewPlayer(null)
     setAddNewPlayerType('actif')
     setSearchKey(k => k + 1)
   }
@@ -350,32 +390,34 @@ export default function GestionEffectifsManager({
     setAddSwapActifId(0); setAddSwapResId(0)
     setAddRecruId(0); setAddDeactifId(0)
     setAddLtirId(0); setAddReturnLtirId(0)
-    setAddReleaseId(0)
-    setAddNewPlayer(null)
+    setAddReleaseId(0); setAddNewPlayer(null)
     setSearchKey(k => k + 1)
   }
 
   function findEntry(id: number): RosterEntry | undefined {
     if (!projected) return undefined
-    return [
-      ...projected.actifs,
-      ...projected.reservistes,
-      ...projected.ltir,
-      ...projected.recrues,
-    ].find(e => e.id === id)
+    return [...projected.actifs, ...projected.reservistes, ...projected.ltir, ...projected.recrues].find(e => e.id === id)
   }
 
   function isAddReady(): boolean {
     if (!addType) return false
     switch (addType) {
-      case 'swap':            return !!(addSwapActifId && addSwapResId)
-      case 'activate_rookie': return !!(addRecruId && addDeactifId)
-      case 'ltir':            return !!addLtirId
-      case 'return_ltir':     return !!(addReturnLtirId && addDeactifId)
-      case 'ltir_sign':       return !!(addLtirId && addNewPlayer)
-      case 'sign':            return !!addNewPlayer
-      case 'release':         return !!addReleaseId
-      default:                return false
+      case 'swap':
+        return !!(addSwapActifId && addSwapResId && !swapResLocked)
+      case 'activate_rookie':
+        return !!(addRecruId && addDeactifId)
+      case 'ltir':
+        return !!addLtirId
+      case 'return_ltir':
+        return !!(addReturnLtirId && addDeactifId && !returnLtirLocked)
+      case 'ltir_sign':
+        return !!(addLtirId && addNewPlayer && canAddLtirSign)
+      case 'sign':
+        return !!(addNewPlayer && canAddSign)
+      case 'release':
+        return !!addReleaseId
+      default:
+        return false
     }
   }
 
@@ -383,7 +425,7 @@ export default function GestionEffectifsManager({
     if (!addType || !projected) return null
     const localId = crypto.randomUUID()
 
-    const makeNewPlayerEntry = (type: 'actif' | 'reserviste'): RosterEntry => ({
+    const makeNewEntry = (type: 'actif' | 'reserviste'): RosterEntry => ({
       id: -(Date.now()),
       playerId: addNewPlayer!.id,
       playerType: type,
@@ -393,28 +435,19 @@ export default function GestionEffectifsManager({
       teamCode: addNewPlayer!.teamCode,
       nhlId: addNewPlayer!.nhlId,
       capNumber: addNewPlayer!.capNumber,
+      lastDeactivatedAt: null,
     })
 
     switch (addType) {
       case 'swap': {
-        const a = findEntry(addSwapActifId)
-        const r = findEntry(addSwapResId)
+        const a = findEntry(addSwapActifId); const r = findEntry(addSwapResId)
         if (!a || !r) return null
-        return {
-          localId, type: 'swap',
-          label: `Ajustement : ${a.lastName} → RÉS / ${r.lastName} → ACT`,
-          swapActifEntry: a, swapReservisteEntry: r,
-        }
+        return { localId, type: 'swap', label: `Ajustement : ${a.lastName} → RÉS / ${r.lastName} → ACT`, swapActifEntry: a, swapReservisteEntry: r }
       }
       case 'activate_rookie': {
-        const rec = findEntry(addRecruId)
-        const act = findEntry(addDeactifId)
+        const rec = findEntry(addRecruId); const act = findEntry(addDeactifId)
         if (!rec || !act) return null
-        return {
-          localId, type: 'activate_rookie',
-          label: `Recrue : ${rec.lastName} → ACT / ${act.lastName} → RÉS`,
-          recrueEntry: rec, deactivateActifEntry: act,
-        }
+        return { localId, type: 'activate_rookie', label: `Recrue : ${rec.lastName} → ACT / ${act.lastName} → RÉS`, recrueEntry: rec, deactivateActifEntry: act }
       }
       case 'ltir': {
         const e = findEntry(addLtirId)
@@ -422,45 +455,23 @@ export default function GestionEffectifsManager({
         return { localId, type: 'ltir', label: `LTIR : ${e.lastName}, ${e.firstName}`, ltirEntry: e }
       }
       case 'return_ltir': {
-        const ret = findEntry(addReturnLtirId)
-        const act = findEntry(addDeactifId)
+        const ret = findEntry(addReturnLtirId); const act = findEntry(addDeactifId)
         if (!ret || !act) return null
-        return {
-          localId, type: 'return_ltir',
-          label: `Retour LTIR : ${ret.lastName} → ACT / ${act.lastName} → RÉS`,
-          returnLtirEntry: ret, deactivateActifEntry: act,
-        }
+        return { localId, type: 'return_ltir', label: `Retour LTIR : ${ret.lastName} → ACT / ${act.lastName} → RÉS`, returnLtirEntry: ret, deactivateActifEntry: act }
       }
       case 'ltir_sign': {
         const e = findEntry(addLtirId)
         if (!e || !addNewPlayer) return null
-        return {
-          localId, type: 'ltir_sign',
-          label: `LTIR+Sign : ${e.lastName} → LTIR / ${addNewPlayer.lastName} → ACT`,
-          ltirEntry: e,
-          newPlayerEntry: makeNewPlayerEntry('actif'),
-          newPlayerId: addNewPlayer.id,
-          newPlayerType: 'actif',
-        }
+        return { localId, type: 'ltir_sign', label: `LTIR+Sign : ${e.lastName} → LTIR / ${addNewPlayer.lastName} → ACT`, ltirEntry: e, newPlayerEntry: makeNewEntry('actif'), newPlayerId: addNewPlayer.id, newPlayerType: 'actif' }
       }
       case 'sign': {
         if (!addNewPlayer) return null
-        return {
-          localId, type: 'sign',
-          label: `Signature : ${addNewPlayer.lastName}, ${addNewPlayer.firstName} (${addNewPlayerType})`,
-          newPlayerEntry: makeNewPlayerEntry(addNewPlayerType),
-          newPlayerId: addNewPlayer.id,
-          newPlayerType: addNewPlayerType,
-        }
+        return { localId, type: 'sign', label: `Signature : ${addNewPlayer.lastName}, ${addNewPlayer.firstName} (${addNewPlayerType})`, newPlayerEntry: makeNewEntry(addNewPlayerType), newPlayerId: addNewPlayer.id, newPlayerType: addNewPlayerType }
       }
       case 'release': {
         const e = findEntry(addReleaseId)
         if (!e) return null
-        return {
-          localId, type: 'release',
-          label: `Libération : ${e.lastName}, ${e.firstName}`,
-          releaseEntry: e,
-        }
+        return { localId, type: 'release', label: `Libération : ${e.lastName}, ${e.firstName}`, releaseEntry: e }
       }
       default: return null
     }
@@ -471,16 +482,14 @@ export default function GestionEffectifsManager({
     if (!item) return
     setCart(c => [...c, item])
     resetAddForm()
-    setError(null)
-    setSuccess(false)
+    setError(null); setSuccess(false)
   }
 
   function handleSubmit() {
     setError(null)
     startTransition(async () => {
       const result = await submitBatchAction({
-        poolerId,
-        saisonId,
+        poolerId, saisonId,
         actions: cart.map(cartItemToInput),
         forcedDate: isAdmin && forceDateEnabled ? forcedDate : undefined,
       })
@@ -490,44 +499,63 @@ export default function GestionEffectifsManager({
         setSuccess(true)
         setCart([])
         resetAddForm()
-        const r = await getPoolerRosterAction(poolerId, saisonId, season)
+        const [r, counts] = await Promise.all([
+          getPoolerRosterAction(poolerId, saisonId, season),
+          getSigningCountsAction(poolerId, saisonId),
+        ])
         setRoster(r)
+        setDbCounts(counts)
       }
     })
   }
 
-  // ─── Add-form fields per action type ──────────────────────────────────────
+  // ── Add-form fields ────────────────────────────────────────────────────────
+
+  function renderLockWarning(entry: RosterEntry | undefined, label: string) {
+    if (!entry || !isLocked(entry, delaiReactivationJours)) return null
+    return (
+      <p className="text-xs text-orange-600 mt-1">
+        {label} ne peut pas être réactivé avant le {unlockDate(entry, delaiReactivationJours)} (délai {delaiReactivationJours} j).
+      </p>
+    )
+  }
 
   function renderAddFields() {
     if (!addType || !projected) return null
     switch (addType) {
       case 'swap':
         return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <EntrySelect label="Actif à désactiver"   entries={projected.actifs}      value={addSwapActifId} onChange={setAddSwapActifId} />
-            <EntrySelect label="Réserviste à activer" entries={projected.reservistes} value={addSwapResId}   onChange={setAddSwapResId} />
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <EntrySelect label="Actif à désactiver"   entries={projected.actifs}      value={addSwapActifId} onChange={setAddSwapActifId} />
+              <EntrySelect label="Réserviste à activer" entries={projected.reservistes} value={addSwapResId}   onChange={setAddSwapResId} />
+            </div>
+            {renderLockWarning(findEntry(addSwapResId), 'Ce réserviste')}
           </div>
         )
       case 'activate_rookie':
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <EntrySelect label="Recrue à activer"    entries={projected.recrues} value={addRecruId}   onChange={setAddRecruId} />
-            <EntrySelect label="Actif à désactiver"  entries={projected.actifs}  value={addDeactifId} onChange={setAddDeactifId} />
+            <EntrySelect label="Recrue à activer"   entries={projected.recrues} value={addRecruId}   onChange={setAddRecruId} />
+            <EntrySelect label="Actif à désactiver" entries={projected.actifs}  value={addDeactifId} onChange={setAddDeactifId} />
           </div>
         )
       case 'ltir':
         return <EntrySelect label="Actif à mettre sur LTIR" entries={projected.actifs} value={addLtirId} onChange={setAddLtirId} />
       case 'return_ltir':
         return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <EntrySelect label="Joueur LTIR à réintégrer" entries={projected.ltir}   value={addReturnLtirId} onChange={setAddReturnLtirId} />
-            <EntrySelect label="Actif à désactiver"       entries={projected.actifs} value={addDeactifId}    onChange={setAddDeactifId} />
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <EntrySelect label="Joueur LTIR à réintégrer" entries={projected.ltir}   value={addReturnLtirId} onChange={setAddReturnLtirId} />
+              <EntrySelect label="Actif à désactiver"       entries={projected.actifs} value={addDeactifId}    onChange={setAddDeactifId} />
+            </div>
+            {renderLockWarning(findEntry(addReturnLtirId), 'Ce joueur')}
           </div>
         )
       case 'ltir_sign':
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <EntrySelect label="Actif à mettre sur LTIR"    entries={projected.actifs} value={addLtirId} onChange={setAddLtirId} />
+            <EntrySelect label="Actif à mettre sur LTIR" entries={projected.actifs} value={addLtirId} onChange={setAddLtirId} />
             <PlayerSearch key={searchKey} label="Agent libre à signer (actif)" season={season} onSelect={setAddNewPlayer} />
           </div>
         )
@@ -537,11 +565,8 @@ export default function GestionEffectifsManager({
             <PlayerSearch key={searchKey} label="Joueur à signer" season={season} onSelect={setAddNewPlayer} />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rôle</label>
-              <select
-                value={addNewPlayerType}
-                onChange={e => setAddNewPlayerType(e.target.value as 'actif' | 'reserviste')}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-              >
+              <select value={addNewPlayerType} onChange={e => setAddNewPlayerType(e.target.value as 'actif' | 'reserviste')}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
                 <option value="actif">Actif</option>
                 <option value="reserviste">Réserviste</option>
               </select>
@@ -565,20 +590,29 @@ export default function GestionEffectifsManager({
     ? (poolers?.find(p => p.id === poolerId)?.name ?? '')
     : (selfPoolerName ?? '')
 
-  // ─── Render ──────────────────────────────────────────────────────────────
+  // ── Signing budget pill helper ─────────────────────────────────────────────
+
+  function BudgetPill({ used, max, label }: { used: number; max: number; label: string }) {
+    const pct = max > 0 ? used / max : 0
+    const color = pct >= 1 ? 'bg-red-100 text-red-700' : pct >= 0.75 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+    return (
+      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${color}`}>
+        {label} : {used}/{max}
+      </span>
+    )
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
 
-      {/* Pooler selector (admin only) */}
+      {/* Pooler selector (admin) */}
       {isAdmin && (
         <div className="bg-white rounded-lg shadow p-5">
           <label className="block text-sm font-medium text-gray-700 mb-1">Pooler</label>
-          <select
-            value={poolerId}
-            onChange={e => setPoolerId(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-          >
+          <select value={poolerId} onChange={e => setPoolerId(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
             <option value="">— Choisir un pooler —</option>
             {poolers?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -586,8 +620,18 @@ export default function GestionEffectifsManager({
       )}
 
       {loadingRoster && (
-        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-400 text-sm">
-          Chargement du roster...
+        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-400 text-sm">Chargement du roster...</div>
+      )}
+
+      {/* Signing budget (visible once roster loaded) */}
+      {roster && (
+        <div className="bg-white rounded-lg shadow px-5 py-3 flex flex-wrap items-center gap-3">
+          <span className="text-xs text-gray-500 font-medium">Agents libres cette saison :</span>
+          <BudgetPill used={totalAlUsed} max={maxSignaturesAl} label="Standard" />
+          <BudgetPill used={totalLtirUsed} max={maxSignaturesLtir} label="LTIR" />
+          {!isAdmin && (
+            <span className="text-xs text-gray-400 ml-auto">Délai réactivation : {delaiReactivationJours} j</span>
+          )}
         </div>
       )}
 
@@ -598,13 +642,9 @@ export default function GestionEffectifsManager({
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {visibleActions.map(a => (
-              <button
-                key={a.type}
-                onClick={() => handleSelectAddType(a.type)}
+              <button key={a.type} onClick={() => handleSelectAddType(a.type)}
                 className={`text-left px-3 py-2.5 rounded-lg border-2 transition-colors ${
-                  addType === a.type
-                    ? 'border-blue-600 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  addType === a.type ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 <p className={`text-xs font-semibold leading-tight ${addType === a.type ? 'text-blue-700' : 'text-gray-800'}`}>{a.label}</p>
@@ -615,13 +655,17 @@ export default function GestionEffectifsManager({
 
           {addType && (
             <div className="space-y-4 pt-3 border-t border-gray-100">
+              {/* Signing limit warning */}
+              {addType === 'sign' && !canAddSign && (
+                <p className="text-xs text-red-600">Budget d&apos;agents libres standard épuisé ({totalAlUsed}/{maxSignaturesAl}).</p>
+              )}
+              {addType === 'ltir_sign' && !canAddLtirSign && (
+                <p className="text-xs text-red-600">Budgets d&apos;agents libres épuisés (AL : {totalAlUsed}/{maxSignaturesAl}, LTIR : {totalLtirUsed}/{maxSignaturesLtir}).</p>
+              )}
               {renderAddFields()}
               <div className="flex justify-end">
-                <button
-                  onClick={handleAddToCart}
-                  disabled={!isAddReady()}
-                  className="bg-green-600 text-white px-4 py-2 rounded font-medium text-sm hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
+                <button onClick={handleAddToCart} disabled={!isAddReady()}
+                  className="bg-green-600 text-white px-4 py-2 rounded font-medium text-sm hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed">
                   Ajouter au panier
                 </button>
               </div>
@@ -634,26 +678,15 @@ export default function GestionEffectifsManager({
       {cart.length > 0 && (
         <div className="bg-white rounded-lg shadow p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-gray-700">
-              Panier — {cart.length} action{cart.length > 1 ? 's' : ''}
-            </p>
-            <button
-              onClick={() => { setCart([]); setError(null) }}
-              className="text-xs text-red-500 hover:text-red-700"
-            >
-              Vider
-            </button>
+            <p className="text-sm font-semibold text-gray-700">Panier — {cart.length} action{cart.length > 1 ? 's' : ''}</p>
+            <button onClick={() => { setCart([]); setError(null) }} className="text-xs text-red-500 hover:text-red-700">Vider</button>
           </div>
           <ul className="divide-y divide-gray-100">
             {cart.map(item => (
               <li key={item.localId} className="flex items-center justify-between py-2.5 text-sm">
                 <span className="text-gray-700">{item.label}</span>
-                <button
-                  onClick={() => setCart(c => c.filter(i => i.localId !== item.localId))}
-                  className="text-gray-400 hover:text-red-500 ml-4 shrink-0 text-xs"
-                >
-                  Retirer
-                </button>
+                <button onClick={() => setCart(c => c.filter(i => i.localId !== item.localId))}
+                  className="text-gray-400 hover:text-red-500 ml-4 shrink-0 text-xs">Retirer</button>
               </li>
             ))}
           </ul>
@@ -664,55 +697,30 @@ export default function GestionEffectifsManager({
       {projected && cart.length > 0 && (
         <div className="bg-white rounded-lg shadow p-5 space-y-3">
           <p className="text-sm font-semibold text-gray-700">État projeté</p>
-
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
             <span>
               Actifs :{' '}
-              <span className={actifCounts.F !== 12 ? 'text-red-600 font-semibold' : 'text-gray-700'}>{actifCounts.F}A</span>
-              {' '}
-              <span className={actifCounts.D !== 6 ? 'text-red-600 font-semibold' : 'text-gray-700'}>{actifCounts.D}D</span>
-              {' '}
-              <span className={actifCounts.G !== 2 ? 'text-red-600 font-semibold' : 'text-gray-700'}>{actifCounts.G}G</span>
+              <span className={actifCounts.F !== 12 ? 'text-red-600 font-semibold' : 'text-gray-700'}>{actifCounts.F}A</span>{' '}
+              <span className={actifCounts.D !== 6  ? 'text-red-600 font-semibold' : 'text-gray-700'}>{actifCounts.D}D</span>{' '}
+              <span className={actifCounts.G !== 2  ? 'text-red-600 font-semibold' : 'text-gray-700'}>{actifCounts.G}G</span>
             </span>
-            <span>
-              Réservistes :{' '}
-              <span className={projected.reservistes.length < 2 ? 'text-red-600 font-semibold' : 'text-gray-700'}>
-                {projected.reservistes.length}
-              </span>
-            </span>
-            {projected.ltir.length > 0 && <span>LTIR : {projected.ltir.length}</span>}
+            <span>Réservistes : <span className={projected.reservistes.length < 2 ? 'text-red-600 font-semibold' : 'text-gray-700'}>{projected.reservistes.length}</span></span>
+            {projected.ltir.length   > 0 && <span>LTIR : {projected.ltir.length}</span>}
             {projected.recrues.length > 0 && <span>Recrues : {projected.recrues.length}</span>}
           </div>
-
-          {/* Cap bar */}
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-gray-500">
               <span>Masse salariale</span>
-              <span className={capOver ? 'text-red-600 font-semibold' : 'text-gray-700'}>
-                {capFmt(capUsed)} / {capFmt(poolCap)}
-              </span>
+              <span className={capOver ? 'text-red-600 font-semibold' : 'text-gray-700'}>{capFmt(capUsed)} / {capFmt(poolCap)}</span>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-2">
-              <div
-                className={`h-2 rounded-full transition-all ${capOver ? 'bg-red-500' : 'bg-green-500'}`}
-                style={{ width: `${Math.min((capUsed / poolCap) * 100, 100)}%` }}
-              />
+              <div className={`h-2 rounded-full transition-all ${capOver ? 'bg-red-500' : 'bg-green-500'}`}
+                style={{ width: `${Math.min((capUsed / poolCap) * 100, 100)}%` }} />
             </div>
           </div>
-
-          {!compositionOk && (
-            <p className="text-xs text-red-600">
-              La composition des actifs doit être 12 attaquants / 6 défenseurs / 2 gardiens.
-            </p>
-          )}
-          {!reservistesOk && (
-            <p className="text-xs text-red-600">Minimum 2 réservistes requis.</p>
-          )}
-          {capOver && (
-            <p className="text-xs text-red-600">
-              La masse salariale dépasse le cap du pool ({capFmt(poolCap)}).
-            </p>
-          )}
+          {!compositionOk && <p className="text-xs text-red-600">La composition des actifs doit être 12 attaquants / 6 défenseurs / 2 gardiens.</p>}
+          {!reservistesOk && <p className="text-xs text-red-600">Minimum 2 réservistes requis.</p>}
+          {capOver        && <p className="text-xs text-red-600">La masse salariale dépasse le cap du pool ({capFmt(poolCap)}).</p>}
         </div>
       )}
 
@@ -720,29 +728,13 @@ export default function GestionEffectifsManager({
       {isAdmin && cart.length > 0 && (
         <div className="bg-white rounded-lg shadow p-5 space-y-3">
           <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="force-date"
-              checked={forceDateEnabled}
-              onChange={e => setForceDateEnabled(e.target.checked)}
-              className="rounded border-gray-300"
-            />
-            <label htmlFor="force-date" className="text-sm text-gray-700">
-              Forcer une date effective
-            </label>
+            <input type="checkbox" id="force-date" checked={forceDateEnabled} onChange={e => setForceDateEnabled(e.target.checked)} className="rounded border-gray-300" />
+            <label htmlFor="force-date" className="text-sm text-gray-700">Forcer une date effective</label>
           </div>
-          {forceDateEnabled ? (
-            <input
-              type="date"
-              value={forcedDate}
-              onChange={e => setForcedDate(e.target.value)}
-              className="border border-gray-300 rounded px-3 py-2 text-sm max-w-xs"
-            />
-          ) : (
-            <p className="text-xs text-gray-400">
-              Par défaut : date et heure de la soumission.
-            </p>
-          )}
+          {forceDateEnabled
+            ? <input type="date" value={forcedDate} onChange={e => setForcedDate(e.target.value)} className="border border-gray-300 rounded px-3 py-2 text-sm max-w-xs" />
+            : <p className="text-xs text-gray-400">Par défaut : date et heure de la soumission.</p>
+          }
         </div>
       )}
 
@@ -751,30 +743,18 @@ export default function GestionEffectifsManager({
         <div className="bg-white rounded-lg shadow p-5 flex items-center justify-between gap-4">
           <div className="text-sm text-gray-600">
             <span className="font-medium">{poolerName}</span>
-            {' — '}
-            {cart.length} action{cart.length > 1 ? 's' : ''}
+            {' — '}{cart.length} action{cart.length > 1 ? 's' : ''}
             {isAdmin && forceDateEnabled && ` — ${forcedDate}`}
           </div>
-          <button
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="bg-blue-600 text-white px-5 py-2 rounded font-medium text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-          >
+          <button onClick={handleSubmit} disabled={!canSubmit}
+            className="bg-blue-600 text-white px-5 py-2 rounded font-medium text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
             {isPending ? 'En cours...' : 'Soumettre'}
           </button>
         </div>
       )}
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-700">
-          ✓ Mouvements appliqués avec succès.
-        </div>
-      )}
+      {error   && <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>}
+      {success && <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-700">✓ Mouvements appliqués avec succès.</div>}
     </div>
   )
 }

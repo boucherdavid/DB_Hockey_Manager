@@ -56,6 +56,37 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-01 (suite)
+
+**Gestion d'effectifs — délai de réactivation + budget de signatures**
+
+Deux nouvelles règles métier ajoutées à l'outil `/gestion-effectifs` et `/admin/mouvements` :
+
+**Délai de réactivation** : un pooler ne peut pas réactiver un joueur avant N jours après l'avoir désactivé. L'UI affiche un avertissement et bloque le bouton d'ajout. La server action vérifie aussi côté serveur. L'admin est exempt.
+
+**Budget de signatures** : limite le nombre de signatures d'agents libres par saison. Deux compteurs distincts — budget AL standard et budget LTIR. Les LTIR en excédent de budget LTIR débordent sur le budget AL. Des pastilles colorées affichent l'utilisation courante. Blocage côté UI et côté server action.
+
+**Configuration admin** : les trois paramètres (`delai_reactivation_jours`, `max_signatures_al`, `max_signatures_ltir`) sont désormais configurables dans `/admin/config` via une nouvelle section "Règles de transactions" dans `ConfigForm`. Valeurs par défaut : 7 j, 10 AL, 2 LTIR.
+
+**Migration BD requise (déjà exécutée) :**
+```sql
+ALTER TABLE pool_seasons
+  ADD COLUMN IF NOT EXISTS delai_reactivation_jours integer NOT NULL DEFAULT 7,
+  ADD COLUMN IF NOT EXISTS max_signatures_al integer NOT NULL DEFAULT 10,
+  ADD COLUMN IF NOT EXISTS max_signatures_ltir integer NOT NULL DEFAULT 2;
+```
+
+Fichiers modifiés :
+- `app/app/gestion-effectifs/actions.ts` : `RosterEntry` + `SaisonInfo` étendus ; `getSigningCountsAction` + `getActiveSaisonAction` mis à jour ; délai et budget validés dans `submitBatchAction`
+- `app/app/gestion-effectifs/GestionEffectifsManager.tsx` : props `delaiReactivationJours`, `maxSignaturesAl`, `maxSignaturesLtir` ; pastilles budget ; avertissements délai ; `isAddReady()` bloque si règle violée
+- `app/app/gestion-effectifs/page.tsx` : fetch + passage des nouveaux props
+- `app/app/admin/mouvements/page.tsx` : idem
+- `app/app/admin/config/ConfigForm.tsx` : section "Règles de transactions" + état + handleSubmit mis à jour
+- `app/app/admin/config/actions.ts` : `updateCapAction` accepte `opts` avec les 3 nouveaux champs
+- `app/app/admin/config/page.tsx` : `select` étendu aux 3 nouvelles colonnes
+
+---
+
 ### 2026-05-01
 
 **Gestion d'effectifs — outil multi-actions accessible aux poolers**

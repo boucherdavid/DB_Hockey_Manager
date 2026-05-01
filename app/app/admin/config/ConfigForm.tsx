@@ -10,6 +10,9 @@ type Saison = {
   cap_multiplier: number
   pool_cap: number
   next_nhl_cap?: number | null
+  delai_reactivation_jours?: number | null
+  max_signatures_al?: number | null
+  max_signatures_ltir?: number | null
 }
 
 const fmt = (n: number) =>
@@ -24,6 +27,9 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
   const [nhlCap, setNhlCap] = useState(String(saison.nhl_cap))
   const [multiplier, setMultiplier] = useState(String(saison.cap_multiplier))
   const [nextNhlCap, setNextNhlCap] = useState(String(saison.next_nhl_cap ?? ''))
+  const [delaiReactivation, setDelaiReactivation] = useState(String(saison.delai_reactivation_jours ?? 7))
+  const [maxAl, setMaxAl] = useState(String(saison.max_signatures_al ?? 10))
+  const [maxLtir, setMaxLtir] = useState(String(saison.max_signatures_ltir ?? 2))
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -42,7 +48,14 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
     e.preventDefault()
     setSaving(true)
     setMessage(null)
-    const result = await updateCapAction(saison.id, nhlCapNum, multiplierNum, nextNhlCapNum > 0 ? nextNhlCapNum : null)
+    const result = await updateCapAction(
+      saison.id, nhlCapNum, multiplierNum, nextNhlCapNum > 0 ? nextNhlCapNum : null,
+      {
+        delaiReactivationJours: Math.max(0, parseInt(delaiReactivation) || 0),
+        maxSignaturesAl: Math.max(0, parseInt(maxAl) || 0),
+        maxSignaturesLtir: Math.max(0, parseInt(maxLtir) || 0),
+      },
+    )
     setSaving(false)
     if (result.error) {
       setMessage({ type: 'error', text: result.error })
@@ -134,6 +147,45 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
               <p className={`text-base font-bold tabular-nums ${nextPoolCapPreview > 0 ? 'text-indigo-600' : 'text-gray-300'}`}>
                 {nextPoolCapPreview > 0 ? fmt(nextPoolCapPreview) : '—'}
               </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border rounded-lg overflow-hidden">
+        <div className="bg-slate-100 px-3 py-2">
+          <span className="text-slate-600 text-sm font-bold">Règles de transactions</span>
+        </div>
+        <div className="divide-y divide-gray-100">
+          <div className="px-3 py-3">
+            <p className="text-xs text-gray-500 mb-1">
+              Délai de réactivation <span className="text-gray-400">(jours)</span>
+            </p>
+            <input
+              type="number" min={0} step={1} value={delaiReactivation}
+              onChange={e => setDelaiReactivation(e.target.value)}
+              className={inputCls}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Nombre de jours avant qu&apos;un pooler puisse réactiver un joueur qu&apos;il vient de désactiver. L&apos;admin est exempt.
+            </p>
+          </div>
+          <div className="px-3 py-3 grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Max signatures AL</p>
+              <input
+                type="number" min={0} step={1} value={maxAl}
+                onChange={e => setMaxAl(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Max signatures LTIR</p>
+              <input
+                type="number" min={0} step={1} value={maxLtir}
+                onChange={e => setMaxLtir(e.target.value)}
+                className={inputCls}
+              />
             </div>
           </div>
         </div>
