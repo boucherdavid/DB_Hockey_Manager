@@ -38,7 +38,9 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
   const [applyingTransition, setApplyingTransition] = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
 
-  const poolCapPreview = Math.ceil((parseFloat(nhlCap) || 0) * (parseFloat(multiplier) || 0) / 1_000_000) * 1_000_000
+  const poolCapPreview = isPlayoff
+    ? parseFloat(nhlCap) || 0
+    : Math.ceil((parseFloat(nhlCap) || 0) * (parseFloat(multiplier) || 0) / 1_000_000) * 1_000_000
 
   const showMsg = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text })
@@ -147,7 +149,7 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
             </div>
             <div className="flex items-center gap-4">
               <span className="text-xs text-gray-500">
-                Cap pool: <span className="font-medium text-gray-700">{fmt(s.pool_cap)}</span>
+                {s.is_playoff ? 'Cap séries' : 'Cap pool'}: <span className="font-medium text-gray-700">{fmt(s.pool_cap)}</span>
               </span>
               {!s.is_active && (
                 <div className="flex items-center gap-3">
@@ -221,7 +223,7 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
           </div>
           {isPlayoff ? (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Cap par ronde ($)</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Cap par défaut des rondes ($)</label>
               <input
                 type="number"
                 value={nhlCap}
@@ -232,7 +234,9 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
                 required
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <p className="text-xs text-gray-400 mt-0.5">Montant fixe — pas de facteur multiplicatif.</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Montant utilisé par défaut. Une ronde peut avoir son propre cap dans Pool des séries.
+              </p>
             </div>
           ) : (
             <>

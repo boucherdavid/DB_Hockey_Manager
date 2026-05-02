@@ -344,9 +344,7 @@ export default function PicksManager({
                   const group = posGroup(p.position)
                   const alreadyIn = pickedIds.has(p.id)
                   const groupFull = counts[group] >= GROUP_NEEDS[group]
-                  const capUsed = conf === 'Est' ? capUsedEst : capUsedOuest
-                  const capWouldExceed = !alreadyIn && capUsed + p.cap_number > capPerRound
-                  const disabled = alreadyIn || groupFull || capWouldExceed
+                  const disabled = alreadyIn || groupFull
 
                   return (
                     <div key={p.id}

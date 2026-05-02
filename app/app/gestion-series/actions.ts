@@ -319,7 +319,7 @@ export async function submitPlayoffChangeAction(input: {
   // Fetch round info
   const { data: round } = await db
     .from('playoff_rounds')
-    .select('submission_deadline, max_changes, is_active')
+    .select('submission_deadline, max_changes, max_f, max_d, max_g, cap_per_round, is_active')
     .eq('id', input.roundId)
     .single()
   if (!round) return { error: 'Ronde introuvable' }
@@ -361,6 +361,79 @@ export async function submitPlayoffChangeAction(input: {
             .maybeSingle()
           if (!elim) return { error: 'Ce joueur n\'est pas sur une équipe éliminée.' }
         }
+      }
+    }
+  }
+
+  if (input.addPlayerId && input.addPositionSlot) {
+    const [{ data: seasonRow }, { data: activeEntries }, { data: playerRow }] = await Promise.all([
+      db
+        .from('pool_seasons')
+        .select('pool_cap')
+        .eq('id', input.poolSeasonId)
+        .single(),
+      db
+        .from('series_round_rosters')
+        .select(`
+          id, player_id, position_slot,
+          players (player_contracts (season, cap_number))
+        `)
+        .eq('round_id', input.roundId)
+        .eq('pooler_id', input.poolerId)
+        .eq('is_active', true),
+      db
+        .from('players')
+        .select('id, player_contracts (season, cap_number)')
+        .eq('id', input.addPlayerId)
+        .single(),
+    ])
+
+    type ContractRow = { season: string; cap_number: number | null }
+    type EntryWithCap = {
+      id?: number
+      player_id?: number
+      position_slot?: 'F' | 'D' | 'G'
+      player_contracts?: ContractRow[] | null
+      players?: { player_contracts?: ContractRow[] | null } | { player_contracts?: ContractRow[] | null }[] | null
+    }
+
+    const capFor = (row: EntryWithCap | null | undefined) => {
+      const playerData = Array.isArray(row?.players) ? row?.players[0] : row?.players
+      const contracts = playerData?.player_contracts ?? row?.player_contracts ?? []
+      const contract = contracts.find(c => c.season === input.season)
+      return Number(contract?.cap_number ?? 0)
+    }
+
+    const proposed = ((activeEntries ?? []) as EntryWithCap[])
+      .filter((entry: EntryWithCap) => entry.id !== input.removeEntryId && entry.player_id !== input.addPlayerId)
+      .map((entry: EntryWithCap) => ({
+        positionSlot: entry.position_slot as 'F' | 'D' | 'G',
+        capNumber: capFor(entry),
+      }))
+
+    proposed.push({
+      positionSlot: input.addPositionSlot,
+      capNumber: capFor(playerRow),
+    })
+
+    const counts = proposed.reduce<Record<'F' | 'D' | 'G', number>>(
+      (acc, entry) => {
+        acc[entry.positionSlot] += 1
+        return acc
+      },
+      { F: 0, D: 0, G: 0 },
+    )
+
+    if (counts.F > (round.max_f ?? 3)) return { error: `Maximum de ${round.max_f ?? 3} attaquants atteint pour cette ronde.` }
+    if (counts.D > (round.max_d ?? 2)) return { error: `Maximum de ${round.max_d ?? 2} défenseurs atteint pour cette ronde.` }
+    if (counts.G > (round.max_g ?? 1)) return { error: `Maximum de ${round.max_g ?? 1} gardiens atteint pour cette ronde.` }
+
+    const effectiveCap = Number(round.cap_per_round ?? seasonRow?.pool_cap ?? 0)
+    const capUsed = proposed.reduce((sum, entry) => sum + entry.capNumber, 0)
+
+    if (effectiveCap > 0 && capUsed > effectiveCap) {
+      return {
+        error: `Cap dépassé: ${(capUsed / 1_000_000).toFixed(2)} M$ / ${(effectiveCap / 1_000_000).toFixed(2)} M$. Ajustez votre sélection avant de soumettre.`,
       }
     }
   }

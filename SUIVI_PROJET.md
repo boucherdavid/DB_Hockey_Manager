@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-05-01
+Derniere mise a jour: 2026-05-02
 
 ## Role du fichier
 
@@ -55,6 +55,24 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-05-02 (suite 2)
+
+**Pool des series - validation du cap a la soumission**
+
+Clarification de regle : un pooler peut construire une selection qui depasse le cap pendant qu'il magasine ses choix, mais la soumission/sauvegarde doit etre refusee si le cap est depasse.
+
+- Ancien outil `/series/picks` : le joueur n'est plus bloque a l'ajout quand il ferait depasser le cap; le bouton de sauvegarde et la server action refusent encore la selection si le cap est depasse.
+- Server action `/series/actions.ts` : recalcul du cap par conference depuis les contrats en BD avant insertion des picks.
+- Nouvel outil `/gestion-series` : validation serveur de la composition max de la ronde et du cap effectif avant insertion/remplacement.
+- Configuration admin : libelles ajustes pour distinguer le cap de saison series (`pool_seasons.pool_cap`, cap par defaut des rondes) et les overrides par ronde.
+- Admin des rondes : la creation d'une ronde 3 pre-remplit maintenant `6F / 4D / 2G`; les autres rondes restent a `3F / 2D / 1G`.
+
+Validation : `npx tsc --noEmit` passe. Le lint global contient encore des erreurs existantes non liees; les fichiers touches hors `gestion-series/actions.ts` passent ESLint cible.
+
+Fichiers modifies : `admin/config/ConfigForm.tsx`, `admin/config/SeasonsManager.tsx`, `admin/series/SeriesAdminManager.tsx`, `gestion-series/actions.ts`, `series/actions.ts`, `series/picks/PicksManager.tsx`.
+
+---
 
 ### 2026-05-02 (suite)
 

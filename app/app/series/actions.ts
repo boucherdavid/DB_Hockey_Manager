@@ -332,7 +332,7 @@ export async function savePicksAction(
 
   const { data: ps } = await supabase
     .from('playoff_seasons')
-    .select('current_round, is_active, scoring_start_at, season, picks_locked')
+    .select('current_round, is_active, scoring_start_at, season, picks_locked, cap_per_round')
     .eq('id', playoffSeasonId)
     .single()
   if (!ps) return { error: 'Saison playoff introuvable.' }
@@ -344,6 +344,34 @@ export async function savePicksAction(
   const errOuest = validateConf(picks, 'Ouest')
   if (errEst)   return { error: errEst }
   if (errOuest) return { error: errOuest }
+
+  const { data: capRows } = await supabase
+    .from('players')
+    .select('id, player_contracts (season, cap_number)')
+    .in('id', picks.map(p => p.playerId))
+
+  const capByPlayer = new Map<number, number>()
+  for (const row of capRows ?? []) {
+    const contracts = (row.player_contracts ?? []) as { season: string; cap_number: number | null }[]
+    const contract = contracts.find(c => c.season === ps.season)
+    capByPlayer.set(row.id, Number(contract?.cap_number ?? 0))
+  }
+
+  const capPerRound = Number(ps.cap_per_round ?? 0)
+  const capUsedEst = picks
+    .filter(p => p.conference === 'Est')
+    .reduce((sum, p) => sum + (capByPlayer.get(p.playerId) ?? 0), 0)
+  const capUsedOuest = picks
+    .filter(p => p.conference === 'Ouest')
+    .reduce((sum, p) => sum + (capByPlayer.get(p.playerId) ?? 0), 0)
+
+  if (capPerRound > 0 && (capUsedEst > capPerRound || capUsedOuest > capPerRound)) {
+    const over = [
+      capUsedEst > capPerRound ? `Est ${(capUsedEst / 1_000_000).toFixed(2)} M$ / ${(capPerRound / 1_000_000).toFixed(2)} M$` : null,
+      capUsedOuest > capPerRound ? `Ouest ${(capUsedOuest / 1_000_000).toFixed(2)} M$ / ${(capPerRound / 1_000_000).toFixed(2)} M$` : null,
+    ].filter(Boolean).join(', ')
+    return { error: `Cap dépassé: ${over}. Ajustez vos choix avant de sauvegarder.` }
+  }
 
   // Validation : aucun joueur d'une équipe éliminée (seulement si scoring pas encore démarré)
   if (!ps.scoring_start_at) {

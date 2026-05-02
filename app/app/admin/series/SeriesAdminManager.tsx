@@ -19,6 +19,11 @@ import type {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const roundLabel = (n: number) => ['Ronde 1', 'Ronde 2', 'Demi-finales', 'Finale'][n - 1] ?? `Ronde ${n}`
+const roundDefaults = (n: number) => (
+  n === 3
+    ? { maxF: '6', maxD: '4', maxG: '2' }
+    : { maxF: '3', maxD: '2', maxG: '1' }
+)
 
 function toLocalDatetimeInput(iso: string | null): string {
   if (!iso) return ''
@@ -224,7 +229,14 @@ function RondesTab({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Numéro</label>
-              <select value={newRound} onChange={e => setNewRound(e.target.value)}
+              <select value={newRound} onChange={e => {
+                const value = e.target.value
+                const defaults = roundDefaults(parseInt(value))
+                setNewRound(value)
+                setNewMaxF(defaults.maxF)
+                setNewMaxD(defaults.maxD)
+                setNewMaxG(defaults.maxG)
+              }}
                 className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
                 {[1, 2, 3, 4].map(n => <option key={n} value={n}>{roundLabel(n)}</option>)}
               </select>
@@ -259,7 +271,7 @@ function RondesTab({
             <div>
               <label className="block text-xs text-gray-500 mb-1">Cap override ($)</label>
               <input type="number" min={0} step={1000000} value={newCapPerRound} onChange={e => setNewCapPerRound(e.target.value)}
-                placeholder="Défaut saison"
+                placeholder={parseInt(newRound) === 3 ? `Suggestion: ${saison.poolCap * 2}` : 'Défaut saison'}
                 className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
             </div>
           </div>

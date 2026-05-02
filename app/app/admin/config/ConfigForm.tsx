@@ -89,7 +89,7 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
           </div>
           <div className="divide-y divide-gray-100">
             <div className="px-3 py-3">
-              <p className="text-xs text-gray-500 mb-1">Cap par ronde</p>
+              <p className="text-xs text-gray-500 mb-1">Cap par défaut des rondes</p>
               <input
                 type="number"
                 min={1_000_000}
@@ -98,10 +98,12 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
                 onChange={e => setNhlCap(e.target.value)}
                 className={inputCls}
               />
-              <p className="text-xs text-gray-400 mt-1">Montant fixe — pas de facteur multiplicatif.</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Montant utilisé si une ronde n&apos;a pas de cap override dans Pool des séries.
+              </p>
             </div>
             <div className="px-3 py-3 bg-orange-50">
-              <p className="text-xs text-gray-500 mb-1">Cap actuel</p>
+              <p className="text-xs text-gray-500 mb-1">Cap par défaut actuel</p>
               <p className="text-base font-bold text-orange-700 tabular-nums">
                 {nhlCapNum > 0 ? fmt(nhlCapNum) : '—'}
               </p>
@@ -194,12 +196,16 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
 
       <div className="border rounded-lg overflow-hidden">
         <div className="bg-slate-100 px-3 py-2">
-          <span className="text-slate-600 text-sm font-bold">Règles de transactions</span>
+          <span className="text-slate-600 text-sm font-bold">
+            {isPlayoffSeason ? 'Accès au pool des séries' : 'Règles de transactions'}
+          </span>
         </div>
         <div className="divide-y divide-gray-100">
           <div className="px-3 py-3 flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-700">Outil gestion d&apos;effectifs ouvert</p>
+              <p className="text-sm font-medium text-gray-700">
+                {isPlayoffSeason ? 'Outil de sélection des séries ouvert' : 'Outil gestion d&apos;effectifs ouvert'}
+              </p>
               <p className="text-xs text-gray-400 mt-0.5">Si désactivé, seul l&apos;admin y a accès.</p>
             </div>
             <button
@@ -210,6 +216,7 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
               <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${toolOuvert ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
+          {!isPlayoffSeason && (
           <div className="px-3 py-3 flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-gray-700">Saison de type séries (playoffs)</p>
@@ -223,6 +230,8 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
               <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${isPlayoff ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
+          )}
+          {!isPlayoffSeason && (
           <div className="px-3 py-3">
             <p className="text-xs text-gray-500 mb-1">
               Délai de réactivation <span className="text-gray-400">(jours)</span>
@@ -236,6 +245,8 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
               Nombre de jours avant qu&apos;un pooler puisse réactiver un joueur qu&apos;il vient de désactiver. L&apos;admin est exempt.
             </p>
           </div>
+          )}
+          {!isPlayoffSeason && (
           <div className="px-3 py-3 grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-500 mb-1">Max signatures AL</p>
@@ -254,6 +265,7 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
               />
             </div>
           </div>
+          )}
         </div>
       </div>
 
