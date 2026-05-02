@@ -145,7 +145,7 @@ export async function getPoolerPlayoffRosterAction(
   const supabase = await createClient()
   const [{ data: entries }, { data: elims }] = await Promise.all([
     supabase
-      .from('playoff_rosters')
+      .from('series_round_rosters')
       .select(`
         id, player_id, position_slot, added_at,
         players (
@@ -190,7 +190,7 @@ export async function getAllPoolersRostersAction(
   const [{ data: poolers }, { data: entries }, { data: elims }] = await Promise.all([
     supabase.from('poolers').select('id, name').order('name'),
     supabase
-      .from('playoff_rosters')
+      .from('series_round_rosters')
       .select(`
         id, pooler_id, player_id, position_slot, added_at,
         players (
@@ -274,7 +274,7 @@ export async function getPostDeadlineChangesAction(
 ): Promise<number> {
   const supabase = await createClient()
   const { data } = await supabase
-    .from('playoff_rosters')
+    .from('series_round_rosters')
     .select('id')
     .eq('pooler_id', poolerId)
     .eq('round_id', roundId)
@@ -325,7 +325,7 @@ export async function submitPlayoffChangeAction(input: {
     if (!input.isEliminationReplacement) {
       // Check discretionary change budget
       const { data: postDeadlineEntries } = await db
-        .from('playoff_rosters')
+        .from('series_round_rosters')
         .select('id')
         .eq('pooler_id', input.poolerId)
         .eq('round_id', input.roundId)
@@ -339,7 +339,7 @@ export async function submitPlayoffChangeAction(input: {
       // Verify the removed player's team is actually eliminated
       if (input.removeEntryId) {
         const { data: entry } = await db
-          .from('playoff_rosters')
+          .from('series_round_rosters')
           .select('player_id, players (teams (id))')
           .eq('id', input.removeEntryId)
           .single()
@@ -362,7 +362,7 @@ export async function submitPlayoffChangeAction(input: {
 
     // Remove existing entry
     if (input.removeEntryId) {
-      await db.from('playoff_rosters').update({
+      await db.from('series_round_rosters').update({
         is_active: false,
         removed_at: now,
         removal_reason: input.isEliminationReplacement ? 'elimination' : 'discretionary',
@@ -372,7 +372,7 @@ export async function submitPlayoffChangeAction(input: {
     // Add new player
     if (input.addPlayerId && input.addPositionSlot) {
       const { data: existing } = await db
-        .from('playoff_rosters')
+        .from('series_round_rosters')
         .select('id')
         .eq('round_id', input.roundId)
         .eq('pooler_id', input.poolerId)
@@ -380,7 +380,7 @@ export async function submitPlayoffChangeAction(input: {
         .maybeSingle()
 
       if (existing) {
-        await db.from('playoff_rosters').update({
+        await db.from('series_round_rosters').update({
           is_active: true,
           position_slot: input.addPositionSlot,
           added_at: now,
@@ -388,7 +388,7 @@ export async function submitPlayoffChangeAction(input: {
           removal_reason: null,
         }).eq('id', existing.id)
       } else {
-        await db.from('playoff_rosters').insert({
+        await db.from('series_round_rosters').insert({
           round_id: input.roundId,
           pooler_id: input.poolerId,
           player_id: input.addPlayerId,
@@ -484,7 +484,6 @@ export async function activateRoundAction(
 export async function transitionToNextRoundAction(
   fromRoundId: number,
   toRoundId: number,
-  poolSeasonId: number,
 ): Promise<{ error?: string; copied?: number }> {
   try {
     await requireAdmin()
@@ -492,7 +491,7 @@ export async function transitionToNextRoundAction(
 
     // Récupérer tous les alignements actifs de la ronde précédente
     const { data: entries } = await db
-      .from('playoff_rosters')
+      .from('series_round_rosters')
       .select('pooler_id, player_id, position_slot')
       .eq('round_id', fromRoundId)
       .eq('is_active', true)
@@ -509,7 +508,7 @@ export async function transitionToNextRoundAction(
     }))
 
     const { error } = await db
-      .from('playoff_rosters')
+      .from('series_round_rosters')
       .upsert(toInsert, { onConflict: 'round_id,pooler_id,player_id', ignoreDuplicates: true })
     if (error) return { error: error.message }
 

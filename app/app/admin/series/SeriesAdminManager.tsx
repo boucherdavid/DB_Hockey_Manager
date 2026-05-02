@@ -148,7 +148,7 @@ function RondesTab({
                 disabled={isPending}
                 onClick={() => {
                   const next = rounds.find(x => x.roundNumber === r.roundNumber + 1)!
-                  act(() => transitionToNextRoundAction(r.id, next.id, saison.id))
+                  act(() => transitionToNextRoundAction(r.id, next.id))
                 }}
                 className="text-xs bg-slate-700 text-white px-3 py-1.5 rounded hover:bg-slate-800 disabled:opacity-50"
               >
