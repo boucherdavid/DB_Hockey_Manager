@@ -56,6 +56,22 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-01 (suite 3)
+
+**Saison de séries distincte dans /admin/config**
+
+Correction de conception : la saison playoff est maintenant une entrée distincte dans `pool_seasons` plutôt qu'un toggle sur la saison régulière. Les deux coexistent dans la liste, seule l'active est utilisée par les outils.
+
+- Format dédié `YYYY-PO` (ex : `2025-PO`) validé côté serveur et client
+- Toggle "Saison de séries" dans le formulaire de création → badge orange **Séries** dans la liste
+- Pas de picks auto ni de saisons futures créées pour une saison séries
+- Bouton "Transitionner les rosters" masqué pour les saisons séries (sans objet)
+- `createSeasonAction` accepte `isPlayoff` en 4e paramètre
+
+Fichiers modifiés : `admin/config/SeasonsManager.tsx`, `admin/config/actions.ts`, `admin/config/page.tsx`
+
+---
+
 ### 2026-05-01 (suite 2)
 
 **Toggle d'accès + Pool des séries (Phase 1)**
