@@ -44,7 +44,11 @@ export default async function GestionSeriesPage() {
     )
   }
 
-  const round = await getActiveRoundAction(saison.id)
+  const [round, poolersData] = await Promise.all([
+    getActiveRoundAction(saison.id),
+    isAdmin ? supabase.from('poolers').select('id, name').order('name') : Promise.resolve({ data: null }),
+  ])
+
   if (!round) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-8">
@@ -60,8 +64,9 @@ export default async function GestionSeriesPage() {
       <p className="text-sm text-gray-500 mb-6">Ronde {round.roundNumber}</p>
       <GestionSeriesManager
         isAdmin={isAdmin}
-        poolerId={pooler.id}
-        poolerName={pooler.name}
+        poolers={isAdmin ? (poolersData.data ?? []) : undefined}
+        selfPoolerId={pooler.id}
+        selfPoolerName={pooler.name}
         round={round}
         poolSeasonId={saison.id}
         season={saison.season}

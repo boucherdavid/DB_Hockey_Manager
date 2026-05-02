@@ -157,21 +157,24 @@ function SlotRow({
 
 export default function GestionSeriesManager({
   isAdmin,
-  poolerId,
-  poolerName,
+  poolers,
+  selfPoolerId,
+  selfPoolerName,
   round,
   poolSeasonId,
   season,
   poolCap,
 }: {
   isAdmin: boolean
-  poolerId: string
-  poolerName: string
+  poolers?: { id: string; name: string }[]
+  selfPoolerId: string
+  selfPoolerName: string
   round: PlayoffRound
   poolSeasonId: number
   season: string
   poolCap: number
 }) {
+  const [poolerId, setPoolerId] = useState(selfPoolerId)
   const [entries, setEntries] = useState<PlayoffRosterEntry[]>([])
   const [postDeadlineChanges, setPostDeadlineChanges] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -188,6 +191,7 @@ export default function GestionSeriesManager({
   const [isPending, startTransition] = useTransition()
 
   const isFrozen = round.isFrozen
+  const poolerName = poolers?.find(p => p.id === poolerId)?.name ?? selfPoolerName
 
   useEffect(() => {
     setLoading(true)
@@ -266,6 +270,20 @@ export default function GestionSeriesManager({
 
   return (
     <div className="space-y-5">
+
+      {/* Pooler selector (admin only) */}
+      {isAdmin && poolers && poolers.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Pooler</label>
+          <select
+            value={poolerId}
+            onChange={e => { setPoolerId(e.target.value); setError(null); setSuccess(false) }}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          >
+            {poolers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+      )}
 
       {/* Round status banner */}
       <div className={`rounded-lg p-4 text-sm ${isFrozen ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
