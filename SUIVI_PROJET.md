@@ -56,6 +56,38 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-02 (suite)
+
+**Composition variable par ronde — pool des séries**
+
+Chaque ronde peut maintenant avoir sa propre composition et son propre cap.
+
+| Ronde | Composition | Cap |
+|---|---|---|
+| 1–2 | 3F / 2D / 1G | Cap saison (défaut) |
+| 3 | 6F / 4D / 2G | Cap override (ex : 60 M$) |
+| 4 | 3F / 2D / 1G | Cap saison (défaut) |
+
+**Migration BD (déjà exécutée) :**
+```sql
+ALTER TABLE playoff_rounds
+  ADD COLUMN IF NOT EXISTS max_f integer NOT NULL DEFAULT 3,
+  ADD COLUMN IF NOT EXISTS max_d integer NOT NULL DEFAULT 2,
+  ADD COLUMN IF NOT EXISTS max_g integer NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS cap_per_round numeric;
+```
+
+- `cap_per_round` nullable — si null, utilise le cap de la saison (`pool_seasons.pool_cap`)
+- Admin : formulaires créer/modifier la ronde incluent maintenant les champs F/D/G et cap override
+- Affichage info ronde en mode lecture : `3F / 2D / 1G · Cap : défaut saison`
+- Pooler : bandeau de statut affiche `Cap : X $ / Y $` en rouge si dépassé
+
+**NHL_SEASON hardcodé :** noté en mémoire — à rendre configurable avant la saison 2026-27 (lire depuis `pool_seasons.season` dynamiquement).
+
+Fichiers modifiés : `gestion-series/actions.ts`, `GestionSeriesManager.tsx`, `gestion-series/page.tsx`, `SeriesAdminManager.tsx`
+
+---
+
 ### 2026-05-02
 
 **Corrections pool des séries — tables et cap**
