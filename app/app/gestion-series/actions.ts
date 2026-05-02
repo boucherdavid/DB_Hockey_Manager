@@ -19,6 +19,10 @@ export type PlayoffRound = {
   roundNumber: number
   submissionDeadline: string | null
   maxChanges: number
+  maxF: number
+  maxD: number
+  maxG: number
+  capPerRound: number | null
   isActive: boolean
   isFrozen: boolean
 }
@@ -74,6 +78,10 @@ function toRound(data: any): PlayoffRound {
     roundNumber: data.round_number,
     submissionDeadline: data.submission_deadline ?? null,
     maxChanges: data.max_changes ?? 2,
+    maxF: data.max_f ?? 3,
+    maxD: data.max_d ?? 2,
+    maxG: data.max_g ?? 1,
+    capPerRound: data.cap_per_round ? Number(data.cap_per_round) : null,
     isActive: data.is_active,
     isFrozen: deadline ? new Date() > deadline : false,
   }
@@ -422,6 +430,10 @@ export async function createRoundAction(
   roundNumber: number,
   submissionDeadline: string | null,
   maxChanges: number,
+  maxF: number,
+  maxD: number,
+  maxG: number,
+  capPerRound: number | null,
 ): Promise<{ error?: string }> {
   try {
     await requireAdmin()
@@ -431,6 +443,10 @@ export async function createRoundAction(
       round_number: roundNumber,
       submission_deadline: submissionDeadline,
       max_changes: maxChanges,
+      max_f: maxF,
+      max_d: maxD,
+      max_g: maxG,
+      cap_per_round: capPerRound,
       is_active: false,
     })
     if (error) return { error: error.message }
@@ -445,6 +461,10 @@ export async function updateRoundAction(
   roundId: number,
   submissionDeadline: string | null,
   maxChanges: number,
+  maxF: number,
+  maxD: number,
+  maxG: number,
+  capPerRound: number | null,
 ): Promise<{ error?: string }> {
   try {
     await requireAdmin()
@@ -452,6 +472,10 @@ export async function updateRoundAction(
     const { error } = await db.from('playoff_rounds').update({
       submission_deadline: submissionDeadline,
       max_changes: maxChanges,
+      max_f: maxF,
+      max_d: maxD,
+      max_g: maxG,
+      cap_per_round: capPerRound,
     }).eq('id', roundId)
     if (error) return { error: error.message }
     revalidatePath('/admin/series')

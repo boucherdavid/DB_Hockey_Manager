@@ -155,12 +155,6 @@ function SlotRow({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-const SLOTS: { slot: 'F' | 'D' | 'G'; count: number }[] = [
-  { slot: 'F', count: 3 },
-  { slot: 'D', count: 2 },
-  { slot: 'G', count: 1 },
-]
-
 export default function GestionSeriesManager({
   isAdmin,
   poolerId,
@@ -168,6 +162,7 @@ export default function GestionSeriesManager({
   round,
   poolSeasonId,
   season,
+  poolCap,
 }: {
   isAdmin: boolean
   poolerId: string
@@ -175,6 +170,7 @@ export default function GestionSeriesManager({
   round: PlayoffRound
   poolSeasonId: number
   season: string
+  poolCap: number
 }) {
   const [entries, setEntries] = useState<PlayoffRosterEntry[]>([])
   const [postDeadlineChanges, setPostDeadlineChanges] = useState(0)
@@ -253,6 +249,15 @@ export default function GestionSeriesManager({
     })
   }
 
+  const slots: { slot: 'F' | 'D' | 'G'; count: number }[] = [
+    { slot: 'F', count: round.maxF },
+    { slot: 'D', count: round.maxD },
+    { slot: 'G', count: round.maxG },
+  ]
+  const effectiveCap = round.capPerRound ?? poolCap
+  const capUsed = entries.reduce((sum, e) => sum + (e.capNumber ?? 0), 0)
+  const capOver = capUsed > effectiveCap
+
   const existingPlayerIds = new Set(entries.map(e => e.playerId))
   const entriesBySlot = (slot: 'F' | 'D' | 'G') => entries.filter(e => e.positionSlot === slot)
   const hasEliminatedPlayers = entries.some(e => e.teamEliminated)
@@ -273,14 +278,19 @@ export default function GestionSeriesManager({
               {round.submissionDeadline ? `Deadline : ${deadlineLabel(round.submissionDeadline)}` : 'Aucune deadline fixée'}
             </span>
           </div>
-          {!isFrozen && timeLeft && (
-            <span className="text-xs text-gray-500">Ferme dans {timeLeft}</span>
-          )}
-          {isFrozen && (
-            <span className="text-xs text-orange-600 font-medium">
-              Changements discrétionnaires : {postDeadlineChanges}/{round.maxChanges}
+          <div className="flex items-center gap-3">
+            {!isFrozen && timeLeft && (
+              <span className="text-xs text-gray-500">Ferme dans {timeLeft}</span>
+            )}
+            {isFrozen && (
+              <span className="text-xs text-orange-600 font-medium">
+                Changements : {postDeadlineChanges}/{round.maxChanges}
+              </span>
+            )}
+            <span className={`text-xs font-medium ${capOver ? 'text-red-600' : 'text-gray-500'}`}>
+              Cap : {capFmt(capUsed)} / {capFmt(effectiveCap)}
             </span>
-          )}
+          </div>
         </div>
         {hasEliminatedPlayers && (
           <p className="mt-2 text-orange-700 font-medium text-xs">
@@ -297,7 +307,7 @@ export default function GestionSeriesManager({
           <p className="text-sm font-semibold text-gray-700">
             Alignement — Ronde {round.roundNumber} — {poolerName}
           </p>
-          {SLOTS.map(({ slot, count }) => (
+          {slots.map(({ slot, count }) => (
             <div key={slot} className="space-y-2">
               {Array.from({ length: count }).map((_, i) => (
                 <SlotRow

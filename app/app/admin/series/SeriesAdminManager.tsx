@@ -48,11 +48,19 @@ function RondesTab({
   const [newRound, setNewRound] = useState('1')
   const [newDeadline, setNewDeadline] = useState('')
   const [newMaxChanges, setNewMaxChanges] = useState('2')
+  const [newMaxF, setNewMaxF] = useState('3')
+  const [newMaxD, setNewMaxD] = useState('2')
+  const [newMaxG, setNewMaxG] = useState('1')
+  const [newCapPerRound, setNewCapPerRound] = useState('')
 
   // Edit state per round
   const [editing, setEditing] = useState<number | null>(null)
   const [editDeadline, setEditDeadline] = useState('')
   const [editMaxChanges, setEditMaxChanges] = useState('2')
+  const [editMaxF, setEditMaxF] = useState('3')
+  const [editMaxD, setEditMaxD] = useState('2')
+  const [editMaxG, setEditMaxG] = useState('1')
+  const [editCapPerRound, setEditCapPerRound] = useState('')
 
   function act(fn: () => Promise<{ error?: string; copied?: number }>) {
     setMsg(null)
@@ -97,7 +105,15 @@ function RondesTab({
                   <button
                     disabled={isPending}
                     onClick={() => act(async () => {
-                      const res = await updateRoundAction(r.id, fromLocalDatetimeInput(editDeadline), parseInt(editMaxChanges) || 2)
+                      const res = await updateRoundAction(
+                        r.id,
+                        fromLocalDatetimeInput(editDeadline),
+                        parseInt(editMaxChanges) || 2,
+                        parseInt(editMaxF) || 3,
+                        parseInt(editMaxD) || 2,
+                        parseInt(editMaxG) || 1,
+                        editCapPerRound ? parseFloat(editCapPerRound) : null,
+                      )
                       if (!res.error) setEditing(null)
                       return res
                     })}
@@ -109,7 +125,15 @@ function RondesTab({
                 </>
               ) : (
                 <button
-                  onClick={() => { setEditing(r.id); setEditDeadline(toLocalDatetimeInput(r.submissionDeadline)); setEditMaxChanges(String(r.maxChanges)) }}
+                  onClick={() => {
+                    setEditing(r.id)
+                    setEditDeadline(toLocalDatetimeInput(r.submissionDeadline))
+                    setEditMaxChanges(String(r.maxChanges))
+                    setEditMaxF(String(r.maxF))
+                    setEditMaxD(String(r.maxD))
+                    setEditMaxG(String(r.maxG))
+                    setEditCapPerRound(r.capPerRound ? String(r.capPerRound) : '')
+                  }}
                   className="text-xs text-gray-500 hover:text-gray-700 underline"
                 >
                   Modifier
@@ -119,22 +143,49 @@ function RondesTab({
           </div>
 
           {editing === r.id ? (
-            <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Deadline soumission</label>
-                <input type="datetime-local" value={editDeadline} onChange={e => setEditDeadline(e.target.value)}
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            <div className="px-4 py-3 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Deadline soumission</label>
+                  <input type="datetime-local" value={editDeadline} onChange={e => setEditDeadline(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Max changements post-deadline</label>
+                  <input type="number" min={0} value={editMaxChanges} onChange={e => setEditMaxChanges(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Max changements discrétionnaires (post-deadline)</label>
-                <input type="number" min={0} value={editMaxChanges} onChange={e => setEditMaxChanges(e.target.value)}
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Max F</label>
+                  <input type="number" min={0} max={20} value={editMaxF} onChange={e => setEditMaxF(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Max D</label>
+                  <input type="number" min={0} max={20} value={editMaxD} onChange={e => setEditMaxD(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Max G</label>
+                  <input type="number" min={0} max={10} value={editMaxG} onChange={e => setEditMaxG(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Cap override ($)</label>
+                  <input type="number" min={0} step={1000000} value={editCapPerRound} onChange={e => setEditCapPerRound(e.target.value)}
+                    placeholder="Défaut saison"
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                </div>
               </div>
             </div>
           ) : (
             <div className="px-4 py-2 text-xs text-gray-500 flex flex-wrap gap-4">
               <span>Deadline : {r.submissionDeadline ? new Date(r.submissionDeadline).toLocaleString('fr-CA') : '—'}</span>
-              <span>Max changements post-deadline : {r.maxChanges}</span>
+              <span>Composition : {r.maxF}F / {r.maxD}D / {r.maxG}G</span>
+              <span>Cap : {r.capPerRound ? `${(r.capPerRound / 1_000_000).toFixed(0)} M$` : 'Défaut saison'}</span>
+              <span>Max post-deadline : {r.maxChanges}</span>
             </div>
           )}
 
@@ -189,12 +240,44 @@ function RondesTab({
                 className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
             </div>
           </div>
+          <div className="grid grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Max F</label>
+              <input type="number" min={0} max={20} value={newMaxF} onChange={e => setNewMaxF(e.target.value)}
+                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Max D</label>
+              <input type="number" min={0} max={20} value={newMaxD} onChange={e => setNewMaxD(e.target.value)}
+                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Max G</label>
+              <input type="number" min={0} max={10} value={newMaxG} onChange={e => setNewMaxG(e.target.value)}
+                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Cap override ($)</label>
+              <input type="number" min={0} step={1000000} value={newCapPerRound} onChange={e => setNewCapPerRound(e.target.value)}
+                placeholder="Défaut saison"
+                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            </div>
+          </div>
           <div className="flex gap-2 justify-end">
             <button onClick={() => setShowNew(false)} className="text-sm text-gray-500 hover:text-gray-700">Annuler</button>
             <button
               disabled={isPending}
               onClick={() => act(async () => {
-                const res = await createRoundAction(saison.id, parseInt(newRound), fromLocalDatetimeInput(newDeadline), parseInt(newMaxChanges) || 2)
+                const res = await createRoundAction(
+                  saison.id,
+                  parseInt(newRound),
+                  fromLocalDatetimeInput(newDeadline),
+                  parseInt(newMaxChanges) || 2,
+                  parseInt(newMaxF) || 3,
+                  parseInt(newMaxD) || 2,
+                  parseInt(newMaxG) || 1,
+                  newCapPerRound ? parseFloat(newCapPerRound) : null,
+                )
                 if (!res.error) setShowNew(false)
                 return res
               })}

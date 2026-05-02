@@ -65,6 +65,7 @@ export default async function GestionSeriesPage() {
         round={round}
         poolSeasonId={saison.id}
         season={saison.season}
+        poolCap={saison.poolCap}
       />
     </div>
   )
