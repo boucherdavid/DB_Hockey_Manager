@@ -50,10 +50,12 @@ export default function Navbar({
   initialUserName,
   initialIsAdmin,
   initialUnreadCount = 0,
+  initialNewPlayoffActive = false,
 }: {
   initialUserName: string | null
   initialIsAdmin: boolean
   initialUnreadCount?: number
+  initialNewPlayoffActive?: boolean
 }) {
   const pathname = usePathname()
   const supabase = createClient()
@@ -61,6 +63,7 @@ export default function Navbar({
   const [userName, setUserName] = useState<string | null>(initialUserName)
   const [isAdmin, setIsAdmin] = useState(initialIsAdmin)
   const [unreadCount] = useState(initialUnreadCount)
+  const newPlayoffActive = initialNewPlayoffActive
   const [menuOpen, setMenuOpen] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null)
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null)
@@ -224,8 +227,8 @@ export default function Navbar({
                 {openDropdown === 'series' && (
                   <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
                     {userName && <Link href="/gestion-series" className={dropdownLinkClass('/gestion-series')}>Gestion d&apos;effectifs</Link>}
-                    {userName && <Link href="/series/picks"   className={dropdownLinkClass('/series/picks')}>Mes choix</Link>}
-                    <Link href="/series" className={dropdownLinkClass('/series')}>Classement</Link>
+                    {userName && (!newPlayoffActive || isAdmin) && <Link href="/series/picks" className={dropdownLinkClass('/series/picks')}>Mes choix (ancien)</Link>}
+                    {(!newPlayoffActive || isAdmin) && <Link href="/series" className={dropdownLinkClass('/series')}>Classement (ancien)</Link>}
                   </div>
                 )}
               </div>
@@ -343,8 +346,8 @@ export default function Navbar({
 
             <MobileSection label={'Pool S\u00e9ries'} />
             {userName && <Link href="/gestion-series" className={mobileLinkClass('/gestion-series')}>Gestion d&apos;effectifs</Link>}
-            {userName && <Link href="/series/picks"   className={mobileLinkClass('/series/picks')}>Mes choix</Link>}
-            <Link href="/series" className={mobileLinkClass('/series')}>Classement</Link>
+            {userName && (!newPlayoffActive || isAdmin) && <Link href="/series/picks" className={mobileLinkClass('/series/picks')}>Mes choix (ancien)</Link>}
+            {(!newPlayoffActive || isAdmin) && <Link href="/series" className={mobileLinkClass('/series')}>Classement (ancien)</Link>}
 
             {userName && (
               <div className="mt-1 pt-1 border-t border-pool-navy-light flex flex-col gap-0.5">

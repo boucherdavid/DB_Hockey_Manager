@@ -49,13 +49,17 @@ export default async function RootLayout({
   }
 
   let unreadCount = 0
-  if (isAdmin) {
-    const { count } = await supabase
-      .from('feedback')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'nouveau')
-    unreadCount = count ?? 0
-  }
+  let newPlayoffActive = false
+
+  const [feedbackResult, playoffResult] = await Promise.all([
+    isAdmin
+      ? supabase.from('feedback').select('*', { count: 'exact', head: true }).eq('status', 'nouveau')
+      : Promise.resolve({ count: 0 }),
+    supabase.from('pool_seasons').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('is_playoff', true),
+  ])
+
+  unreadCount = feedbackResult.count ?? 0
+  newPlayoffActive = (playoffResult.count ?? 0) > 0
 
   return (
     <html lang="fr">
@@ -70,7 +74,7 @@ export default async function RootLayout({
       </head>
       <body className="bg-gray-50 min-h-screen">
         <ServiceWorkerProvider />
-        <Navbar initialUserName={userName} initialIsAdmin={isAdmin} initialUnreadCount={unreadCount} />
+        <Navbar initialUserName={userName} initialIsAdmin={isAdmin} initialUnreadCount={unreadCount} initialNewPlayoffActive={newPlayoffActive} />
         <InstallBanner />
         <main className="max-w-7xl mx-auto px-4 py-6">
           {children}

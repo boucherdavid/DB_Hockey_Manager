@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { fetchNhlSkaters, fetchNhlGoalies, normName } from '@/lib/nhl-stats'
 import { fetchStreaks } from '@/lib/streaks'
@@ -14,6 +15,17 @@ const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 
 export default async function SeriesPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+
+  // Rediriger vers le nouveau système si une saison séries active y existe (non-admins seulement)
+  const { count: newPlayoffCount } = await supabase
+    .from('pool_seasons').select('id', { count: 'exact', head: true })
+    .eq('is_active', true).eq('is_playoff', true)
+  if ((newPlayoffCount ?? 0) > 0) {
+    const { data: poolerSelf } = user
+      ? await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+      : { data: null }
+    if (!poolerSelf?.is_admin) redirect('/gestion-series')
+  }
 
   const { data: ps } = await supabase
     .from('playoff_seasons')

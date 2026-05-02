@@ -11,11 +11,13 @@ export default async function SeriesPicksPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: pooler } = await supabase
-    .from('poolers')
-    .select('id, name')
-    .eq('id', user.id)
-    .single()
+  // Rediriger vers le nouveau système si une saison séries active y existe
+  const [{ data: pooler }, { count: newPlayoffCount }] = await Promise.all([
+    supabase.from('poolers').select('id, name, is_admin').eq('id', user.id).single(),
+    supabase.from('pool_seasons').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('is_playoff', true),
+  ])
+
+  if ((newPlayoffCount ?? 0) > 0 && !pooler?.is_admin) redirect('/gestion-series')
 
   if (!pooler) {
     return (
