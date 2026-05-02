@@ -219,36 +219,55 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
               {isPlayoff ? 'Format : 2025-PO' : 'Format : 2026-27'}
             </p>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Plafond NHL ($)</label>
-            <input
-              type="number"
-              value={nhlCap}
-              onChange={e => setNhlCap(e.target.value)}
-              placeholder="98000000"
-              min={1_000_000}
-              step={100_000}
-              required
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Facteur du pool</label>
-            <input
-              type="number"
-              value={multiplier}
-              onChange={e => setMultiplier(e.target.value)}
-              min={1}
-              max={2}
-              step={0.01}
-              required
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          {parseFloat(nhlCap) > 0 && (
-            <div className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
-              Cap du pool estimé: <span className="font-semibold text-blue-700">{fmt(poolCapPreview)}</span>
+          {isPlayoff ? (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Cap par ronde ($)</label>
+              <input
+                type="number"
+                value={nhlCap}
+                onChange={e => setNhlCap(e.target.value)}
+                placeholder="30000000"
+                min={1_000_000}
+                step={1_000_000}
+                required
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-xs text-gray-400 mt-0.5">Montant fixe — pas de facteur multiplicatif.</p>
             </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Plafond NHL ($)</label>
+                <input
+                  type="number"
+                  value={nhlCap}
+                  onChange={e => setNhlCap(e.target.value)}
+                  placeholder="98000000"
+                  min={1_000_000}
+                  step={100_000}
+                  required
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Facteur du pool</label>
+                <input
+                  type="number"
+                  value={multiplier}
+                  onChange={e => setMultiplier(e.target.value)}
+                  min={1}
+                  max={2}
+                  step={0.01}
+                  required
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {parseFloat(nhlCap) > 0 && (
+                <div className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
+                  Cap du pool estimé : <span className="font-semibold text-blue-700">{fmt(poolCapPreview)}</span>
+                </div>
+              )}
+            </>
           )}
           <div className="flex gap-2 pt-1">
             <button

@@ -86,10 +86,10 @@ export async function createSeasonAction(
   const poolerIds = (poolers ?? []).map(p => p.id)
 
   if (isPlayoff) {
-    // Saison séries : créer sans picks ni saisons futures
+    // Saison séries : cap fixe par ronde, pas de facteur multiplicatif
     const { error } = await supabase
       .from('pool_seasons')
-      .insert({ season, nhl_cap: nhlCap, cap_multiplier: capMultiplier, is_active: false, is_playoff: true })
+      .insert({ season, nhl_cap: nhlCap, cap_multiplier: 1, is_active: false, is_playoff: true })
     if (error) return { error: error.message }
   } else {
     // Saison régulière : créer + 2 suivantes avec picks
