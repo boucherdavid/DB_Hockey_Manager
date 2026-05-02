@@ -56,6 +56,38 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-02
+
+**Corrections pool des séries — tables et cap**
+
+**Conflit de table résolu :** Le pool des séries existant (`/series`) utilise déjà une table `playoff_rosters` avec son propre schéma (snapshots, picks_locked, etc.). Notre `CREATE TABLE IF NOT EXISTS` avait été silencieusement ignoré. Le nouvel outil `/gestion-series` utilise désormais `series_round_rosters` (nouvelle table distincte).
+
+**Migration BD (à exécuter) :**
+```sql
+CREATE TABLE IF NOT EXISTS series_round_rosters (
+  id serial PRIMARY KEY,
+  round_id integer NOT NULL REFERENCES playoff_rounds(id) ON DELETE CASCADE,
+  pooler_id uuid NOT NULL REFERENCES poolers(id),
+  player_id integer NOT NULL REFERENCES players(id),
+  position_slot varchar(1) NOT NULL CHECK (position_slot IN ('F', 'D', 'G')),
+  added_at timestamptz NOT NULL DEFAULT now(),
+  removed_at timestamptz,
+  removal_reason varchar(20) CHECK (removal_reason IN ('elimination', 'discretionary')),
+  is_active boolean NOT NULL DEFAULT true,
+  UNIQUE (round_id, pooler_id, player_id)
+);
+ALTER TABLE series_round_rosters ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Lecture publique series_round_rosters" ON series_round_rosters FOR SELECT USING (true);
+```
+
+**Cap fixe par ronde pour les saisons séries :** Le formulaire de création de saison affiche maintenant un seul champ "Cap par ronde" (ex : 30 000 000 $) sans facteur multiplicatif ni colonne saison suivante. `createSeasonAction` force `cap_multiplier = 1` pour les saisons playoff. `ConfigForm` affiche une version simplifiée (orange) quand la saison active est de type séries.
+
+**Saison séries distincte :** Le flow correct est de créer une saison `2025-PO` séparée (toggle "Saison de séries" dans le formulaire). Elle apparaît dans la liste avec un badge orange "Séries", sans bouton "Transitionner les rosters" (sans objet pour les séries).
+
+Fichiers modifiés : `gestion-series/actions.ts`, `admin/series/SeriesAdminManager.tsx`, `admin/config/SeasonsManager.tsx`, `admin/config/actions.ts`, `admin/config/ConfigForm.tsx`
+
+---
+
 ### 2026-05-01 (suite 3)
 
 **Saison de séries distincte dans /admin/config**
