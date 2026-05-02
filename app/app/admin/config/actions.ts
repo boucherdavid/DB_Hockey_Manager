@@ -66,8 +66,10 @@ export async function createSeasonAction(
   season: string,
   nhlCap: number,
   capMultiplier: number,
+  isPlayoff = false,
 ): Promise<{ error?: string }> {
-  if (!/^\d{4}-\d{2}$/.test(season)) return { error: 'Format invalide. Utiliser ex: 2026-27' }
+  const validFormat = isPlayoff ? /^\d{4}-PO$/.test(season) : /^\d{4}-\d{2}$/.test(season)
+  if (!validFormat) return { error: isPlayoff ? 'Format invalide. Utiliser ex: 2025-PO' : 'Format invalide. Utiliser ex: 2026-27' }
   if (nhlCap < 1_000_000) return { error: 'Cap NHL invalide.' }
   if (capMultiplier <= 0) return { error: 'Facteur invalide.' }
 
@@ -83,12 +85,20 @@ export async function createSeasonAction(
   const { data: poolers } = await supabase.from('poolers').select('id')
   const poolerIds = (poolers ?? []).map(p => p.id)
 
-  // Créer la saison demandée + les 2 suivantes comme placeholders
-  for (let offset = 0; offset < 3; offset++) {
-    const label = offset === 0 ? season : nextSeasonLabel(season, offset)
-    const result = await ensureSeasonWithPicks(supabase, label, nhlCap, capMultiplier, poolerIds)
-    if ('error' in result) return { error: result.error }
-    if (offset === 0 && !result.created) return { error: `La saison ${season} existe déjà.` }
+  if (isPlayoff) {
+    // Saison séries : créer sans picks ni saisons futures
+    const { error } = await supabase
+      .from('pool_seasons')
+      .insert({ season, nhl_cap: nhlCap, cap_multiplier: capMultiplier, is_active: false, is_playoff: true })
+    if (error) return { error: error.message }
+  } else {
+    // Saison régulière : créer + 2 suivantes avec picks
+    for (let offset = 0; offset < 3; offset++) {
+      const label = offset === 0 ? season : nextSeasonLabel(season, offset)
+      const result = await ensureSeasonWithPicks(supabase, label, nhlCap, capMultiplier, poolerIds)
+      if ('error' in result) return { error: result.error }
+      if (offset === 0 && !result.created) return { error: `La saison ${season} existe déjà.` }
+    }
   }
 
   revalidateAll()

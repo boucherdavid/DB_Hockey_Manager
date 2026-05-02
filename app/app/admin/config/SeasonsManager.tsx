@@ -11,6 +11,7 @@ type Saison = {
   cap_multiplier: number
   pool_cap: number
   is_active: boolean
+  is_playoff: boolean
 }
 
 const fmt = (n: number) =>
@@ -22,6 +23,7 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
   const [season, setSeason] = useState('')
   const [nhlCap, setNhlCap] = useState('')
   const [multiplier, setMultiplier] = useState('1.24')
+  const [isPlayoff, setIsPlayoff] = useState(false)
   const [saving, setSaving] = useState(false)
   const [activating, setActivating] = useState<number | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -46,7 +48,7 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
   const handleCreate = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
     setSaving(true)
-    const result = await createSeasonAction(season, parseFloat(nhlCap), parseFloat(multiplier))
+    const result = await createSeasonAction(season, parseFloat(nhlCap), parseFloat(multiplier), isPlayoff)
     setSaving(false)
     if (result.error) {
       showMsg('error', result.error)
@@ -55,6 +57,7 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
       setSeason('')
       setNhlCap('')
       setMultiplier('1.24')
+      setIsPlayoff(false)
       setShowForm(false)
       router.refresh()
     }
@@ -133,10 +136,13 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
             key={s.id}
             className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${s.is_active ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-800">{s.season}</span>
               {s.is_active && (
                 <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded">Active</span>
+              )}
+              {s.is_playoff && (
+                <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-medium">Séries</span>
               )}
             </div>
             <div className="flex items-center gap-4">
@@ -145,7 +151,7 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
               </span>
               {!s.is_active && (
                 <div className="flex items-center gap-3">
-                  {saisons.some(s2 => s2.is_active) && (
+                  {saisons.some(s2 => s2.is_active) && !s.is_playoff && (
                     <button
                       onClick={() => handlePreviewTransition(s.id)}
                       disabled={transitioning === s.id}
@@ -182,18 +188,36 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
       {showForm && (
         <form onSubmit={handleCreate} className="border-t pt-4 space-y-3">
           <h3 className="font-semibold text-gray-700 text-sm">Nouvelle saison</h3>
+
+          {/* Toggle playoff */}
+          <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2.5">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Saison de séries (playoffs)</p>
+              <p className="text-xs text-gray-400">Format 2025-PO, sans picks ni saisons futures.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setIsPlayoff(v => !v); setSeason('') }}
+              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${isPlayoff ? 'bg-orange-500' : 'bg-gray-300'}`}
+            >
+              <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${isPlayoff ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Identifiant</label>
             <input
               type="text"
               value={season}
               onChange={e => setSeason(e.target.value)}
-              placeholder="2026-27"
+              placeholder={isPlayoff ? '2025-PO' : '2026-27'}
               required
-              pattern="\d{4}-\d{2}"
+              pattern={isPlayoff ? '\\d{4}-PO' : '\\d{4}-\\d{2}'}
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <p className="text-xs text-gray-400 mt-0.5">Format: 2026-27</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {isPlayoff ? 'Format : 2025-PO' : 'Format : 2026-27'}
+            </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Plafond NHL ($)</label>
