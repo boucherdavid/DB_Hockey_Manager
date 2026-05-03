@@ -83,6 +83,7 @@ export async function getActiveSaisonAction(): Promise<SaisonInfo | null> {
     .from('pool_seasons')
     .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir, gestion_effectifs_ouvert, is_playoff')
     .eq('is_active', true)
+    .eq('is_playoff', false)
     .single()
   if (!data) return null
   return {

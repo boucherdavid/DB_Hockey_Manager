@@ -11,7 +11,7 @@ export default async function TransactionsPage() {
   const { data: pooler } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
   if (!pooler?.is_admin) redirect('/')
 
-  const { data: saison } = await supabase.from('pool_seasons').select('id, season, pool_cap').eq('is_active', true).single()
+  const { data: saison } = await supabase.from('pool_seasons').select('id, season, pool_cap').eq('is_active', true).eq('is_playoff', false).single()
   const { data: poolers } = await supabase.from('poolers').select('id, name').order('name')
 
   if (!saison) {

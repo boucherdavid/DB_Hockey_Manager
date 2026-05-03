@@ -19,6 +19,7 @@ export default async function RepechageAdminPage() {
     .from('pool_seasons')
     .select('id, season')
     .eq('is_active', true)
+    .eq('is_playoff', false)
     .single()
 
   if (!saison) {

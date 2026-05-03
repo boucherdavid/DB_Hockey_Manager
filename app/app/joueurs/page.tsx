@@ -38,6 +38,7 @@ export default async function JoueursPage() {
     .from('pool_seasons')
     .select('id')
     .eq('is_active', true)
+    .eq('is_playoff', false)
     .single()
 
   // Joueurs déjà dans un roster actif cette saison (actif, reserviste, ltir, recrue)

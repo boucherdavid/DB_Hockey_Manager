@@ -32,7 +32,7 @@ export default async function AdminRecruesPage() {
   if (!pooler?.is_admin) redirect('/')
 
   // Saison en premier pour calculer la fenêtre de protection du pool (5 saisons depuis le repêchage)
-  const saisonResult = await supabase.from('pool_seasons').select('id, season').eq('is_active', true).single()
+  const saisonResult = await supabase.from('pool_seasons').select('id, season').eq('is_active', true).eq('is_playoff', false).single()
   const saisonFin = saisonResult.data
     ? parseInt(saisonResult.data.season.split('-')[0], 10) + 1
     : new Date().getFullYear()

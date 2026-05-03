@@ -307,7 +307,7 @@ export default async function Home({
   const { data: { user } } = await supabase.auth.getUser()
 
   const [{ data: saison }, { data: ps }, { data: me }] = await Promise.all([
-    supabase.from('pool_seasons').select('id, season, pool_cap').eq('is_active', true).single(),
+    supabase.from('pool_seasons').select('id, season, pool_cap').eq('is_active', true).eq('is_playoff', false).single(),
     supabase.from('playoff_seasons').select('id, season, current_round, scoring_start_at').eq('is_active', true).single(),
     user
       ? supabase.from('poolers').select('id, name').eq('id', user.id).single()

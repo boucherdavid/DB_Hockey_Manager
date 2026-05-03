@@ -46,6 +46,7 @@ export default async function RepechagePage() {
     .from('pool_seasons')
     .select('id')
     .eq('is_active', true)
+    .eq('is_playoff', false)
     .single()
 
   // Recrues actives : player_type='recrue' (banque) OU actif/autre avec rookie_type défini

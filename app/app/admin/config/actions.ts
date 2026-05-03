@@ -108,11 +108,20 @@ export async function createSeasonAction(
 export async function activateSeasonAction(saisonId: number): Promise<{ error?: string }> {
   const supabase = await createClient()
 
-  // Désactiver toutes les saisons
+  // Récupérer le type de la saison cible pour ne désactiver que les saisons du même type
+  const { data: target } = await supabase
+    .from('pool_seasons')
+    .select('is_playoff')
+    .eq('id', saisonId)
+    .single()
+  if (!target) return { error: 'Saison introuvable.' }
+
+  // Désactiver uniquement les saisons du même type (régulières OU séries)
+  // — permet à une saison régulière et une saison séries d'être actives simultanément
   const { error: deactivateError } = await supabase
     .from('pool_seasons')
     .update({ is_active: false })
-    .neq('id', 0)
+    .eq('is_playoff', target.is_playoff)
   if (deactivateError) return { error: deactivateError.message }
 
   // Activer la saison cible

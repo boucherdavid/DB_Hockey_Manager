@@ -308,6 +308,7 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     .from('pool_seasons')
     .select('*')
     .eq('is_active', true)
+    .eq('is_playoff', false)
     .single()
 
   const [{ data: pooler }, { data: allPoolers }] = await Promise.all([

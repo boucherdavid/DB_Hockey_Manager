@@ -210,6 +210,7 @@ async function fetchTakenNames(): Promise<string[]> {
       .from('pool_seasons')
       .select('id')
       .eq('is_active', true)
+      .eq('is_playoff', false)
       .single()
     if (!season) return []
 

@@ -13,7 +13,7 @@ export default async function AdminRostersPage() {
   const { data: pooler } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
   if (!pooler?.is_admin) redirect('/')
 
-  const saisonResult = await supabase.from('pool_seasons').select('*').eq('is_active', true).single()
+  const saisonResult = await supabase.from('pool_seasons').select('*').eq('is_active', true).eq('is_playoff', false).single()
   const saison = saisonResult.data
 
   const [poolersResult, players, takenResult] = await Promise.all([

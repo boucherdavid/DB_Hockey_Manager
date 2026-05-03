@@ -111,7 +111,7 @@ export default async function CalendrierPage({
 
   if (user) {
     const [{ data: activeSeason }, { data: playoffSeason }] = await Promise.all([
-      supabase.from('pool_seasons').select('id').eq('is_active', true).single(),
+      supabase.from('pool_seasons').select('id').eq('is_active', true).eq('is_playoff', false).single(),
       supabase.from('playoff_seasons').select('id').eq('is_active', true).maybeSingle(),
     ])
 

@@ -55,6 +55,7 @@ export default async function PoolersPage() {
     .from('pool_seasons')
     .select('id, season, pool_cap')
     .eq('is_active', true)
+    .eq('is_playoff', false)
     .single()
 
   if (!season) {

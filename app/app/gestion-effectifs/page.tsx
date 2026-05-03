@@ -14,7 +14,7 @@ export default async function GestionEffectifsPage() {
     supabase.from('poolers').select('id, name, is_admin').eq('id', user.id).single(),
     supabase.from('pool_seasons')
       .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir, gestion_effectifs_ouvert, is_playoff')
-      .eq('is_active', true).single(),
+      .eq('is_active', true).eq('is_playoff', false).single(),
   ])
 
   if (!pooler) {

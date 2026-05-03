@@ -12,6 +12,7 @@ export default async function ClassementPage() {
     .from('pool_seasons')
     .select('id, season')
     .eq('is_active', true)
+    .eq('is_playoff', false)
     .single()
 
   if (!season) {

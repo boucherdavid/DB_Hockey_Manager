@@ -20,7 +20,7 @@ export default async function AdminPage() {
   const [{ count: nbJoueurs }, { count: nbPoolers }, { data: saison }, { count: nbNouveaux }] = await Promise.all([
     supabase.from('players').select('*', { count: 'exact', head: true }),
     supabase.from('poolers').select('*', { count: 'exact', head: true }),
-    supabase.from('pool_seasons').select('*').eq('is_active', true).single(),
+    supabase.from('pool_seasons').select('*').eq('is_active', true).eq('is_playoff', false).single(),
     supabase.from('feedback').select('*', { count: 'exact', head: true }).eq('status', 'nouveau'),
   ])
 

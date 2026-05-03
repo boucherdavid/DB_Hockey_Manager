@@ -18,7 +18,7 @@ export default async function AdminMouvementsPage() {
     supabase.from('poolers').select('id, name').order('name'),
     supabase.from('pool_seasons')
       .select('id, season, pool_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir, gestion_effectifs_ouvert, is_playoff')
-      .eq('is_active', true).single(),
+      .eq('is_active', true).eq('is_playoff', false).single(),
   ])
 
   if (!saison) {
