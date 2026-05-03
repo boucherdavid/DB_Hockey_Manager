@@ -13,6 +13,7 @@ export default async function PresaisonPage() {
   const { data: saisons } = await supabase
     .from('pool_seasons')
     .select('id, season, is_active')
+    .eq('is_playoff', false)
     .order('season', { ascending: false })
 
   const list = (saisons ?? []) as { id: number; season: string; is_active: boolean }[]
