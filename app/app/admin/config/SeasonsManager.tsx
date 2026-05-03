@@ -105,7 +105,12 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
   }
 
   const handleActivate = async (saisonId: number, saisonLabel: string) => {
-    if (!window.confirm(`Activer la saison ${saisonLabel} ? La saison courante sera désactivée.`)) return
+    const target = saisons.find(s => s.id === saisonId)
+    const activeOfSameType = saisons.find(s => s.is_active && s.is_playoff === target?.is_playoff && s.id !== saisonId)
+    const msg = activeOfSameType
+      ? `Activer la saison ${saisonLabel} ? La saison ${activeOfSameType.season} sera désactivée.`
+      : `Activer la saison ${saisonLabel} ?`
+    if (!window.confirm(msg)) return
     setActivating(saisonId)
     const result = await activateSeasonAction(saisonId)
     setActivating(null)
