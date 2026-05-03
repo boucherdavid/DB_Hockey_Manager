@@ -225,10 +225,12 @@ export default function Navbar({
                   {'Pool S\u00e9ries'} <Chevron open={openDropdown === 'series'} />
                 </button>
                 {openDropdown === 'series' && (
-                  <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                  <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
                     {userName && <Link href="/gestion-series" className={dropdownLinkClass('/gestion-series')}>Gestion d&apos;effectifs</Link>}
                     {userName && (!newPlayoffActive || isAdmin) && <Link href="/series/picks" className={dropdownLinkClass('/series/picks')}>Mes choix (ancien)</Link>}
                     {(!newPlayoffActive || isAdmin) && <Link href="/series" className={dropdownLinkClass('/series')}>Classement (ancien)</Link>}
+                    {isAdmin && <div className="border-t my-1" />}
+                    {isAdmin && <Link href="/admin/series" className={dropdownLinkClass('/admin/series')}>Gestion/Création Pool des séries</Link>}
                   </div>
                 )}
               </div>
@@ -243,15 +245,14 @@ export default function Navbar({
                   </button>
                   {openDropdown === 'admin' && (
                     <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
-                      <Link href="/admin/transactions" className={dropdownLinkClass('/admin/transactions')}>Transactions inter-pooler</Link>
-                      <Link href="/admin/mouvements"  className={dropdownLinkClass('/admin/mouvements')}>Gestion d&apos;effectifs — pooler</Link>
-                      <Link href="/admin/series"      className={dropdownLinkClass('/admin/series')}>Gestion/Création Pool des séries</Link>
+                      <Link href="/admin/poolers"      className={dropdownLinkClass('/admin/poolers')}>Gestion des poolers</Link>
                       <Link href="/admin/rosters"      className={dropdownLinkClass('/admin/rosters')}>Gestion initiale des rosters</Link>
-                      <Link href="/admin/recrues"      className={dropdownLinkClass('/admin/recrues')}>Assignation des recrues</Link>
                       <Link href="/admin/presaison"    className={dropdownLinkClass('/admin/presaison')}>Configuration présaison</Link>
+                      <Link href="/admin/recrues"      className={dropdownLinkClass('/admin/recrues')}>Assignation des recrues</Link>
+                      <Link href="/admin/mouvements"  className={dropdownLinkClass('/admin/mouvements')}>Gestion d&apos;effectifs — pooler</Link>
+                      <Link href="/admin/transactions" className={dropdownLinkClass('/admin/transactions')}>Transactions inter-pooler</Link>
                       <div className="border-t my-1" />
                       <Link href="/admin/joueurs"      className={dropdownLinkClass('/admin/joueurs')}>Procédure mise à jour</Link>
-                      <Link href="/admin/poolers"      className={dropdownLinkClass('/admin/poolers')}>Gestion des poolers</Link>
                       <div className="border-t my-1" />
                       <Link href="/admin/config"       className={dropdownLinkClass('/admin/config')}>Configuration des pools</Link>
                       <Link href="/admin/suivi"        className={dropdownLinkClass('/admin/suivi')}>Suivi des activités</Link>
@@ -348,6 +349,7 @@ export default function Navbar({
             {userName && <Link href="/gestion-series" className={mobileLinkClass('/gestion-series')}>Gestion d&apos;effectifs</Link>}
             {userName && (!newPlayoffActive || isAdmin) && <Link href="/series/picks" className={mobileLinkClass('/series/picks')}>Mes choix (ancien)</Link>}
             {(!newPlayoffActive || isAdmin) && <Link href="/series" className={mobileLinkClass('/series')}>Classement (ancien)</Link>}
+            {isAdmin && <Link href="/admin/series" className={mobileLinkClass('/admin/series')}>Gestion/Cr\u00e9ation Pool des s\u00e9ries</Link>}
 
             {userName && (
               <div className="mt-1 pt-1 border-t border-pool-navy-light flex flex-col gap-0.5">
@@ -356,14 +358,13 @@ export default function Navbar({
                 <Link href="/aide"     className={mobileLinkClass('/aide')}>Aide &amp; Règlements</Link>
                 <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler un problème</Link>
                 {isAdmin && <MobileSection label="Admin" />}
-                {isAdmin && <Link href="/admin/transactions" className={mobileLinkClass('/admin/transactions')}>Transactions inter-pooler</Link>}
-                {isAdmin && <Link href="/admin/mouvements"  className={mobileLinkClass('/admin/mouvements')}>Gestion d&apos;effectifs — pooler</Link>}
-                {isAdmin && <Link href="/admin/series"      className={mobileLinkClass('/admin/series')}>Gestion/Création Pool des séries</Link>}
-                {isAdmin && <Link href="/admin/rosters"      className={mobileLinkClass('/admin/rosters')}>Gestion initiale des rosters</Link>}
-                {isAdmin && <Link href="/admin/recrues"      className={mobileLinkClass('/admin/recrues')}>Assignation des recrues</Link>}
-                {isAdmin && <Link href="/admin/presaison"    className={mobileLinkClass('/admin/presaison')}>Configuration présaison</Link>}
-                {isAdmin && <Link href="/admin/joueurs"      className={mobileLinkClass('/admin/joueurs')}>Procédure mise à jour</Link>}
                 {isAdmin && <Link href="/admin/poolers"      className={mobileLinkClass('/admin/poolers')}>Gestion des poolers</Link>}
+                {isAdmin && <Link href="/admin/rosters"      className={mobileLinkClass('/admin/rosters')}>Gestion initiale des rosters</Link>}
+                {isAdmin && <Link href="/admin/presaison"    className={mobileLinkClass('/admin/presaison')}>Configuration présaison</Link>}
+                {isAdmin && <Link href="/admin/recrues"      className={mobileLinkClass('/admin/recrues')}>Assignation des recrues</Link>}
+                {isAdmin && <Link href="/admin/mouvements"  className={mobileLinkClass('/admin/mouvements')}>Gestion d&apos;effectifs — pooler</Link>}
+                {isAdmin && <Link href="/admin/transactions" className={mobileLinkClass('/admin/transactions')}>Transactions inter-pooler</Link>}
+                {isAdmin && <Link href="/admin/joueurs"      className={mobileLinkClass('/admin/joueurs')}>Procédure mise à jour</Link>}
                 {isAdmin && <Link href="/admin/config"       className={mobileLinkClass('/admin/config')}>Configuration des pools</Link>}
                 {isAdmin && <Link href="/admin/suivi"        className={mobileLinkClass('/admin/suivi')}>Suivi des activités</Link>}
                 {isAdmin && (
