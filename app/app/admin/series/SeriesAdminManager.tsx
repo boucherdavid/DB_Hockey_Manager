@@ -37,13 +37,52 @@ function fromLocalDatetimeInput(val: string): string | null {
   return new Date(val).toISOString()
 }
 
+// ─── Team selector ────────────────────────────────────────────────────────────
+
+function TeamSelector({
+  teams, selected, onChange,
+}: {
+  teams: { id: number; code: string; name: string }[]
+  selected: number[]
+  onChange: (ids: number[]) => void
+}) {
+  const toggle = (id: number) =>
+    onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id])
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-xs text-gray-500">Équipes actives dans cette ronde ({selected.length})</label>
+        <div className="flex gap-2 text-xs">
+          <button type="button" onClick={() => onChange(teams.map(t => t.id))} className="text-blue-500 hover:underline">Tout</button>
+          <button type="button" onClick={() => onChange([])} className="text-gray-400 hover:underline">Aucune</button>
+        </div>
+      </div>
+      <div className="border border-gray-200 rounded max-h-40 overflow-y-auto grid grid-cols-4 gap-0.5 p-2">
+        {teams.map(t => (
+          <label key={t.id} className="flex items-center gap-1 cursor-pointer text-xs hover:bg-gray-50 px-1 py-0.5 rounded">
+            <input
+              type="checkbox"
+              checked={selected.includes(t.id)}
+              onChange={() => toggle(t.id)}
+              className="accent-blue-600"
+            />
+            <span className="font-medium text-gray-700">{t.code}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Tab: Rondes ──────────────────────────────────────────────────────────────
 
 function RondesTab({
-  saison, rounds,
+  saison, rounds, teams,
 }: {
   saison: PlayoffSaison
   rounds: PlayoffRound[]
+  teams: { id: number; code: string; name: string }[]
 }) {
   const [isPending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -57,6 +96,7 @@ function RondesTab({
   const [newMaxD, setNewMaxD] = useState('2')
   const [newMaxG, setNewMaxG] = useState('1')
   const [newCapPerRound, setNewCapPerRound] = useState('')
+  const [newTeamIds, setNewTeamIds] = useState<number[]>([])
 
   // Edit state per round
   const [editing, setEditing] = useState<number | null>(null)
@@ -66,6 +106,7 @@ function RondesTab({
   const [editMaxD, setEditMaxD] = useState('2')
   const [editMaxG, setEditMaxG] = useState('1')
   const [editCapPerRound, setEditCapPerRound] = useState('')
+  const [editTeamIds, setEditTeamIds] = useState<number[]>([])
 
   function act(fn: () => Promise<{ error?: string; copied?: number }>) {
     setMsg(null)
@@ -118,6 +159,7 @@ function RondesTab({
                         parseInt(editMaxD) || 2,
                         parseInt(editMaxG) || 1,
                         editCapPerRound ? parseFloat(editCapPerRound) : null,
+                        editTeamIds,
                       )
                       if (!res.error) setEditing(null)
                       return res
@@ -138,6 +180,7 @@ function RondesTab({
                     setEditMaxD(String(r.maxD))
                     setEditMaxG(String(r.maxG))
                     setEditCapPerRound(r.capPerRound ? String(r.capPerRound) : '')
+                    setEditTeamIds(r.teamIds)
                   }}
                   className="text-xs text-gray-500 hover:text-gray-700 underline"
                 >
@@ -184,13 +227,22 @@ function RondesTab({
                     className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
                 </div>
               </div>
+              <TeamSelector teams={teams} selected={editTeamIds} onChange={setEditTeamIds} />
             </div>
           ) : (
-            <div className="px-4 py-2 text-xs text-gray-500 flex flex-wrap gap-4">
-              <span>Deadline : {r.submissionDeadline ? new Date(r.submissionDeadline).toLocaleString('fr-CA') : '—'}</span>
-              <span>Composition : {r.maxF}F / {r.maxD}D / {r.maxG}G</span>
-              <span>Cap : {r.capPerRound ? `${(r.capPerRound / 1_000_000).toFixed(0)} M$` : 'Défaut saison'}</span>
-              <span>Max post-deadline : {r.maxChanges}</span>
+            <div className="px-4 py-2 text-xs text-gray-500 space-y-1">
+              <div className="flex flex-wrap gap-4">
+                <span>Deadline : {r.submissionDeadline ? new Date(r.submissionDeadline).toLocaleString('fr-CA') : '—'}</span>
+                <span>Composition : {r.maxF}F / {r.maxD}D / {r.maxG}G</span>
+                <span>Cap : {r.capPerRound ? `${(r.capPerRound / 1_000_000).toFixed(0)} M$` : 'Défaut saison'}</span>
+                <span>Max post-deadline : {r.maxChanges}</span>
+              </div>
+              {r.teamIds.length > 0 && (
+                <div className="text-gray-400">
+                  {r.teamIds.length} équipe{r.teamIds.length > 1 ? 's' : ''} :{' '}
+                  {teams.filter(t => r.teamIds.includes(t.id)).map(t => t.code).join(', ')}
+                </div>
+              )}
             </div>
           )}
 
@@ -275,6 +327,7 @@ function RondesTab({
                 className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
             </div>
           </div>
+          <TeamSelector teams={teams} selected={newTeamIds} onChange={setNewTeamIds} />
           <div className="flex gap-2 justify-end">
             <button onClick={() => setShowNew(false)} className="text-sm text-gray-500 hover:text-gray-700">Annuler</button>
             <button
@@ -289,6 +342,7 @@ function RondesTab({
                   parseInt(newMaxD) || 2,
                   parseInt(newMaxG) || 1,
                   newCapPerRound ? parseFloat(newCapPerRound) : null,
+                  newTeamIds,
                 )
                 if (!res.error) setShowNew(false)
                 return res
@@ -483,7 +537,7 @@ export default function SeriesAdminManager({
         ))}
       </div>
 
-      {tab === 'rondes' && <RondesTab saison={saison} rounds={rounds} />}
+      {tab === 'rondes' && <RondesTab saison={saison} rounds={rounds} teams={teams} />}
       {tab === 'eliminations' && (
         <EliminationsTab
           saison={saison}

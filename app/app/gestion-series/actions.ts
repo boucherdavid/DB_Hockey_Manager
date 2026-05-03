@@ -25,6 +25,7 @@ export type PlayoffRound = {
   capPerRound: number | null
   isActive: boolean
   isFrozen: boolean
+  teamIds: number[]
 }
 
 export type PlayoffRosterEntry = {
@@ -84,6 +85,7 @@ function toRound(data: any): PlayoffRound {
     capPerRound: data.cap_per_round ? Number(data.cap_per_round) : null,
     isActive: data.is_active,
     isFrozen: deadline ? new Date() > deadline : false,
+    teamIds: (data.playoff_round_teams ?? []).map((t: any) => t.team_id),
   }
 }
 
@@ -110,7 +112,7 @@ export async function getAllRoundsAction(poolSeasonId: number): Promise<PlayoffR
   const supabase = await createClient()
   const { data } = await supabase
     .from('playoff_rounds')
-    .select('*')
+    .select('*, playoff_round_teams(team_id)')
     .eq('pool_season_id', poolSeasonId)
     .order('round_number')
   return (data ?? []).map(toRound)
@@ -120,7 +122,7 @@ export async function getActiveRoundAction(poolSeasonId: number): Promise<Playof
   const supabase = await createClient()
   const { data } = await supabase
     .from('playoff_rounds')
-    .select('*')
+    .select('*, playoff_round_teams(team_id)')
     .eq('pool_season_id', poolSeasonId)
     .eq('is_active', true)
     .single()
@@ -243,36 +245,49 @@ export async function searchPlayoffPlayersAction(
   query: string,
   season: string,
   poolSeasonId: number,
+  roundId?: number,
 ): Promise<PlayoffPlayerResult[]> {
   if (query.length < 2) return []
   const supabase = await createClient()
-  const [{ data: players }, { data: elims }] = await Promise.all([
+  const [{ data: players }, { data: elims }, { data: roundTeams }] = await Promise.all([
     supabase
       .from('players')
       .select('id, first_name, last_name, position, nhl_id, teams (id, code), player_contracts (season, cap_number)')
       .or(`last_name.ilike.%${query}%,first_name.ilike.%${query}%`)
       .eq('is_available', true)
       .order('last_name')
-      .limit(20),
+      .limit(30),
     supabase
       .from('playoff_eliminations')
       .select('team_id')
       .eq('pool_season_id', poolSeasonId),
+    roundId
+      ? supabase.from('playoff_round_teams').select('team_id').eq('round_id', roundId)
+      : Promise.resolve({ data: null }),
   ])
 
   const eliminatedIds = new Set((elims ?? []).map((e: any) => e.team_id))
+  const allowedTeamIds = roundTeams && roundTeams.length > 0
+    ? new Set(roundTeams.map((t: any) => t.team_id))
+    : null
 
-  return (players ?? []).map((p: any) => ({
-    id: p.id,
-    firstName: p.first_name,
-    lastName: p.last_name,
-    position: p.position ?? null,
-    teamCode: p.teams?.code ?? null,
-    teamId: p.teams?.id ?? null,
-    nhlId: p.nhl_id ?? null,
-    capNumber: p.player_contracts?.find((c: any) => c.season === season)?.cap_number ?? null,
-    teamEliminated: eliminatedIds.has(p.teams?.id),
-  }))
+  return (players ?? [])
+    .filter((p: any) => {
+      const tid = p.teams?.id
+      if (allowedTeamIds && !allowedTeamIds.has(tid)) return false
+      return true
+    })
+    .map((p: any) => ({
+      id: p.id,
+      firstName: p.first_name,
+      lastName: p.last_name,
+      position: p.position ?? null,
+      teamCode: p.teams?.code ?? null,
+      teamId: p.teams?.id ?? null,
+      nhlId: p.nhl_id ?? null,
+      capNumber: p.player_contracts?.find((c: any) => c.season === season)?.cap_number ?? null,
+      teamEliminated: eliminatedIds.has(p.teams?.id),
+    }))
 }
 
 export async function getPostDeadlineChangesAction(
@@ -366,6 +381,17 @@ export async function submitPlayoffChangeAction(input: {
   }
 
   if (input.addPlayerId && input.addPositionSlot) {
+    // Valider que le joueur est sur une équipe active dans cette ronde
+    const { data: roundTeams } = await db.from('playoff_round_teams').select('team_id').eq('round_id', input.roundId)
+    if (roundTeams && roundTeams.length > 0) {
+      const { data: pTeam } = await db.from('players').select('teams(id)').eq('id', input.addPlayerId).single()
+      const tid = (pTeam?.teams as any)?.id
+      const allowed = new Set(roundTeams.map((t: any) => t.team_id))
+      if (tid && !allowed.has(tid)) {
+        return { error: 'Ce joueur n\'est pas sur une équipe active dans cette ronde.' }
+      }
+    }
+
     const [{ data: seasonRow }, { data: activeEntries }, { data: playerRow }] = await Promise.all([
       db
         .from('pool_seasons')
@@ -507,11 +533,12 @@ export async function createRoundAction(
   maxD: number,
   maxG: number,
   capPerRound: number | null,
+  teamIds: number[] = [],
 ): Promise<{ error?: string }> {
   try {
     await requireAdmin()
     const db = createAdminClient()
-    const { error } = await db.from('playoff_rounds').insert({
+    const { data: newRound, error } = await db.from('playoff_rounds').insert({
       pool_season_id: poolSeasonId,
       round_number: roundNumber,
       submission_deadline: submissionDeadline,
@@ -521,9 +548,13 @@ export async function createRoundAction(
       max_g: maxG,
       cap_per_round: capPerRound,
       is_active: false,
-    })
+    }).select('id').single()
     if (error) return { error: error.message }
+    if (teamIds.length > 0 && newRound) {
+      await db.from('playoff_round_teams').insert(teamIds.map(tid => ({ round_id: newRound.id, team_id: tid })))
+    }
     revalidatePath('/admin/series')
+    revalidatePath('/gestion-series')
     return {}
   } catch (e: any) {
     return { error: e?.message ?? 'Erreur inconnue' }
@@ -538,6 +569,7 @@ export async function updateRoundAction(
   maxD: number,
   maxG: number,
   capPerRound: number | null,
+  teamIds: number[] = [],
 ): Promise<{ error?: string }> {
   try {
     await requireAdmin()
@@ -551,6 +583,11 @@ export async function updateRoundAction(
       cap_per_round: capPerRound,
     }).eq('id', roundId)
     if (error) return { error: error.message }
+    // Remplacer les équipes de la ronde
+    await db.from('playoff_round_teams').delete().eq('round_id', roundId)
+    if (teamIds.length > 0) {
+      await db.from('playoff_round_teams').insert(teamIds.map(tid => ({ round_id: roundId, team_id: tid })))
+    }
     revalidatePath('/admin/series')
     revalidatePath('/gestion-series')
     return {}

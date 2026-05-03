@@ -45,10 +45,11 @@ function timeUntilDeadline(deadline: string | null): string | null {
 // ─── Sub-component : player search ────────────────────────────────────────────
 
 function PlayerSearch({
-  season, poolSeasonId, onSelect, excludeIds,
+  season, poolSeasonId, roundId, onSelect, excludeIds,
 }: {
   season: string
   poolSeasonId: number
+  roundId: number
   onSelect: (p: PlayoffPlayerResult) => void
   excludeIds: Set<number>
 }) {
@@ -61,11 +62,11 @@ function PlayerSearch({
     if (query.length < 2) { setResults([]); return }
     const t = setTimeout(async () => {
       setLoading(true)
-      setResults(await searchPlayoffPlayersAction(query, season, poolSeasonId))
+      setResults(await searchPlayoffPlayersAction(query, season, poolSeasonId, roundId))
       setLoading(false)
     }, 300)
     return () => clearTimeout(t)
-  }, [query, season, poolSeasonId])
+  }, [query, season, poolSeasonId, roundId])
 
   if (selected) return (
     <div className="flex items-center gap-2 border border-green-300 bg-green-50 rounded px-3 py-2 text-sm">
@@ -379,6 +380,7 @@ export default function GestionSeriesManager({
                 key={searchKey}
                 season={season}
                 poolSeasonId={poolSeasonId}
+                roundId={round.id}
                 onSelect={setAddPlayer}
                 excludeIds={existingPlayerIds}
               />
