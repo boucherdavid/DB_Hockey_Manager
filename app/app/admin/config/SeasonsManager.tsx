@@ -156,9 +156,9 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
               <span className="text-xs text-gray-500">
                 {s.is_playoff ? 'Cap séries' : 'Cap pool'}: <span className="font-medium text-gray-700">{fmt(s.pool_cap)}</span>
               </span>
-              {!s.is_active && (
+              {(!s.is_active || s.is_playoff) && (
                 <div className="flex items-center gap-3">
-                  {saisons.some(s2 => s2.is_active) && !s.is_playoff && (
+                  {!s.is_active && saisons.some(s2 => s2.is_active) && !s.is_playoff && (
                     <button
                       onClick={() => handlePreviewTransition(s.id)}
                       disabled={transitioning === s.id}
@@ -167,13 +167,15 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
                       {transitioning === s.id ? '...' : 'Transitionner les rosters →'}
                     </button>
                   )}
-                  <button
-                    onClick={() => handleActivate(s.id, s.season)}
-                    disabled={activating === s.id}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-40"
-                  >
-                    {activating === s.id ? '...' : 'Activer'}
-                  </button>
+                  {!s.is_active && (
+                    <button
+                      onClick={() => handleActivate(s.id, s.season)}
+                      disabled={activating === s.id}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-40"
+                    >
+                      {activating === s.id ? '...' : 'Activer'}
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDelete(s.id, s.season)}
                     disabled={deleting === s.id}

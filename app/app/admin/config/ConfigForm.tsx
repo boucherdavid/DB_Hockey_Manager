@@ -117,6 +117,18 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
             </div>
             <div className="px-3 py-3 space-y-3">
               <div>
+                <p className="text-xs text-gray-500 mb-1">Cap du pool des séries ($)</p>
+                <input
+                  type="number"
+                  min={1_000_000}
+                  step={1_000_000}
+                  value={nhlCap}
+                  onChange={e => setNhlCap(e.target.value)}
+                  className={inputCls}
+                />
+                <p className="text-xs text-gray-400 mt-1">Masse salariale maximale par sélection.</p>
+              </div>
+              <div>
                 <p className="text-xs text-gray-500 mb-1">Deadline de soumission</p>
                 <input type="datetime-local" value={poDeadline} onChange={e => setPoDeadline(e.target.value)} className={inputCls} />
                 <p className="text-xs text-gray-400 mt-1">Avant cette date : modifications libres. Après : changements limités.</p>

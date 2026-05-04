@@ -225,9 +225,9 @@ export async function deleteSeasonAction(saisonId: number): Promise<{ error?: st
   const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
   if (!me?.is_admin) return { error: 'Accès refusé.' }
 
-  const { data: saison } = await supabase.from('pool_seasons').select('is_active, season').eq('id', saisonId).single()
+  const { data: saison } = await supabase.from('pool_seasons').select('is_active, is_playoff, season').eq('id', saisonId).single()
   if (!saison) return { error: 'Saison introuvable.' }
-  if (saison.is_active) return { error: 'Impossible de supprimer la saison active.' }
+  if (saison.is_active && !saison.is_playoff) return { error: 'Impossible de supprimer une saison régulière active.' }
 
   // Supprimer les transaction_items puis transactions liés (pas de CASCADE)
   const { data: txs } = await supabase.from('transactions').select('id').eq('pool_season_id', saisonId)
