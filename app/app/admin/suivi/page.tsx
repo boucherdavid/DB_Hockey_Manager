@@ -55,16 +55,6 @@ export default async function AdminSuiviPage() {
       .limit(50),
   ])
 
-  type Event = {
-    id: string
-    at: string
-    category: 'roster' | 'transaction'
-    poolerName: string
-    label: string
-    detail: string
-    color: string
-  }
-
   const events: Event[] = []
 
   // Changements roster

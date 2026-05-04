@@ -1,32 +1,32 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { deleteEventAction } from './suivi-actions'
 
 export type Event = {
   id: string
   at: string
-  category: 'roster' | 'transaction' | 'series'
+  category: 'roster' | 'transaction'
   poolerName: string
   label: string
   detail: string
   color: string
 }
 
-const CATEGORY_LABEL: Record<string, string> = { roster: 'Alignement', transaction: 'Transaction', series: 'Séries' }
+const CATEGORY_LABEL: Record<string, string> = { roster: 'Alignement', transaction: 'Transaction' }
 const CATEGORY_DOT: Record<string, string> = {
   roster:      'bg-green-500',
   transaction: 'bg-slate-500',
-  series:      'bg-pink-500',
 }
 
-type CategoryFilter = 'all' | 'roster' | 'transaction' | 'series'
+type CategoryFilter = 'all' | 'roster' | 'transaction'
 type DateFilter = '7' | '30' | 'all'
 
 const CATEGORY_TABS: { key: CategoryFilter; label: string }[] = [
   { key: 'all',         label: 'Tous' },
   { key: 'roster',      label: 'Alignement' },
   { key: 'transaction', label: 'Transaction' },
-  { key: 'series',      label: 'Séries' },
 ]
 
 const DATE_OPTIONS: { key: DateFilter; label: string }[] = [
@@ -42,14 +42,19 @@ function fmtDate(iso: string) {
   })
 }
 
-export default function SuiviTable({ events }: { events: Event[] }) {
+export default function SuiviTable({ events: initialEvents }: { events: Event[] }) {
+  const router = useRouter()
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
   const [dateFilter, setDateFilter] = useState<DateFilter>('30')
+  const [deleted, setDeleted] = useState<Set<string>>(new Set())
+  const [isPending, startTransition] = useTransition()
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  const events = useMemo(() => initialEvents.filter(e => !deleted.has(e.id)), [initialEvents, deleted])
 
   const filtered = useMemo(() => {
     const now = Date.now()
     const cutoff = dateFilter === 'all' ? null : now - parseInt(dateFilter) * 24 * 60 * 60 * 1000
-
     return events.filter(e => {
       if (categoryFilter !== 'all' && e.category !== categoryFilter) return false
       if (cutoff && new Date(e.at).getTime() < cutoff) return false
@@ -60,11 +65,24 @@ export default function SuiviTable({ events }: { events: Event[] }) {
   const countFor = (cat: CategoryFilter) =>
     cat === 'all' ? events.length : events.filter(e => e.category === cat).length
 
+  function handleDelete(eventId: string) {
+    if (!window.confirm('Supprimer cet événement du suivi ?')) return
+    setErrorMsg(null)
+    startTransition(async () => {
+      const result = await deleteEventAction(eventId)
+      if (result.error) {
+        setErrorMsg(result.error)
+      } else {
+        setDeleted(prev => new Set([...prev, eventId]))
+        router.refresh()
+      }
+    })
+  }
+
   return (
     <div className="space-y-4">
       {/* Filtres */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Filtre catégorie */}
         <div className="flex border-b">
           {CATEGORY_TABS.map(tab => (
             <button key={tab.key} onClick={() => setCategoryFilter(tab.key)}
@@ -83,12 +101,15 @@ export default function SuiviTable({ events }: { events: Event[] }) {
           ))}
         </div>
 
-        {/* Filtre date */}
         <select value={dateFilter} onChange={e => setDateFilter(e.target.value as DateFilter)}
           className="ml-auto border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
           {DATE_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
       </div>
+
+      {errorMsg && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{errorMsg}</p>
+      )}
 
       {/* Table */}
       {filtered.length === 0 ? (
@@ -103,11 +124,12 @@ export default function SuiviTable({ events }: { events: Event[] }) {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Pooler</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-40">Action</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Détail</th>
+                <th className="px-2 py-3 w-8" />
               </tr>
             </thead>
             <tbody className="divide-y">
               {filtered.map(e => (
-                <tr key={e.id} className="hover:bg-gray-50">
+                <tr key={e.id} className="hover:bg-gray-50 group">
                   <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">{fmtDate(e.at)}</td>
                   <td className="px-4 py-2.5">
                     <span className="flex items-center gap-1.5">
@@ -122,6 +144,16 @@ export default function SuiviTable({ events }: { events: Event[] }) {
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-sm text-gray-600">{e.detail}</td>
+                  <td className="px-2 py-2.5 text-right">
+                    <button
+                      onClick={() => handleDelete(e.id)}
+                      disabled={isPending}
+                      className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all disabled:opacity-20"
+                      title="Supprimer"
+                    >
+                      ✕
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
