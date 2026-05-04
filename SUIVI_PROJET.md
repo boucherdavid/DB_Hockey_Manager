@@ -72,6 +72,16 @@ Ajout dans `markTeamEliminatedAction` (`admin/series/series-admin-actions.ts`) :
 
 ---
 
+**Onglet Équipes — sélection participantes + éliminations par grille**
+
+Nouvelle table `playoff_participating_teams (pool_season_id, team_id)` créée en prod. Onglet "Éliminations" renommé "Équipes", restructuré en deux phases :
+- **Phase 1** : grille des 32 équipes regroupées par division, sélection multiple pour désigner les participantes (typiquement 16), bouton Confirmer
+- **Phase 2** : grille des équipes participantes uniquement — cliquer bascule le statut éliminée (rouge ✕) / active (vert ✓). Lien "Modifier la sélection" pour revenir à la phase 1.
+
+La notification push lors d'une élimination est conservée. Commit : `62ad4e2`
+
+---
+
 **Corrections config pool des séries**
 
 - `deleteSeasonAction` : autorise la suppression d'une saison playoff active (seules les saisons régulières actives sont protégées). Commit : `78ef408`
