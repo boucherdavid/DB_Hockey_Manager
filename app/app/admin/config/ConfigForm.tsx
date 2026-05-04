@@ -15,6 +15,12 @@ type Saison = {
   max_signatures_ltir?: number | null
   gestion_effectifs_ouvert?: boolean | null
   is_playoff?: boolean | null
+  playoff_submission_deadline?: string | null
+  playoff_max_changes?: number | null
+  playoff_max_elim_changes?: number | null
+  playoff_max_f?: number | null
+  playoff_max_d?: number | null
+  playoff_max_g?: number | null
 }
 
 const fmt = (n: number) =>
@@ -23,6 +29,13 @@ const fmt = (n: number) =>
 const getNextSeasonLabel = (s: string) => {
   const y = parseInt(s.split('-')[0]) + 1
   return `${y}-${String(y + 1).slice(-2)}`
+}
+
+function toDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 export default function ConfigForm({ saison }: { saison: Saison }) {
@@ -34,6 +47,13 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
   const [maxLtir, setMaxLtir] = useState(String(saison.max_signatures_ltir ?? 2))
   const [toolOuvert, setToolOuvert] = useState(saison.gestion_effectifs_ouvert ?? true)
   const [isPlayoff, setIsPlayoff] = useState(saison.is_playoff ?? false)
+  // Playoff-specific fields
+  const [poDeadline, setPoDeadline] = useState(toDatetimeLocal(saison.playoff_submission_deadline))
+  const [poMaxChanges, setPoMaxChanges] = useState(String(saison.playoff_max_changes ?? 5))
+  const [poMaxElim, setPoMaxElim] = useState(String(saison.playoff_max_elim_changes ?? 5))
+  const [poMaxF, setPoMaxF] = useState(String(saison.playoff_max_f ?? 5))
+  const [poMaxD, setPoMaxD] = useState(String(saison.playoff_max_d ?? 3))
+  const [poMaxG, setPoMaxG] = useState(String(saison.playoff_max_g ?? 1))
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -54,7 +74,15 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
     setMessage(null)
     const result = await updateCapAction(
       saison.id, nhlCapNum, isPlayoffSeason ? 1 : multiplierNum, isPlayoffSeason ? null : (nextNhlCapNum > 0 ? nextNhlCapNum : null),
-      {
+      isPlayoffSeason ? {
+        gestionEffectifsOuvert: toolOuvert,
+        playoffSubmissionDeadline: poDeadline ? new Date(poDeadline).toISOString() : null,
+        playoffMaxChanges: Math.max(0, parseInt(poMaxChanges) || 5),
+        playoffMaxElimChanges: Math.max(0, parseInt(poMaxElim) || 5),
+        playoffMaxF: Math.max(1, parseInt(poMaxF) || 5),
+        playoffMaxD: Math.max(1, parseInt(poMaxD) || 3),
+        playoffMaxG: Math.max(1, parseInt(poMaxG) || 1),
+      } : {
         delaiReactivationJours: Math.max(0, parseInt(delaiReactivation) || 0),
         maxSignaturesAl: Math.max(0, parseInt(maxAl) || 0),
         maxSignaturesLtir: Math.max(0, parseInt(maxLtir) || 0),
@@ -81,32 +109,42 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
       </h2>
 
       {isPlayoffSeason ? (
-        /* Saison séries : cap fixe par ronde, pas de facteur */
-        <div className="border rounded-lg overflow-hidden mb-5">
-          <div className="bg-orange-500 px-3 py-2 flex items-center gap-2">
-            <span className="text-white text-sm font-bold">{saison.season}</span>
-            <span className="text-xs bg-white text-orange-600 px-1.5 py-0.5 rounded font-bold leading-none">Séries · Active</span>
-          </div>
-          <div className="divide-y divide-gray-100">
-            <div className="px-3 py-3">
-              <p className="text-xs text-gray-500 mb-1">Cap par défaut des rondes</p>
-              <input
-                type="number"
-                min={1_000_000}
-                step={1_000_000}
-                value={nhlCap}
-                onChange={e => setNhlCap(e.target.value)}
-                className={inputCls}
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Montant utilisé si une ronde n&apos;a pas de cap override dans Pool des séries.
-              </p>
+        <div className="space-y-4 mb-5">
+          <div className="border border-orange-200 rounded-lg overflow-hidden">
+            <div className="bg-orange-500 px-3 py-2 flex items-center gap-2">
+              <span className="text-white text-sm font-bold">{saison.season}</span>
+              <span className="text-xs bg-white text-orange-600 px-1.5 py-0.5 rounded font-bold leading-none">Séries · Active</span>
             </div>
-            <div className="px-3 py-3 bg-orange-50">
-              <p className="text-xs text-gray-500 mb-1">Cap par défaut actuel</p>
-              <p className="text-base font-bold text-orange-700 tabular-nums">
-                {nhlCapNum > 0 ? fmt(nhlCapNum) : '—'}
-              </p>
+            <div className="px-3 py-3 space-y-3">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Deadline de soumission</p>
+                <input type="datetime-local" value={poDeadline} onChange={e => setPoDeadline(e.target.value)} className={inputCls} />
+                <p className="text-xs text-gray-400 mt-1">Avant cette date : modifications libres. Après : changements limités.</p>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Max F</p>
+                  <input type="number" min={1} value={poMaxF} onChange={e => setPoMaxF(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Max D</p>
+                  <input type="number" min={1} value={poMaxD} onChange={e => setPoMaxD(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Max G</p>
+                  <input type="number" min={1} value={poMaxG} onChange={e => setPoMaxG(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Changements volontaires max</p>
+                  <input type="number" min={0} value={poMaxChanges} onChange={e => setPoMaxChanges(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Changements élimination max</p>
+                  <input type="number" min={0} value={poMaxElim} onChange={e => setPoMaxElim(e.target.value)} className={inputCls} />
+                </div>
+              </div>
             </div>
           </div>
         </div>

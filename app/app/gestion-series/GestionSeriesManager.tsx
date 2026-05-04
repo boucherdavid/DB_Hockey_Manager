@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useTransition } from 'react'
 import {
-  getPoolerPlayoffRosterAction,
-  searchPlayoffPlayersAction,
-  getPostDeadlineChangesAction,
-  submitPlayoffChangeAction,
-} from './actions'
+  getPlayoffPoolRosterAction,
+  getPlayoffChangeCountsAction,
+  searchPlayoffPoolPlayersAction,
+  submitPlayoffPoolChangeAction,
+} from './playoff-pool-actions'
 import type {
-  PlayoffRound,
-  PlayoffRosterEntry,
-  PlayoffPlayerResult,
-} from './actions'
+  PlayoffPoolSaison,
+  PlayoffPoolEntry,
+  PlayoffPoolPlayerResult,
+} from './playoff-pool-actions'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -24,49 +24,41 @@ const slotColor: Record<'F' | 'D' | 'G', string> = {
   D: 'bg-green-50 border-green-200',
   G: 'bg-purple-50 border-purple-200',
 }
+const slotTextColor: Record<'F' | 'D' | 'G', string> = {
+  F: 'text-blue-600', D: 'text-green-600', G: 'text-purple-600',
+}
 
 function deadlineLabel(deadline: string | null): string {
-  if (!deadline) return 'Aucune deadline fixée'
+  if (!deadline) return 'Aucune deadline'
   return new Date(deadline).toLocaleString('fr-CA', {
     day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
   })
 }
 
-function timeUntilDeadline(deadline: string | null): string | null {
-  if (!deadline) return null
-  const diff = new Date(deadline).getTime() - Date.now()
-  if (diff <= 0) return null
-  const h = Math.floor(diff / 3_600_000)
-  const m = Math.floor((diff % 3_600_000) / 60_000)
-  if (h >= 24) return `${Math.floor(h / 24)}j ${h % 24}h`
-  return `${h}h ${m}m`
-}
-
-// ─── Sub-component : player search ────────────────────────────────────────────
+// ─── Player search ────────────────────────────────────────────────────────────
 
 function PlayerSearch({
-  season, poolSeasonId, roundId, onSelect, excludeIds,
+  poolSeasonId, season, onSelect, excludeIds,
 }: {
-  season: string
   poolSeasonId: number
-  roundId: number
-  onSelect: (p: PlayoffPlayerResult) => void
+  season: string
+  onSelect: (p: PlayoffPoolPlayerResult) => void
   excludeIds: Set<number>
 }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<PlayoffPlayerResult[]>([])
-  const [selected, setSelected] = useState<PlayoffPlayerResult | null>(null)
+  const [results, setResults] = useState<PlayoffPoolPlayerResult[]>([])
+  const [selected, setSelected] = useState<PlayoffPoolPlayerResult | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (query.length < 2) { setResults([]); return }
     const t = setTimeout(async () => {
       setLoading(true)
-      setResults(await searchPlayoffPlayersAction(query, season, poolSeasonId, roundId))
+      setResults(await searchPlayoffPoolPlayersAction(query, poolSeasonId, season))
       setLoading(false)
     }, 300)
     return () => clearTimeout(t)
-  }, [query, season, poolSeasonId, roundId])
+  }, [query, poolSeasonId, season])
 
   if (selected) return (
     <div className="flex items-center gap-2 border border-green-300 bg-green-50 rounded px-3 py-2 text-sm">
@@ -92,11 +84,12 @@ function PlayerSearch({
             <button
               key={p.id}
               onClick={() => { setSelected(p); setResults([]); setQuery(''); onSelect(p) }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2 ${p.teamEliminated ? 'opacity-50' : ''}`}
+              disabled={p.teamEliminated}
             >
               <span className="flex-1">{p.lastName}, {p.firstName}</span>
               <span className="text-xs text-gray-500">{p.teamCode} — {p.position}</span>
-              {p.teamEliminated && <span className="text-xs text-red-500 font-medium">ÉL.</span>}
+              {p.teamEliminated && <span className="text-xs text-red-500">ÉL.</span>}
             </button>
           ))}
         </div>
@@ -108,42 +101,38 @@ function PlayerSearch({
 // ─── Slot row ─────────────────────────────────────────────────────────────────
 
 function SlotRow({
-  slot, index, entry, isFrozen, isAdmin, onRemove,
+  slot, index, entry, isLocked, isAdmin,
+  onRemove,
 }: {
   slot: 'F' | 'D' | 'G'
   index: number
-  entry: PlayoffRosterEntry | undefined
-  isFrozen: boolean
+  entry: PlayoffPoolEntry | undefined
+  isLocked: boolean
   isAdmin: boolean
-  onRemove: (entry: PlayoffRosterEntry, isElimReplacement: boolean) => void
+  onRemove: (entry: PlayoffPoolEntry, isElim: boolean) => void
 }) {
-  const label = `${slotLabel[slot]} ${index + 1}`
-  const canRemove = !isFrozen || isAdmin || (isFrozen && entry?.teamEliminated)
+  const canRemove = !isLocked || isAdmin || (isLocked && !!entry?.teamEliminated)
 
   return (
     <div className={`border rounded-lg p-3 ${slotColor[slot]}`}>
-      <p className="text-xs font-semibold text-gray-500 mb-1">{label}</p>
+      <p className="text-xs font-semibold text-gray-500 mb-1">{slotLabel[slot]} {index + 1}</p>
       {entry ? (
         <div className="flex items-center gap-2">
           <div className="flex-1">
             <span className="text-sm font-medium text-gray-800">{entry.lastName}, {entry.firstName}</span>
             <span className="text-xs text-gray-500 ml-2">{entry.teamCode} — {entry.position}</span>
-            {entry.teamEliminated && (
-              <span className="ml-2 text-xs text-red-600 font-semibold">⚠ Équipe éliminée</span>
-            )}
+            {entry.teamEliminated && <span className="ml-2 text-xs text-red-600 font-semibold">⚠ Équipe éliminée</span>}
           </div>
-          {entry.capNumber != null && (
-            <span className="text-xs text-gray-400 tabular-nums">{capFmt(entry.capNumber)}</span>
-          )}
+          {entry.capNumber != null && <span className="text-xs text-gray-400 tabular-nums">{capFmt(entry.capNumber)}</span>}
           {canRemove && (
             <button
-              onClick={() => onRemove(entry, isFrozen && !!entry.teamEliminated)}
+              onClick={() => onRemove(entry, isLocked && !!entry.teamEliminated)}
               className="text-xs text-red-400 hover:text-red-600 shrink-0"
             >
               Retirer
             </button>
           )}
-          {isFrozen && !isAdmin && !entry.teamEliminated && (
+          {isLocked && !isAdmin && !entry.teamEliminated && (
             <span className="text-xs text-gray-400">🔒</span>
           )}
         </div>
@@ -157,56 +146,43 @@ function SlotRow({
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export default function GestionSeriesManager({
-  isAdmin,
-  poolers,
-  selfPoolerId,
-  selfPoolerName,
-  round,
-  poolSeasonId,
-  season,
-  poolCap,
+  isAdmin, poolers, selfPoolerId, selfPoolerName, saison,
 }: {
   isAdmin: boolean
   poolers?: { id: string; name: string }[]
   selfPoolerId: string
   selfPoolerName: string
-  round: PlayoffRound
-  poolSeasonId: number
-  season: string
-  poolCap: number
+  saison: PlayoffPoolSaison
 }) {
   const [poolerId, setPoolerId] = useState(selfPoolerId)
-  const [entries, setEntries] = useState<PlayoffRosterEntry[]>([])
-  const [postDeadlineChanges, setPostDeadlineChanges] = useState(0)
+  const [entries, setEntries] = useState<PlayoffPoolEntry[]>([])
+  const [counts, setCounts] = useState({ voluntary: 0, elimination: 0 })
   const [loading, setLoading] = useState(true)
 
-  // Add-form state
-  const [removingEntry, setRemovingEntry] = useState<PlayoffRosterEntry | null>(null)
+  const [removingEntry, setRemovingEntry] = useState<PlayoffPoolEntry | null>(null)
   const [isElimReplacement, setIsElimReplacement] = useState(false)
   const [addSlot, setAddSlot] = useState<'F' | 'D' | 'G'>('F')
-  const [addPlayer, setAddPlayer] = useState<PlayoffPlayerResult | null>(null)
+  const [addPlayer, setAddPlayer] = useState<PlayoffPoolPlayerResult | null>(null)
   const [searchKey, setSearchKey] = useState(0)
 
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const isFrozen = round.isFrozen
+  const isLocked = saison.submissionDeadline ? new Date() > new Date(saison.submissionDeadline) : false
   const poolerName = poolers?.find(p => p.id === poolerId)?.name ?? selfPoolerName
 
   useEffect(() => {
     setLoading(true)
     Promise.all([
-      getPoolerPlayoffRosterAction(poolerId, round.id, poolSeasonId, season),
-      round.submissionDeadline
-        ? getPostDeadlineChangesAction(poolerId, round.id, round.submissionDeadline)
-        : Promise.resolve(0),
+      getPlayoffPoolRosterAction(poolerId, saison.id, saison.season),
+      getPlayoffChangeCountsAction(poolerId, saison.id),
     ]).then(([r, c]) => {
       setEntries(r)
-      setPostDeadlineChanges(c)
+      setCounts(c)
       setLoading(false)
     })
-  }, [poolerId, round.id, poolSeasonId, season, round.submissionDeadline])
+  }, [poolerId, saison.id, saison.season])
 
   function resetForm() {
     setRemovingEntry(null)
@@ -215,7 +191,7 @@ export default function GestionSeriesManager({
     setSearchKey(k => k + 1)
   }
 
-  function handleRemove(entry: PlayoffRosterEntry, isElim: boolean) {
+  function handleRemove(entry: PlayoffPoolEntry, isElim: boolean) {
     setRemovingEntry(entry)
     setIsElimReplacement(isElim)
     setAddSlot(entry.positionSlot)
@@ -227,13 +203,15 @@ export default function GestionSeriesManager({
     if (!removingEntry && !addPlayer) return
     setError(null)
     startTransition(async () => {
-      const result = await submitPlayoffChangeAction({
+      const result = await submitPlayoffPoolChangeAction({
         poolerId,
-        roundId: round.id,
-        poolSeasonId,
-        season,
+        poolSeasonId: saison.id,
+        season: saison.season,
         removeEntryId: removingEntry?.id ?? null,
+        removePlayerId: removingEntry?.playerId ?? null,
+        removeNhlId: removingEntry?.nhlId ?? null,
         addPlayerId: addPlayer?.id ?? null,
+        addNhlId: addPlayer?.nhlId ?? null,
         addPositionSlot: addPlayer ? addSlot : null,
         isEliminationReplacement: isElimReplacement,
       })
@@ -243,36 +221,31 @@ export default function GestionSeriesManager({
         setSuccess(true)
         resetForm()
         const [r, c] = await Promise.all([
-          getPoolerPlayoffRosterAction(poolerId, round.id, poolSeasonId, season),
-          round.submissionDeadline
-            ? getPostDeadlineChangesAction(poolerId, round.id, round.submissionDeadline)
-            : Promise.resolve(0),
+          getPlayoffPoolRosterAction(poolerId, saison.id, saison.season),
+          getPlayoffChangeCountsAction(poolerId, saison.id),
         ])
         setEntries(r)
-        setPostDeadlineChanges(c)
+        setCounts(c)
+        setTimeout(() => setSuccess(false), 3000)
       }
     })
   }
 
-  const slots: { slot: 'F' | 'D' | 'G'; count: number }[] = [
-    { slot: 'F', count: round.maxF },
-    { slot: 'D', count: round.maxD },
-    { slot: 'G', count: round.maxG },
-  ]
-  const effectiveCap = round.capPerRound ?? poolCap
-  const capUsed = entries.reduce((sum, e) => sum + (e.capNumber ?? 0), 0)
-  const capOver = capUsed > effectiveCap
-
   const existingPlayerIds = new Set(entries.map(e => e.playerId))
+  const slots: { slot: 'F' | 'D' | 'G'; count: number }[] = [
+    { slot: 'F', count: saison.maxF },
+    { slot: 'D', count: saison.maxD },
+    { slot: 'G', count: saison.maxG },
+  ]
   const entriesBySlot = (slot: 'F' | 'D' | 'G') => entries.filter(e => e.positionSlot === slot)
   const hasEliminatedPlayers = entries.some(e => e.teamEliminated)
-  const timeLeft = timeUntilDeadline(round.submissionDeadline)
-  const changesLeft = round.maxChanges - postDeadlineChanges
+  const voluntaryLeft = saison.maxChanges - counts.voluntary
+  const elimLeft = saison.maxElimChanges - counts.elimination
 
   return (
     <div className="space-y-5">
 
-      {/* Pooler selector (admin only) */}
+      {/* Pooler selector (admin) */}
       {isAdmin && poolers && poolers.length > 0 && (
         <div className="bg-white rounded-lg shadow p-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Pooler</label>
@@ -286,82 +259,77 @@ export default function GestionSeriesManager({
         </div>
       )}
 
-      {/* Round status banner */}
-      <div className={`rounded-lg p-4 text-sm ${isFrozen ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* Status banner */}
+      <div className={`rounded-lg p-4 text-sm ${isLocked ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <span className={`font-semibold ${isFrozen ? 'text-orange-700' : 'text-green-700'}`}>
-              {isFrozen ? '🔒 Alignement gelé' : '✏️ Modifications libres'}
+            <span className={`font-semibold ${isLocked ? 'text-orange-700' : 'text-green-700'}`}>
+              {isLocked ? '🔒 Alignement verrouillé' : '✏️ Soumission libre'}
             </span>
-            <span className="text-gray-600 ml-2">
-              {round.submissionDeadline ? `Deadline : ${deadlineLabel(round.submissionDeadline)}` : 'Aucune deadline fixée'}
-            </span>
+            <p className="text-gray-500 text-xs mt-0.5">{deadlineLabel(saison.submissionDeadline)}</p>
           </div>
-          <div className="flex items-center gap-3">
-            {!isFrozen && timeLeft && (
-              <span className="text-xs text-gray-500">Ferme dans {timeLeft}</span>
-            )}
-            {isFrozen && (
-              <span className="text-xs text-orange-600 font-medium">
-                Changements : {postDeadlineChanges}/{round.maxChanges}
-              </span>
-            )}
-            <span className={`text-xs font-medium ${capOver ? 'text-red-600' : 'text-gray-500'}`}>
-              Cap : {capFmt(capUsed)} / {capFmt(effectiveCap)}
+          <div className="flex flex-wrap gap-3 text-xs">
+            <span className={voluntaryLeft <= 0 ? 'text-red-600 font-semibold' : 'text-gray-600'}>
+              Changements volontaires : {counts.voluntary}/{saison.maxChanges}
+            </span>
+            <span className={elimLeft <= 0 ? 'text-red-600 font-semibold' : 'text-gray-600'}>
+              Remplacements élimination : {counts.elimination}/{saison.maxElimChanges}
             </span>
           </div>
         </div>
         {hasEliminatedPlayers && (
-          <p className="mt-2 text-orange-700 font-medium text-xs">
-            ⚠ Un ou plusieurs de vos joueurs sont sur des équipes éliminées — remplacement possible même si gelé.
-          </p>
+          <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+            ⚠ Un ou plusieurs joueurs sont sur une équipe éliminée. Remplacez-les.
+          </div>
         )}
       </div>
 
-      {/* Lineup */}
+      {/* Roster slots */}
       {loading ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-400 text-sm">Chargement...</div>
+        <p className="text-sm text-gray-400">Chargement...</p>
       ) : (
-        <div className="bg-white rounded-lg shadow p-5 space-y-4">
-          <p className="text-sm font-semibold text-gray-700">
-            Alignement — Ronde {round.roundNumber} — {poolerName}
-          </p>
+        <div className="bg-white rounded-lg shadow p-4 space-y-4">
+          <h2 className="text-sm font-semibold text-gray-700">{poolerName}</h2>
           {slots.map(({ slot, count }) => (
-            <div key={slot} className="space-y-2">
-              {Array.from({ length: count }).map((_, i) => (
-                <SlotRow
-                  key={`${slot}-${i}`}
-                  slot={slot}
-                  index={i}
-                  entry={entriesBySlot(slot)[i]}
-                  isFrozen={isFrozen}
-                  isAdmin={isAdmin}
-                  onRemove={handleRemove}
-                />
-              ))}
+            <div key={slot}>
+              <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${slotTextColor[slot]}`}>
+                {slotLabel[slot]}s ({entriesBySlot(slot).length}/{count})
+              </p>
+              <div className="grid grid-cols-1 gap-2">
+                {Array.from({ length: count }).map((_, i) => (
+                  <SlotRow
+                    key={i}
+                    slot={slot}
+                    index={i}
+                    entry={entriesBySlot(slot)[i]}
+                    isLocked={isLocked}
+                    isAdmin={isAdmin}
+                    onRemove={handleRemove}
+                  />
+                ))}
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Change form */}
-      {(removingEntry || (!isFrozen || isAdmin)) && !loading && (
-        <div className="bg-white rounded-lg shadow p-5 space-y-4">
+      {/* Add/swap form */}
+      {(!isLocked || isAdmin || hasEliminatedPlayers) && (
+        <div className="bg-white rounded-lg shadow p-4 space-y-3">
           <p className="text-sm font-semibold text-gray-700">
-            {removingEntry ? `Remplacer : ${removingEntry.lastName}, ${removingEntry.firstName}` : 'Ajouter un joueur'}
+            {removingEntry
+              ? `Remplacer : ${removingEntry.lastName}, ${removingEntry.firstName}${isElimReplacement ? ' (élimination)' : ''}`
+              : 'Ajouter un joueur'}
           </p>
 
-          {isFrozen && !isAdmin && (
-            <div className={`text-xs rounded p-2 ${isElimReplacement ? 'bg-blue-50 text-blue-700' : changesLeft <= 0 ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'}`}>
-              {isElimReplacement
-                ? 'Remplacement d\'urgence (équipe éliminée) — ne compte pas dans le budget.'
-                : changesLeft <= 0
-                  ? `Budget épuisé (${round.maxChanges}/${round.maxChanges} changements utilisés).`
-                  : `Changement discrétionnaire — il vous reste ${changesLeft} changement${changesLeft > 1 ? 's' : ''}.`}
+          {removingEntry && (
+            <div className="bg-red-50 border border-red-200 rounded px-3 py-2 flex items-center justify-between text-sm">
+              <span className="text-red-700 font-medium">{removingEntry.lastName}, {removingEntry.firstName}</span>
+              <button onClick={resetForm} className="text-xs text-gray-400 hover:text-gray-600">Annuler</button>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Position</label>
               <select
@@ -378,34 +346,26 @@ export default function GestionSeriesManager({
               <label className="block text-xs font-medium text-gray-600 mb-1">Joueur</label>
               <PlayerSearch
                 key={searchKey}
-                season={season}
-                poolSeasonId={poolSeasonId}
-                roundId={round.id}
+                poolSeasonId={saison.id}
+                season={saison.season}
                 onSelect={setAddPlayer}
                 excludeIds={existingPlayerIds}
               />
             </div>
           </div>
 
-          <div className="flex gap-3 justify-end">
-            {removingEntry && (
-              <button onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700">
-                Annuler
-              </button>
-            )}
-            <button
-              onClick={handleSubmit}
-              disabled={isPending || (!addPlayer && !removingEntry) || (isFrozen && !isAdmin && !isElimReplacement && changesLeft <= 0)}
-              className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {isPending ? 'En cours...' : removingEntry ? 'Remplacer' : 'Ajouter'}
-            </button>
-          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {success && <p className="text-sm text-green-600">Changement enregistré.</p>}
+
+          <button
+            onClick={handleSubmit}
+            disabled={isPending || !addPlayer}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+          >
+            {isPending ? 'Enregistrement...' : removingEntry ? 'Confirmer le remplacement' : 'Ajouter'}
+          </button>
         </div>
       )}
-
-      {error && <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>}
-      {success && <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-700">✓ Changement appliqué.</div>}
     </div>
   )
 }

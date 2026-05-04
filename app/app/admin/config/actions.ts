@@ -366,7 +366,19 @@ export async function updateCapAction(
   nhlCap: number,
   capMultiplier: number,
   nextNhlCap?: number | null,
-  opts?: { delaiReactivationJours?: number; maxSignaturesAl?: number; maxSignaturesLtir?: number; gestionEffectifsOuvert?: boolean; isPlayoff?: boolean },
+  opts?: {
+    delaiReactivationJours?: number
+    maxSignaturesAl?: number
+    maxSignaturesLtir?: number
+    gestionEffectifsOuvert?: boolean
+    isPlayoff?: boolean
+    playoffSubmissionDeadline?: string | null
+    playoffMaxChanges?: number
+    playoffMaxElimChanges?: number
+    playoffMaxF?: number
+    playoffMaxD?: number
+    playoffMaxG?: number
+  },
 ): Promise<{ error?: string }> {
   if (!nhlCap || nhlCap < 1_000_000) return { error: 'Cap NHL invalide.' }
   if (!capMultiplier || capMultiplier <= 0) return { error: 'Facteur invalide.' }
@@ -379,6 +391,12 @@ export async function updateCapAction(
   if (opts?.maxSignaturesLtir !== undefined) updates.max_signatures_ltir = opts.maxSignaturesLtir
   if (opts?.gestionEffectifsOuvert !== undefined) updates.gestion_effectifs_ouvert = opts.gestionEffectifsOuvert
   if (opts?.isPlayoff !== undefined) updates.is_playoff = opts.isPlayoff
+  if (opts?.playoffSubmissionDeadline !== undefined) updates.playoff_submission_deadline = opts.playoffSubmissionDeadline ?? null
+  if (opts?.playoffMaxChanges !== undefined) updates.playoff_max_changes = opts.playoffMaxChanges
+  if (opts?.playoffMaxElimChanges !== undefined) updates.playoff_max_elim_changes = opts.playoffMaxElimChanges
+  if (opts?.playoffMaxF !== undefined) updates.playoff_max_f = opts.playoffMaxF
+  if (opts?.playoffMaxD !== undefined) updates.playoff_max_d = opts.playoffMaxD
+  if (opts?.playoffMaxG !== undefined) updates.playoff_max_g = opts.playoffMaxG
 
   const { error } = await supabase
     .from('pool_seasons')

@@ -21,7 +21,7 @@ export default async function AdminConfigPage() {
 
   const { data: saisons } = await supabase
     .from('pool_seasons')
-    .select('id, season, nhl_cap, cap_multiplier, pool_cap, is_active, is_playoff, next_nhl_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir, gestion_effectifs_ouvert')
+    .select('id, season, nhl_cap, cap_multiplier, pool_cap, is_active, is_playoff, next_nhl_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir, gestion_effectifs_ouvert, playoff_submission_deadline, playoff_max_changes, playoff_max_elim_changes, playoff_max_f, playoff_max_d, playoff_max_g')
     .order('season', { ascending: false })
 
   const activeRegSaison = (saisons ?? []).find(s => s.is_active && !s.is_playoff) ?? null
