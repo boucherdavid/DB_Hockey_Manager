@@ -58,6 +58,15 @@ Je l'utiliserai pour:
 
 ### 2026-05-04 (suite)
 
+**Corrections config pool des séries**
+
+- `deleteSeasonAction` : autorise la suppression d'une saison playoff active (seules les saisons régulières actives sont protégées). Commit : `78ef408`
+- `SeasonsManager` : bouton Supprimer visible pour toute saison playoff (active ou non). Commit : `78ef408`
+- `ConfigForm` : ajout du champ "Cap du pool des séries ($)" dans la section Configuration — Séries. Commit : `78ef408`
+- Labels "Max F / Max D / Max G" renommés en "Attaquants requis / Défenseurs requis / Gardiens requis" dans ConfigForm, SeriesAdminManager et la page gestion-series — ces valeurs définissent une composition exacte, pas un maximum. Commit : `f9fe01d`
+
+---
+
 **Suppression de l'ancien système de pool des séries**
 
 Fichiers supprimés :
