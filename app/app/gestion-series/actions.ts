@@ -688,3 +688,211 @@ export async function removeEliminationAction(eliminationId: number): Promise<{ 
     return { error: e?.message ?? 'Erreur inconnue' }
   }
 }
+
+// ─── Scoring ──────────────────────────────────────────────────────────────────
+
+export type RoundPlayerScore = {
+  playerId: number
+  firstName: string
+  lastName: string
+  teamCode: string | null
+  positionSlot: 'F' | 'D' | 'G'
+  goals: number
+  assists: number
+  goalieWins: number
+  goalieOtl: number
+  goalieShutouts: number
+  points: number
+}
+
+export type RoundStanding = {
+  poolerId: string
+  poolerName: string
+  totalPoints: number
+  players: RoundPlayerScore[]
+}
+
+export type RoundSnapshotStatus = {
+  hasStart: boolean
+  hasEnd: boolean
+  startTakenAt: string | null
+  endTakenAt: string | null
+}
+
+export async function getRoundSnapshotStatusAction(roundId: number): Promise<RoundSnapshotStatus> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('series_round_snapshots')
+    .select('snapshot_type, taken_at')
+    .eq('round_id', roundId)
+  const rows = data ?? []
+  const starts = rows.filter((r: any) => r.snapshot_type === 'start')
+  const ends = rows.filter((r: any) => r.snapshot_type === 'end')
+  return {
+    hasStart: starts.length > 0,
+    hasEnd: ends.length > 0,
+    startTakenAt: starts[0]?.taken_at ?? null,
+    endTakenAt: ends[0]?.taken_at ?? null,
+  }
+}
+
+/**
+ * Prend un snapshot pour tous les joueurs actifs de la ronde.
+ * useZeros=true : insère des zéros (début de ronde 1, avant tout match playoff).
+ * useZeros=false : fetch les stats playoff cumulatives depuis l'API NHL.
+ */
+export async function takeRoundSnapshotAction(
+  roundId: number,
+  snapshotType: 'start' | 'end',
+  useZeros = false,
+): Promise<{ error?: string; count?: number }> {
+  try {
+    await requireAdmin()
+    const db = createAdminClient()
+
+    const { data: entries } = await db
+      .from('series_round_rosters')
+      .select('pooler_id, player_id, players(nhl_id)')
+      .eq('round_id', roundId)
+      .eq('is_active', true)
+
+    if (!entries || entries.length === 0) return { error: 'Aucun alignement dans cette ronde.' }
+
+    const { fetchPlayerStatsById } = await import('@/lib/nhl-snapshot')
+    const now = new Date().toISOString()
+
+    const toUpsert = await Promise.all(entries.map(async (e: any) => {
+      const nhlId = e.players?.nhl_id ?? null
+      const stats = useZeros || !nhlId
+        ? { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0 }
+        : await fetchPlayerStatsById(nhlId, 3)
+      return {
+        round_id: roundId,
+        pooler_id: e.pooler_id,
+        player_id: e.player_id,
+        snapshot_type: snapshotType,
+        taken_at: now,
+        ...stats,
+      }
+    }))
+
+    const { error } = await db
+      .from('series_round_snapshots')
+      .upsert(toUpsert, { onConflict: 'round_id,pooler_id,player_id,snapshot_type' })
+    if (error) return { error: error.message }
+
+    revalidatePath('/admin/series')
+    revalidatePath('/classement-series')
+    return { count: toUpsert.length }
+  } catch (e: any) {
+    return { error: e?.message ?? 'Erreur inconnue' }
+  }
+}
+
+export async function getRoundStandingsAction(
+  roundId: number,
+): Promise<RoundStanding[]> {
+  const supabase = await createClient()
+
+  const [{ data: snapshots }, { data: scoringRows }, { data: rosters }] = await Promise.all([
+    supabase
+      .from('series_round_snapshots')
+      .select('pooler_id, player_id, snapshot_type, goals, assists, goalie_wins, goalie_otl, goalie_shutouts')
+      .eq('round_id', roundId),
+    supabase
+      .from('scoring_config')
+      .select('stat_key, points, points_playoffs, scope'),
+    supabase
+      .from('series_round_rosters')
+      .select('pooler_id, player_id, position_slot, players(first_name, last_name, teams(code)), poolers(id, name)')
+      .eq('round_id', roundId)
+      .eq('is_active', true),
+  ])
+
+  if (!snapshots || snapshots.length === 0) return []
+
+  // Scoring config — utilise points_playoffs si défini
+  const cfg: Record<string, number> = {}
+  for (const row of scoringRows ?? []) {
+    cfg[row.stat_key] = row.points_playoffs != null ? row.points_playoffs : row.points
+  }
+
+  // Index snapshots par pooler+player+type
+  type SnapKey = string
+  const snap = new Map<SnapKey, any>()
+  for (const s of snapshots) {
+    snap.set(`${s.pooler_id}:${s.player_id}:${s.snapshot_type}`, s)
+  }
+
+  // Index rosters
+  const poolerNames = new Map<string, string>()
+  const playerMeta = new Map<number, { firstName: string; lastName: string; teamCode: string | null; positionSlot: 'F' | 'D' | 'G' }>()
+  const rosterByPooler = new Map<string, number[]>()
+
+  for (const r of rosters ?? []) {
+    const poolerId = r.pooler_id
+    const name = (r.poolers as any)?.name ?? poolerId
+    poolerNames.set(poolerId, name)
+    if (!rosterByPooler.has(poolerId)) rosterByPooler.set(poolerId, [])
+    rosterByPooler.get(poolerId)!.push(r.player_id)
+    playerMeta.set(r.player_id, {
+      firstName: (r.players as any)?.first_name ?? '',
+      lastName: (r.players as any)?.last_name ?? '',
+      teamCode: (r.players as any)?.teams?.code ?? null,
+      positionSlot: r.position_slot as 'F' | 'D' | 'G',
+    })
+  }
+
+  const standings: RoundStanding[] = []
+
+  for (const [poolerId, playerIds] of rosterByPooler.entries()) {
+    const players: RoundPlayerScore[] = []
+    let totalPoints = 0
+
+    for (const playerId of playerIds) {
+      const start = snap.get(`${poolerId}:${playerId}:start`)
+      const end = snap.get(`${poolerId}:${playerId}:end`)
+      if (!end) continue
+
+      const delta = {
+        goals:          (end.goals ?? 0)          - (start?.goals ?? 0),
+        assists:        (end.assists ?? 0)         - (start?.assists ?? 0),
+        goalie_wins:    (end.goalie_wins ?? 0)     - (start?.goalie_wins ?? 0),
+        goalie_otl:     (end.goalie_otl ?? 0)      - (start?.goalie_otl ?? 0),
+        goalie_shutouts:(end.goalie_shutouts ?? 0) - (start?.goalie_shutouts ?? 0),
+      }
+
+      const pts =
+        delta.goals           * (cfg['goal']         ?? 1) +
+        delta.assists         * (cfg['assist']        ?? 1) +
+        delta.goalie_wins     * (cfg['goalie_win']    ?? 2) +
+        delta.goalie_otl      * (cfg['goalie_otl']    ?? 1) +
+        delta.goalie_shutouts * (cfg['goalie_shutout']?? 0)
+
+      const meta = playerMeta.get(playerId)
+      players.push({
+        playerId,
+        firstName:      meta?.firstName ?? '',
+        lastName:       meta?.lastName ?? '',
+        teamCode:       meta?.teamCode ?? null,
+        positionSlot:   meta?.positionSlot ?? 'F',
+        goals:          delta.goals,
+        assists:        delta.assists,
+        goalieWins:     delta.goalie_wins,
+        goalieOtl:      delta.goalie_otl,
+        goalieShutouts: delta.goalie_shutouts,
+        points:         pts,
+      })
+      totalPoints += pts
+    }
+
+    standings.push({
+      poolerId,
+      poolerName: poolerNames.get(poolerId) ?? poolerId,
+      totalPoints,
+      players: players.sort((a, b) => b.points - a.points),
+    })
+  }
+
+  return standings.sort((a, b) => b.totalPoints - a.totalPoints)
+}

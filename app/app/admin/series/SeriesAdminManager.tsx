@@ -8,12 +8,17 @@ import {
   transitionToNextRoundAction,
   markTeamEliminatedAction,
   removeEliminationAction,
+  takeRoundSnapshotAction,
+  getRoundStandingsAction,
+  getRoundSnapshotStatusAction,
 } from '@/app/gestion-series/actions'
 import type {
   PlayoffSaison,
   PlayoffRound,
   EliminatedTeam,
   AllPoolersRosters,
+  RoundStanding,
+  RoundSnapshotStatus,
 } from '@/app/gestion-series/actions'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -501,6 +506,173 @@ function AlignmentsTab({
   )
 }
 
+// ─── Tab: Scoring ─────────────────────────────────────────────────────────────
+
+function ScoringTab({ rounds }: { rounds: PlayoffRound[] }) {
+  const [isPending, startTransition] = useTransition()
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [selectedRoundId, setSelectedRoundId] = useState<number>(rounds[0]?.id ?? 0)
+  const [standings, setStandings] = useState<RoundStanding[]>([])
+  const [status, setStatus] = useState<RoundSnapshotStatus | null>(null)
+  const [loadingStandings, setLoadingStandings] = useState(false)
+
+  const roundLabel = (n: number) => ['Ronde 1', 'Ronde 2', 'Demi-finales', 'Finale'][n - 1] ?? `Ronde ${n}`
+
+  function act(fn: () => Promise<{ error?: string; count?: number }>, successMsg: string) {
+    setMsg(null)
+    startTransition(async () => {
+      const r = await fn()
+      if (r.error) setMsg({ type: 'error', text: r.error })
+      else setMsg({ type: 'success', text: r.count ? `${successMsg} (${r.count} joueurs)` : successMsg })
+    })
+  }
+
+  async function loadStatus(roundId: number) {
+    const s = await getRoundSnapshotStatusAction(roundId)
+    setStatus(s)
+  }
+
+  async function loadStandings() {
+    setLoadingStandings(true)
+    const s = await getRoundStandingsAction(selectedRoundId)
+    setStandings(s)
+    setLoadingStandings(false)
+  }
+
+  const fmtDate = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString('fr-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
+
+  if (rounds.length === 0) return <p className="text-sm text-gray-400">Aucune ronde créée.</p>
+
+  return (
+    <div className="space-y-5">
+      {msg && (
+        <div className={`text-sm rounded p-3 ${msg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {msg.text}
+        </div>
+      )}
+
+      {/* Sélecteur de ronde */}
+      <div className="flex items-center gap-3">
+        <label className="text-sm font-medium text-gray-700">Ronde :</label>
+        <select
+          value={selectedRoundId}
+          onChange={e => { setSelectedRoundId(Number(e.target.value)); setStatus(null); setStandings([]) }}
+          className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+        >
+          {rounds.map(r => <option key={r.id} value={r.id}>{roundLabel(r.roundNumber)}</option>)}
+        </select>
+        <button
+          onClick={() => loadStatus(selectedRoundId)}
+          className="text-xs text-blue-500 hover:underline"
+        >
+          Vérifier l&apos;état
+        </button>
+      </div>
+
+      {/* État des snapshots */}
+      {status && (
+        <div className="border rounded-lg divide-y divide-gray-100 text-sm">
+          <div className="px-4 py-2 flex items-center justify-between">
+            <span className="text-gray-600">Snapshot début</span>
+            <span className={status.hasStart ? 'text-green-600 font-medium' : 'text-gray-400'}>
+              {status.hasStart ? `✓ ${fmtDate(status.startTakenAt)}` : 'Non pris'}
+            </span>
+          </div>
+          <div className="px-4 py-2 flex items-center justify-between">
+            <span className="text-gray-600">Snapshot fin</span>
+            <span className={status.hasEnd ? 'text-green-600 font-medium' : 'text-gray-400'}>
+              {status.hasEnd ? `✓ ${fmtDate(status.endTakenAt)}` : 'Non pris'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Boutons snapshot */}
+      <div className="border rounded-lg p-4 space-y-3">
+        <p className="text-sm font-medium text-gray-700">Snapshots des stats playoff (API NHL)</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <button
+              disabled={isPending}
+              onClick={() => act(() => takeRoundSnapshotAction(selectedRoundId, 'start', true), 'Snapshot début (zéros) enregistré')}
+              className="w-full bg-slate-100 text-slate-700 text-sm px-3 py-2 rounded hover:bg-slate-200 disabled:opacity-50"
+            >
+              Début de ronde — zéros
+            </button>
+            <p className="text-xs text-gray-400">Pour la ronde 1 : les playoffs n&apos;avaient pas encore commencé.</p>
+          </div>
+          <div className="space-y-1.5">
+            <button
+              disabled={isPending}
+              onClick={() => act(() => takeRoundSnapshotAction(selectedRoundId, 'start', false), 'Snapshot début (API) enregistré')}
+              className="w-full bg-blue-50 text-blue-700 text-sm px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50"
+            >
+              Début de ronde — stats actuelles
+            </button>
+            <p className="text-xs text-gray-400">Pour rondes 2+ : stats cumulatives avant que la ronde commence.</p>
+          </div>
+          <div className="sm:col-span-2">
+            <button
+              disabled={isPending}
+              onClick={() => act(() => takeRoundSnapshotAction(selectedRoundId, 'end', false), 'Snapshot fin enregistré')}
+              className="w-full bg-green-600 text-white text-sm px-3 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+            >
+              Fin de ronde — comptabiliser les stats actuelles
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Classement */}
+      <div className="border rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-gray-700">Classement de la ronde</p>
+          <button
+            onClick={loadStandings}
+            disabled={loadingStandings}
+            className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded hover:bg-gray-900 disabled:opacity-50"
+          >
+            {loadingStandings ? 'Calcul...' : 'Calculer'}
+          </button>
+        </div>
+        {standings.length > 0 && (
+          <div className="space-y-3">
+            {standings.map((s, i) => (
+              <div key={s.poolerId} className="border rounded-lg overflow-hidden">
+                <div className="bg-slate-50 px-4 py-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-400 w-5">#{i + 1}</span>
+                    <span className="text-sm font-semibold text-gray-800">{s.poolerName}</span>
+                  </div>
+                  <span className="text-sm font-bold text-blue-700">{s.totalPoints.toFixed(1)} pts</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {s.players.map(p => (
+                    <div key={p.playerId} className="flex items-center gap-2 px-4 py-1.5 text-xs text-gray-600">
+                      <span className={`font-bold w-4 ${p.positionSlot === 'F' ? 'text-blue-500' : p.positionSlot === 'D' ? 'text-green-500' : 'text-purple-500'}`}>{p.positionSlot}</span>
+                      <span className="flex-1">{p.lastName}, {p.firstName}</span>
+                      <span className="text-gray-400">{p.teamCode}</span>
+                      <span className="text-gray-500 tabular-nums">{p.goals}B {p.assists}A</span>
+                      {(p.goalieWins > 0 || p.goalieOtl > 0 || p.goalieShutouts > 0) && (
+                        <span className="text-gray-500 tabular-nums">{p.goalieWins}V {p.goalieOtl}DP {p.goalieShutouts}BL</span>
+                      )}
+                      <span className="font-semibold text-blue-600 tabular-nums w-12 text-right">{p.points.toFixed(1)} pts</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {standings.length === 0 && !loadingStandings && (
+          <p className="text-xs text-gray-400">Cliquez &quot;Calculer&quot; après avoir pris un snapshot de fin.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function SeriesAdminManager({
@@ -513,12 +685,13 @@ export default function SeriesAdminManager({
   allRosters: AllPoolersRosters[]
   activeRound: PlayoffRound | null
 }) {
-  const [tab, setTab] = useState<'rondes' | 'eliminations' | 'alignements'>('rondes')
+  const [tab, setTab] = useState<'rondes' | 'eliminations' | 'alignements' | 'scoring'>('rondes')
 
   const tabs: { key: typeof tab; label: string }[] = [
     { key: 'rondes', label: 'Rondes' },
     { key: 'eliminations', label: 'Éliminations' },
     { key: 'alignements', label: 'Alignements' },
+    { key: 'scoring', label: 'Scoring' },
   ]
 
   return (
@@ -547,6 +720,7 @@ export default function SeriesAdminManager({
         />
       )}
       {tab === 'alignements' && <AlignmentsTab allRosters={allRosters} activeRound={activeRound} />}
+      {tab === 'scoring' && <ScoringTab rounds={rounds} />}
     </div>
   )
 }
