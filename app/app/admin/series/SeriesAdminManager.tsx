@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import {
   markTeamEliminatedAction,
   removeEliminationAction,
+  setParticipatingTeamsAction,
 } from './series-admin-actions'
 import {
   getPlayoffPoolStandingsAction,
@@ -15,23 +16,28 @@ import type {
 } from '@/app/gestion-series/playoff-pool-actions'
 import type { EliminatedTeam } from './series-admin-actions'
 
-// ─── Tab: Éliminations ────────────────────────────────────────────────────────
+type Team = { id: number; code: string; name: string }
 
-function EliminationsTab({
+// ─── Tab: Équipes ─────────────────────────────────────────────────────────────
+
+function TeamsTab({
   saison,
+  participatingTeamIds,
   eliminations,
-  teams,
+  allTeams,
 }: {
   saison: PlayoffPoolSaison
+  participatingTeamIds: number[]
   eliminations: EliminatedTeam[]
-  teams: { id: number; code: string; name: string }[]
+  allTeams: Team[]
 }) {
   const [isPending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [selectedTeam, setSelectedTeam] = useState('')
+  const [editingSetup, setEditingSetup] = useState(participatingTeamIds.length === 0)
+  const [selected, setSelected] = useState<Set<number>>(new Set(participatingTeamIds))
 
   const eliminatedIds = new Set(eliminations.map(e => e.teamId))
-  const availableTeams = teams.filter(t => !eliminatedIds.has(t.id))
+  const participatingTeams = allTeams.filter(t => participatingTeamIds.includes(t.id))
 
   function act(fn: () => Promise<{ error?: string }>) {
     setMsg(null)
@@ -42,62 +48,161 @@ function EliminationsTab({
     })
   }
 
-  return (
-    <div className="space-y-4">
-      {msg && (
-        <div className={`text-sm rounded p-3 ${msg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-          {msg.text}
-        </div>
-      )}
+  function toggleSelected(teamId: number) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(teamId)) next.delete(teamId)
+      else next.add(teamId)
+      return next
+    })
+  }
 
-      <div className="border rounded-lg p-4 space-y-3">
-        <p className="text-sm font-medium text-gray-700">Marquer une équipe éliminée</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+  function handleConfirmSetup() {
+    act(async () => {
+      const res = await setParticipatingTeamsAction(saison.id, [...selected])
+      if (!res.error) setEditingSetup(false)
+      return res
+    })
+  }
+
+  function handleToggleEliminated(team: Team) {
+    const elim = eliminations.find(e => e.teamId === team.id)
+    if (elim) {
+      act(() => removeEliminationAction(elim.id))
+    } else {
+      act(() => markTeamEliminatedAction(saison.id, team.id))
+    }
+  }
+
+  // ── Phase 1 : sélection des équipes participantes ──
+  if (editingSetup) {
+    const divisions: Record<string, Team[]> = {}
+    for (const t of allTeams) {
+      const div = getDivision(t.code)
+      if (!divisions[div]) divisions[div] = []
+      divisions[div].push(t)
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Équipe</label>
-            <select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
-              <option value="">— Choisir —</option>
-              {availableTeams.map(t => <option key={t.id} value={t.id}>{t.code} — {t.name}</option>)}
-            </select>
+            <p className="text-sm font-semibold text-gray-800">Sélectionner les équipes participantes</p>
+            <p className="text-xs text-gray-500 mt-0.5">{selected.size} équipe{selected.size > 1 ? 's' : ''} sélectionnée{selected.size > 1 ? 's' : ''}</p>
           </div>
-          <button
-            disabled={isPending || !selectedTeam}
-            onClick={() => act(async () => {
-              const res = await markTeamEliminatedAction(saison.id, parseInt(selectedTeam))
-              if (!res.error) setSelectedTeam('')
-              return res
-            })}
-            className="bg-red-600 text-white text-sm px-4 py-1.5 rounded hover:bg-red-700 disabled:opacity-50"
-          >
-            Marquer éliminée
-          </button>
+          {participatingTeamIds.length > 0 && (
+            <button onClick={() => { setSelected(new Set(participatingTeamIds)); setEditingSetup(false) }}
+              className="text-xs text-gray-400 hover:text-gray-600">
+              Annuler
+            </button>
+          )}
         </div>
-      </div>
 
-      {eliminations.length === 0 ? (
-        <p className="text-sm text-gray-400">Aucune équipe éliminée enregistrée.</p>
-      ) : (
-        <div className="border rounded-lg divide-y divide-gray-100">
-          {eliminations.map(e => (
-            <div key={e.id} className="flex items-center justify-between px-4 py-2.5">
-              <div>
-                <span className="text-sm font-medium text-gray-800">{e.teamCode}</span>
-                <span className="text-xs text-gray-500 ml-2">{e.teamName}</span>
+        {msg && (
+          <p className={`text-sm rounded px-3 py-2 ${msg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+            {msg.text}
+          </p>
+        )}
+
+        <div className="space-y-4">
+          {Object.entries(divisions).map(([div, teams]) => (
+            <div key={div}>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">{div}</p>
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                {teams.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => toggleSelected(t.id)}
+                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg border-2 transition-all text-xs font-bold
+                      ${selected.has(t.id)
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'}`}
+                  >
+                    <span className="text-base leading-none">{t.code}</span>
+                    {selected.has(t.id) && <span className="text-blue-400 text-xs mt-0.5">✓</span>}
+                  </button>
+                ))}
               </div>
-              <button
-                disabled={isPending}
-                onClick={() => act(() => removeEliminationAction(e.id))}
-                className="text-xs text-red-400 hover:text-red-600"
-              >
-                Retirer
-              </button>
             </div>
           ))}
         </div>
+
+        <button
+          onClick={handleConfirmSetup}
+          disabled={isPending || selected.size === 0}
+          className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
+        >
+          {isPending ? 'Enregistrement...' : `Confirmer — ${selected.size} équipe${selected.size > 1 ? 's' : ''}`}
+        </button>
+      </div>
+    )
+  }
+
+  // ── Phase 2 : gestion des éliminations ──
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-gray-800">Équipes participantes</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {eliminatedIds.size} éliminée{eliminatedIds.size > 1 ? 's' : ''} · {participatingTeamIds.length - eliminatedIds.size} encore en lice
+          </p>
+        </div>
+        <button
+          onClick={() => { setSelected(new Set(participatingTeamIds)); setEditingSetup(true) }}
+          className="text-xs text-blue-500 hover:text-blue-700 font-medium"
+        >
+          Modifier la sélection
+        </button>
+      </div>
+
+      {msg && (
+        <p className={`text-sm rounded px-3 py-2 ${msg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {msg.text}
+        </p>
       )}
+
+      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+        {participatingTeams.map(t => {
+          const isElim = eliminatedIds.has(t.id)
+          return (
+            <button
+              key={t.id}
+              onClick={() => handleToggleEliminated(t)}
+              disabled={isPending}
+              title={isElim ? `${t.name} — cliquer pour retirer l'élimination` : `${t.name} — cliquer pour marquer éliminée`}
+              className={`flex flex-col items-center justify-center py-3 px-1 rounded-lg border-2 transition-all text-xs font-bold disabled:opacity-50
+                ${isElim
+                  ? 'border-red-300 bg-red-50 text-red-400 line-through opacity-70'
+                  : 'border-green-300 bg-green-50 text-green-700 hover:border-green-400 hover:bg-green-100'}`}
+            >
+              <span className="text-base leading-none">{t.code}</span>
+              <span className={`text-xs mt-0.5 ${isElim ? 'text-red-400' : 'text-green-500'}`}>
+                {isElim ? '✕' : '✓'}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <p className="text-xs text-gray-400 text-center">
+        Cliquer sur une équipe pour basculer son statut d&apos;élimination
+      </p>
     </div>
   )
+}
+
+// Division helper (approximatif — pour regrouper visuellement)
+function getDivision(code: string): string {
+  const atlantic = ['BOS', 'BUF', 'DET', 'FLA', 'MTL', 'OTT', 'TBL', 'TOR']
+  const metro = ['CAR', 'CBJ', 'NJD', 'NYI', 'NYR', 'PHI', 'PIT', 'WSH']
+  const central = ['ARI', 'CHI', 'COL', 'DAL', 'MIN', 'NSH', 'STL', 'UTA', 'WPG']
+  const pacific = ['ANA', 'CGY', 'EDM', 'LAK', 'SJS', 'SEA', 'VAN', 'VGK']
+  if (atlantic.includes(code)) return 'Atlantique'
+  if (metro.includes(code)) return 'Métropolitaine'
+  if (central.includes(code)) return 'Centrale'
+  if (pacific.includes(code)) return 'Pacifique'
+  return 'Autre'
 }
 
 // ─── Tab: Alignements ─────────────────────────────────────────────────────────
@@ -156,7 +261,7 @@ function ScoringTab({ poolSeasonId }: { poolSeasonId: number }) {
     try {
       const s = await getPlayoffPoolStandingsAction(poolSeasonId)
       setStandings(s)
-      if (s.length === 0) setMsg('Aucune donnée de scoring disponible. Des snapshots doivent être pris lors des changements.')
+      if (s.length === 0) setMsg('Aucune donnée de scoring disponible.')
     } catch {
       setMsg('Erreur lors du calcul.')
     }
@@ -170,7 +275,7 @@ function ScoringTab({ poolSeasonId }: { poolSeasonId: number }) {
           <div>
             <p className="text-sm font-medium text-gray-700">Classement en direct</p>
             <p className="text-xs text-gray-400 mt-0.5">
-              Les points sont calculés automatiquement à chaque changement (snapshot activation/désactivation via API NHL playoffs).
+              Points calculés automatiquement à chaque changement (snapshot activation/désactivation).
             </p>
           </div>
           <button
@@ -223,25 +328,26 @@ function ScoringTab({ poolSeasonId }: { poolSeasonId: number }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function SeriesAdminManager({
-  saison, eliminations, teams, allRosters,
+  saison, participatingTeamIds, eliminations, allTeams, allRosters,
 }: {
   saison: PlayoffPoolSaison
+  participatingTeamIds: number[]
   eliminations: EliminatedTeam[]
-  teams: { id: number; code: string; name: string }[]
+  allTeams: Team[]
   allRosters: { poolerId: string; poolerName: string; entries: PlayoffPoolEntry[] }[]
 }) {
-  const [tab, setTab] = useState<'eliminations' | 'alignements' | 'scoring'>('eliminations')
+  const [tab, setTab] = useState<'equipes' | 'alignements' | 'scoring'>('equipes')
 
-  const tabs: { key: typeof tab; label: string }[] = [
-    { key: 'eliminations', label: 'Éliminations' },
-    { key: 'alignements', label: 'Alignements' },
-    { key: 'scoring', label: 'Scoring' },
+  const tabs = [
+    { key: 'equipes' as const,     label: 'Équipes' },
+    { key: 'alignements' as const, label: 'Alignements' },
+    { key: 'scoring' as const,     label: 'Scoring' },
   ]
 
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-lg shadow p-4 text-sm text-gray-600 flex flex-wrap gap-4">
-        <span>Composition requise : <strong>{saison.maxF}F / {saison.maxD}D / {saison.maxG}G</strong></span>
+        <span>Composition : <strong>{saison.maxF}F / {saison.maxD}D / {saison.maxG}G</strong></span>
         <span>Changements volontaires max : <strong>{saison.maxChanges}</strong></span>
         <span>Changements élimination max : <strong>{saison.maxElimChanges}</strong></span>
         <span>Deadline : <strong>{saison.submissionDeadline ? new Date(saison.submissionDeadline).toLocaleString('fr-CA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'Aucune'}</strong></span>
@@ -261,7 +367,14 @@ export default function SeriesAdminManager({
         ))}
       </div>
 
-      {tab === 'eliminations' && <EliminationsTab saison={saison} eliminations={eliminations} teams={teams} />}
+      {tab === 'equipes' && (
+        <TeamsTab
+          saison={saison}
+          participatingTeamIds={participatingTeamIds}
+          eliminations={eliminations}
+          allTeams={allTeams}
+        />
+      )}
       {tab === 'alignements' && <AlignmentsTab allRosters={allRosters} saison={saison} />}
       {tab === 'scoring' && <ScoringTab poolSeasonId={saison.id} />}
     </div>

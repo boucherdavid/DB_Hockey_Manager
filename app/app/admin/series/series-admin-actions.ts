@@ -109,3 +109,33 @@ export async function removeEliminationAction(eliminationId: number): Promise<{ 
     return { error: e?.message ?? 'Erreur inconnue' }
   }
 }
+
+export async function getParticipatingTeamsAction(poolSeasonId: number): Promise<number[]> {
+  const db = createAdminClient()
+  const { data } = await db
+    .from('playoff_participating_teams')
+    .select('team_id')
+    .eq('pool_season_id', poolSeasonId)
+  return (data ?? []).map((r: any) => r.team_id)
+}
+
+export async function setParticipatingTeamsAction(
+  poolSeasonId: number,
+  teamIds: number[],
+): Promise<{ error?: string }> {
+  try {
+    const db = createAdminClient()
+    await db.from('playoff_participating_teams').delete().eq('pool_season_id', poolSeasonId)
+    if (teamIds.length > 0) {
+      const { error } = await db.from('playoff_participating_teams').insert(
+        teamIds.map(team_id => ({ pool_season_id: poolSeasonId, team_id })),
+      )
+      if (error) return { error: error.message }
+    }
+    revalidatePath('/admin/series')
+    revalidatePath('/gestion-series')
+    return {}
+  } catch (e: any) {
+    return { error: e?.message ?? 'Erreur inconnue' }
+  }
+}

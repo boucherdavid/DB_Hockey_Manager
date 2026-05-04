@@ -4,6 +4,7 @@ import {
   getPlayoffPoolSaisonAction,
   getEliminatedTeamsForPoolAction,
   getAllPlayoffPoolRostersAction,
+  getParticipatingTeamsAction,
 } from './series-admin-actions'
 import SeriesAdminManager from './SeriesAdminManager'
 
@@ -32,10 +33,11 @@ export default async function AdminSeriesPage() {
     )
   }
 
-  const [eliminations, allRosters, { data: teams }] = await Promise.all([
+  const [eliminations, allRosters, { data: allTeams }, participatingTeamIds] = await Promise.all([
     getEliminatedTeamsForPoolAction(saison.id),
     getAllPlayoffPoolRostersAction(saison.id, saison.season),
     supabase.from('teams').select('id, code, name').order('code'),
+    getParticipatingTeamsAction(saison.id),
   ])
 
   return (
@@ -43,8 +45,9 @@ export default async function AdminSeriesPage() {
       <h1 className="text-2xl font-bold text-gray-800">Pool des séries — {saison.season}</h1>
       <SeriesAdminManager
         saison={saison}
+        participatingTeamIds={participatingTeamIds}
         eliminations={eliminations}
-        teams={teams ?? []}
+        allTeams={allTeams ?? []}
         allRosters={allRosters}
       />
     </div>
