@@ -3,10 +3,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import type { PlayoffPoolSaison, PlayoffPoolEntry } from '@/app/gestion-series/playoff-pool-actions'
+import type { PlayoffPoolSaison } from '@/app/gestion-series/playoff-pool-actions'
 import { getAllPlayoffPoolRostersAction } from '@/app/gestion-series/playoff-pool-actions'
 
-export type { PlayoffPoolSaison, PlayoffPoolEntry }
 export { getAllPlayoffPoolRostersAction }
 
 export type EliminatedTeam = {

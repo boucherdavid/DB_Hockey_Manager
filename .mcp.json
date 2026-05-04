@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "context-engine": {
+      "command": "C:\\Users\\david\\.local\\bin\\cce",
+      "args": [
+        "serve",
+        "--project-dir",
+        "C:\\Projet_Codex\\Hockey_Pool_App"
+      ]
+    }
+  }
+}

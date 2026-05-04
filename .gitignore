@@ -15,3 +15,9 @@ python_script/diagnostics/
 
 .DS_Store
 Thumbs.db
+
+# CCE (code-context-engine)
+# CCE local cache (per-machine, not for version control)
+.cce/
+# Claude Code local settings written by cce init
+.claude/settings.local.json

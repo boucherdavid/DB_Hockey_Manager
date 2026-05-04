@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-05-02
+Derniere mise a jour: 2026-05-04
 
 ## Role du fichier
 
@@ -55,6 +55,148 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-05-04 (suite)
+
+**Fix build Vercel — `PlayoffPoolSaison` not defined**
+
+Erreur à la build : `ReferenceError: PlayoffPoolSaison is not defined` sur `/admin/series`.
+
+**Cause :** `app/admin/series/series-admin-actions.ts` est un fichier `'use server'`. Il re-exportait `export type { PlayoffPoolSaison, PlayoffPoolEntry }`. Turbopack génère des proxy runtime pour tous les exports d'un fichier `'use server'`, mais `export type` est effacé par TypeScript — la référence runtime manquait donc au chargement du module.
+
+**Fix :** supprimé le `export type { PlayoffPoolSaison, PlayoffPoolEntry }` (re-export inutile — `SeriesAdminManager.tsx` importe déjà les types directement depuis `playoff-pool-actions.ts`). L'`import type { PlayoffPoolSaison }` est conservé pour l'annotation de type de retour interne.
+
+Fichier modifié : `app/app/admin/series/series-admin-actions.ts`
+
+**Installation code-context-engine (CCE)**
+
+Outil installé via `uv tool install code-context-engine`. `cce init` exécuté : index de 1 981 chunks depuis 223 fichiers, hooks git, MCP server enregistré dans `.mcp.json`, bloc d'instructions ajouté dans `CLAUDE.md`.
+
+---
+
+### 2026-05-04
+
+**Pool des séries — Scoring par ronde**
+
+Migration BD exécutée :
+```sql
+CREATE TABLE series_round_snapshots (
+  id serial PRIMARY KEY,
+  round_id integer NOT NULL REFERENCES playoff_rounds(id) ON DELETE CASCADE,
+  pooler_id uuid NOT NULL REFERENCES poolers(id),
+  player_id integer NOT NULL REFERENCES players(id),
+  snapshot_type varchar(5) NOT NULL CHECK (snapshot_type IN ('start', 'end')),
+  goals integer NOT NULL DEFAULT 0,
+  assists integer NOT NULL DEFAULT 0,
+  goalie_wins integer NOT NULL DEFAULT 0,
+  goalie_otl integer NOT NULL DEFAULT 0,
+  goalie_shutouts integer NOT NULL DEFAULT 0,
+  taken_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (round_id, pooler_id, player_id, snapshot_type)
+);
+```
+
+**Mécanique snapshots :**
+- Snapshot `start` avec zéros → pour la Ronde 1 (aucun match playoff avant)
+- Snapshot `start` avec stats API → pour Rondes 2+ (stats cumulatives avant la ronde)
+- Snapshot `end` avec stats API → en fin de ronde (stats cumulatives après)
+- Points = (end − start) × valeurs `scoring_config` (`points_playoffs` si défini, sinon `points`)
+
+**Nouveaux outils :**
+- Onglet **Scoring** dans `/admin/series` : sélecteur de ronde, boutons snapshot, classement en direct
+- Page publique `/classement-series` : classement cumulatif + détail par ronde
+- Lien **Classement** dans le menu Pool Séries (visible si saison playoff active)
+
+**Chantier E — Pool des séries : COMPLÉTÉ**
+- ✅ Rondes + composition F/D/G + deadline + cap override
+- ✅ Équipes actives par ronde (filtre picker)
+- ✅ Picks libres avant deadline
+- ✅ Changements discrétionnaires post-deadline
+- ✅ Remplacements d'urgence (équipe éliminée)
+- ✅ Scoring par ronde (snapshots + calcul)
+- ✅ Classement cumulatif public
+- ⬜ Snapshot automatique au changement post-deadline (optionnel, amélioration future)
+
+Commit : `18eb4f6`
+
+---
+
+### 2026-05-03 (suite 4)
+
+**Brainstorm → feuille de route**
+
+Deux éléments du brainstorm (`docs/brainstorm.md`) intégrés au planning :
+
+**Menu admin** — réordonné et restructuré (fait ce jour, commits `51feae1`, `57c1b5d`, `45c05c6`).
+
+**Chantier 4 — Présaison enrichi** (feuille de route mise à jour dans `memory/roadmap.md`) :
+- Flux en 3 étapes : repêchage recrues → ajustements alignements → repêchage agents libres
+- Minuteur configurable par tour (AL), avec mécanique saut/glissement si temps expiré
+- Vue observateur temps réel pour les poolers
+- Ce qui est déjà en place dans `/admin/presaison` : file rotative, ordre drag & drop, décisions ELC, remise LTIR, reset
+- Ce qui manque : minuteur, vue observateur, étape recrue structurée, validation conformité
+- À planifier après la transition de saison 2025-26 → 2026-27
+
+---
+
+### 2026-05-03 (suite 3)
+
+**Navbar admin — réorganisation et corrections**
+
+- Menu Admin réordonné selon la logique métier : Poolers → Rosters → Présaison → Recrues → Effectifs → Transactions → Procédure MAJ → Configuration → Suivi → Boîte de réception
+- Lien "Gestion/Création Pool des séries" déplacé du menu Admin vers le menu **Pool Séries** (visible admin seulement, avec séparateur)
+- Fix : saisons `is_playoff = true` exclues du sélecteur de saison dans `/admin/presaison`
+
+Commits : `51feae1`, `57c1b5d`, `45c05c6`
+
+---
+
+### 2026-05-03 (suite 2)
+
+**Pool des séries — équipes actives par ronde**
+
+Nouvelle table `playoff_round_teams (id, round_id, team_id)` — migration exécutée en prod.
+
+Fonctionnement :
+- Admin sélectionne les 16 équipes en séries lors de la création de la Ronde 1 (grille de cases à cocher dans `/admin/series`)
+- Pour les rondes suivantes, l'admin coche les 8/4/2 équipes restantes
+- Le picker de joueurs dans `/gestion-series` ne montre que les joueurs des équipes actives de la ronde courante
+- `submitPlayoffChangeAction` rejette l'ajout d'un joueur dont l'équipe n'est pas dans la ronde
+
+Commits : `da625da` (config page), `ca963a0` (équipes par ronde)
+
+**État actuel du Chantier E (Pool des séries) :**
+- ✅ Création de rondes (composition F/D/G, deadline, cap override)
+- ✅ Équipes actives par ronde (filtre dans le picker)
+- ✅ Picks libres avant deadline
+- ✅ Changements discrétionnaires post-deadline (compteur)
+- ✅ Remplacements d'urgence (équipe éliminée)
+- ✅ Séparation saison régulière / séries (deux saisons actives simultanées)
+- ✅ Config admin indépendante pour chaque type de pool
+- ⬜ Snapshot au changement post-deadline (pour scoring)
+- ⬜ Scoring / comptabilisation de ronde (bouton admin)
+- ⬜ Page classement séries
+
+---
+
+### 2026-05-03
+
+**Séparation Pool Saison / Pool Séries — saisons actives simultanées**
+
+Correction d'architecture : les pages du Pool Saison retournaient les données de la saison playoff (2026-PO) quand celle-ci était la saison active.
+
+**Cause :** `activateSeasonAction` désactivait toutes les saisons avant d'en activer une, empêchant la coexistence d'une saison régulière et d'une saison séries actives en même temps.
+
+**Correction :**
+- `admin/config/actions.ts` — `activateSeasonAction` ne désactive plus que les saisons du **même type** (`is_playoff` identique). Saison régulière et saison séries peuvent maintenant être actives simultanément.
+- **16 fichiers Pool Saison** — `.eq('is_playoff', false)` ajouté sur toutes les requêtes `pool_seasons` avec `is_active = true` : pages poolers, joueurs, classement, statistiques, repêchage, calendrier, transactions, gestion-effectifs, et toutes les pages admin correspondantes.
+- Les pages Pool Séries (`gestion-series/actions.ts`, `layout.tsx`) filtraient déjà `.eq('is_playoff', true)` — aucun changement requis.
+
+**Note BD :** si la saison 2025-26 régulière a été désactivée lors de l'activation de 2026-PO, il faut la remettre `is_active = true` dans Supabase (table `pool_seasons`).
+
+Commit : `ac96863`
+
+---
 
 ### 2026-05-02 (suite 2)
 
