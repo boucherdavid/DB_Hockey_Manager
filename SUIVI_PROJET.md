@@ -58,6 +58,14 @@ Je l'utiliserai pour:
 
 ### 2026-05-04 (suite)
 
+**Suivi des activités — suppression de lignes**
+
+Ajout d'un bouton ✕ par ligne dans le suivi admin (`/admin/suivi`), visible au hover. Supprime l'entrée de `roster_change_log` (catégorie Alignement) ou la transaction + ses items (catégorie Transaction). Utile pour nettoyer les entrées de test. Onglet "Séries" retiré des filtres (source de données déjà supprimée). Commit : `fa910af`
+
+Note : le suivi est admin-only — les poolers n'y ont pas accès.
+
+---
+
 **Notification push — équipe éliminée (pool des séries)**
 
 Ajout dans `markTeamEliminatedAction` (`admin/series/series-admin-actions.ts`) : quand l'admin marque une équipe comme éliminée, une notification push est envoyée à chaque pooler ayant un joueur actif de cette équipe. Message : "⚠️ Équipe éliminée — Pool des séries" avec lien vers `/gestion-series`. Les poolers sans abonnement push ou sans joueur impacté sont silencieusement ignorés.
