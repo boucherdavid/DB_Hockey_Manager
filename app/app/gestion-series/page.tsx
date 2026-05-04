@@ -51,7 +51,7 @@ export default async function GestionSeriesPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-gray-800 mb-1">Pool des séries — {saison.season}</h1>
-      <p className="text-sm text-gray-500 mb-6">Composition : {saison.maxF}F / {saison.maxD}D / {saison.maxG}G</p>
+      <p className="text-sm text-gray-500 mb-6">Composition requise : {saison.maxF}F / {saison.maxD}D / {saison.maxG}G</p>
       <GestionSeriesManager
         isAdmin={isAdmin}
         poolers={isAdmin ? (poolersData.data ?? []) : undefined}

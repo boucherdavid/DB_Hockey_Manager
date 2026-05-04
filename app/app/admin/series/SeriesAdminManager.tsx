@@ -241,7 +241,7 @@ export default function SeriesAdminManager({
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-lg shadow p-4 text-sm text-gray-600 flex flex-wrap gap-4">
-        <span>Composition : <strong>{saison.maxF}F / {saison.maxD}D / {saison.maxG}G</strong></span>
+        <span>Composition requise : <strong>{saison.maxF}F / {saison.maxD}D / {saison.maxG}G</strong></span>
         <span>Changements volontaires max : <strong>{saison.maxChanges}</strong></span>
         <span>Changements élimination max : <strong>{saison.maxElimChanges}</strong></span>
         <span>Deadline : <strong>{saison.submissionDeadline ? new Date(saison.submissionDeadline).toLocaleString('fr-CA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'Aucune'}</strong></span>

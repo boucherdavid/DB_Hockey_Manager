@@ -135,15 +135,15 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">Max F</p>
+                  <p className="text-xs text-gray-500 mb-1">Attaquants requis</p>
                   <input type="number" min={1} value={poMaxF} onChange={e => setPoMaxF(e.target.value)} className={inputCls} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">Max D</p>
+                  <p className="text-xs text-gray-500 mb-1">Défenseurs requis</p>
                   <input type="number" min={1} value={poMaxD} onChange={e => setPoMaxD(e.target.value)} className={inputCls} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">Max G</p>
+                  <p className="text-xs text-gray-500 mb-1">Gardiens requis</p>
                   <input type="number" min={1} value={poMaxG} onChange={e => setPoMaxG(e.target.value)} className={inputCls} />
                 </div>
               </div>
