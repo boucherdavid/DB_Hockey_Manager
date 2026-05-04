@@ -58,6 +58,12 @@ Je l'utiliserai pour:
 
 ### 2026-05-04 (suite)
 
+**Notification push — équipe éliminée (pool des séries)**
+
+Ajout dans `markTeamEliminatedAction` (`admin/series/series-admin-actions.ts`) : quand l'admin marque une équipe comme éliminée, une notification push est envoyée à chaque pooler ayant un joueur actif de cette équipe. Message : "⚠️ Équipe éliminée — Pool des séries" avec lien vers `/gestion-series`. Les poolers sans abonnement push ou sans joueur impacté sont silencieusement ignorés.
+
+---
+
 **Corrections config pool des séries**
 
 - `deleteSeasonAction` : autorise la suppression d'une saison playoff active (seules les saisons régulières actives sont protégées). Commit : `78ef408`

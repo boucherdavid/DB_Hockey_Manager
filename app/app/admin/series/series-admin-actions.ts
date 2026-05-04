@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import type { PlayoffPoolSaison } from '@/app/gestion-series/playoff-pool-actions'
 import { getAllPlayoffPoolRostersAction } from '@/app/gestion-series/playoff-pool-actions'
+import { sendPushToUser } from '@/lib/push'
 
 export { getAllPlayoffPoolRostersAction }
 
@@ -64,6 +65,30 @@ export async function markTeamEliminatedAction(
       { onConflict: 'pool_season_id,team_id', ignoreDuplicates: true },
     )
     if (error) return { error: error.message }
+
+    // Notifier les poolers qui ont un joueur actif de cette équipe
+    const [{ data: teamRow }, { data: impacted }] = await Promise.all([
+      db.from('teams').select('code, name').eq('id', teamId).single(),
+      db.from('playoff_pool_rosters')
+        .select('pooler_id, players!inner(team_id)')
+        .eq('pool_season_id', poolSeasonId)
+        .eq('is_active', true)
+        .eq('players.team_id', teamId),
+    ])
+
+    const teamLabel = teamRow ? `${teamRow.code} — ${teamRow.name}` : `équipe #${teamId}`
+    const uniquePoolerIds = [...new Set((impacted ?? []).map((r: any) => r.pooler_id))]
+
+    await Promise.allSettled(
+      uniquePoolerIds.map(poolerId =>
+        sendPushToUser(poolerId, {
+          title: '⚠️ Équipe éliminée — Pool des séries',
+          body: `${teamLabel} est éliminée. Remplacez votre joueur avant la prochaine ronde.`,
+          url: '/gestion-series',
+        }),
+      ),
+    )
+
     revalidatePath('/admin/series')
     revalidatePath('/gestion-series')
     return {}
