@@ -221,15 +221,13 @@ export default function Navbar({
               {/* Pool Séries */}
               <div className="relative">
                 <button onClick={() => toggle('series')}
-                  className={navBtnClass(isActive('/series', '/gestion-series'))}>
+                  className={navBtnClass(isActive('/gestion-series', '/classement-series'))}>
                   {'Pool S\u00e9ries'} <Chevron open={openDropdown === 'series'} />
                 </button>
                 {openDropdown === 'series' && (
                   <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
                     {userName && <Link href="/gestion-series" className={dropdownLinkClass('/gestion-series')}>Gestion d&apos;effectifs</Link>}
                     {newPlayoffActive && <Link href="/classement-series" className={dropdownLinkClass('/classement-series')}>Classement</Link>}
-                    {userName && (!newPlayoffActive || isAdmin) && <Link href="/series/picks" className={dropdownLinkClass('/series/picks')}>Mes choix (ancien)</Link>}
-                    {(!newPlayoffActive || isAdmin) && <Link href="/series" className={dropdownLinkClass('/series')}>Classement (ancien)</Link>}
                     {isAdmin && <div className="border-t my-1" />}
                     {isAdmin && <Link href="/admin/series" className={dropdownLinkClass('/admin/series')}>Gestion/Création Pool des séries</Link>}
                   </div>
@@ -349,8 +347,6 @@ export default function Navbar({
             <MobileSection label={'Pool S\u00e9ries'} />
             {userName && <Link href="/gestion-series" className={mobileLinkClass('/gestion-series')}>Gestion d&apos;effectifs</Link>}
             {newPlayoffActive && <Link href="/classement-series" className={mobileLinkClass('/classement-series')}>Classement</Link>}
-            {userName && (!newPlayoffActive || isAdmin) && <Link href="/series/picks" className={mobileLinkClass('/series/picks')}>Mes choix (ancien)</Link>}
-            {(!newPlayoffActive || isAdmin) && <Link href="/series" className={mobileLinkClass('/series')}>Classement (ancien)</Link>}
             {isAdmin && <Link href="/admin/series" className={mobileLinkClass('/admin/series')}>Gestion/Cr\u00e9ation Pool des s\u00e9ries</Link>}
 
             {userName && (

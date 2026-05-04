@@ -58,6 +58,21 @@ Je l'utiliserai pour:
 
 ### 2026-05-04 (suite)
 
+**Suppression de l'ancien système de pool des séries**
+
+Fichiers supprimés :
+- `app/app/series/` (entier) : `page.tsx`, `PoolerSeriesCard.tsx`, `actions.ts`, `picks/page.tsx`, `picks/PicksManager.tsx`
+- `app/app/admin/series/SeriesAdmin.tsx` (composant admin de l'ancien système)
+
+Fichiers modifiés :
+- `Navbar.tsx` : liens "Mes choix (ancien)" et "Classement (ancien)" retirés des menus desktop et mobile ; `isActive` du bouton Pool Séries mis à jour
+- `admin/suivi/page.tsx` : requête `playoff_rosters` et section "Picks séries" retirées
+- `app/page.tsx` : mode Séries (ancien système) retiré ; classement compact du nouveau système (`playoff_pool_rosters`) ajouté directement sur la page d'accueil quand une saison playoff est active ; toggle Saison/Séries supprimé
+
+Le nouveau système (`/gestion-series`, `/classement-series`, `/admin/series`) est le seul actif.
+
+---
+
 **Fix build Vercel — `PlayoffPoolSaison` not defined**
 
 Erreur à la build : `ReferenceError: PlayoffPoolSaison is not defined` sur `/admin/series`.

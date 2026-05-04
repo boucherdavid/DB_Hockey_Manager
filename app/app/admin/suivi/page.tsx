@@ -39,7 +39,7 @@ export default async function AdminSuiviPage() {
   const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
   if (!me?.is_admin) redirect('/')
 
-  const [{ data: rosterChanges }, { data: transactions }, { data: playoffPicks }] = await Promise.all([
+  const [{ data: rosterChanges }, { data: transactions }] = await Promise.all([
     // Changements d'alignement (saison régulière)
     supabase
       .from('roster_change_log')
@@ -53,20 +53,12 @@ export default async function AdminSuiviPage() {
       .select('id, notes, created_at, poolers!transactions_created_by_fkey (name)')
       .order('created_at', { ascending: false })
       .limit(50),
-
-    // Soumissions pool des séries
-    supabase
-      .from('playoff_rosters')
-      .select('id, round_added, created_at, pooler_id, poolers (name)')
-      .not('created_at', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(100),
   ])
 
   type Event = {
     id: string
     at: string
-    category: 'roster' | 'transaction' | 'series'
+    category: 'roster' | 'transaction'
     poolerName: string
     label: string
     detail: string
@@ -107,31 +99,6 @@ export default async function AdminSuiviPage() {
       label:      'Transaction',
       detail:     t.notes ?? '(sans notes)',
       color:      'bg-slate-100 text-slate-800',
-    })
-  }
-
-  // Picks séries — regrouper par pooler + ronde + minute (= même soumission)
-  const picksBySession = new Map<string, { poolerName: string; round: number; count: number; at: string }>()
-  for (const p of playoffPicks ?? []) {
-    if (!p.created_at) continue
-    const pooler = (p as any).poolers as { name: string } | null
-    const name = pooler?.name ?? '?'
-    const minuteKey = `${(p as any).pooler_id}|${p.round_added}|${p.created_at.slice(0, 16)}`
-    if (!picksBySession.has(minuteKey)) {
-      picksBySession.set(minuteKey, { poolerName: name, round: p.round_added, count: 0, at: p.created_at })
-    }
-    picksBySession.get(minuteKey)!.count++
-  }
-
-  for (const [, s] of picksBySession) {
-    events.push({
-      id:         `s-${s.poolerName}-${s.round}-${s.at}`,
-      at:         s.at,
-      category:   'series',
-      poolerName: s.poolerName,
-      label:      `Picks séries R${s.round}`,
-      detail:     `${s.count} joueur${s.count > 1 ? 's' : ''} soumis`,
-      color:      'bg-pink-100 text-pink-800',
     })
   }
 

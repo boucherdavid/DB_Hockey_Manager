@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { buildStandings } from '@/lib/standings'
-import { fetchNhlSkaters, fetchNhlGoalies, normName, fmtPts } from '@/lib/nhl-stats'
+import { fmtPts } from '@/lib/nhl-stats'
 import SummaryTable from '@/components/SummaryTable'
 import Link from 'next/link'
 
@@ -93,62 +93,6 @@ type PoolerActivity = {
   count: number
   detail: string
   isMe: boolean
-}
-
-// ---------- playoff standings (compact) ----------
-
-type PlayoffRow = { poolerId: string; poolerName: string; totalPoints: number }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildPlayoffStandingsCompact(supabase: any, psId: number): Promise<PlayoffRow[]> {
-  const [{ data: rosterRows }, { data: scoringRows }, skatersMap, goaliesMap] = await Promise.all([
-    supabase
-      .from('playoff_rosters')
-      .select('pooler_id, snap_goals, snap_assists, snap_goalie_wins, snap_goalie_otl, snap_goalie_shutouts, poolers(id, name), players(first_name, last_name, position)')
-      .eq('playoff_season_id', psId)
-      .eq('is_active', true),
-    supabase.from('scoring_config').select('stat_key, points'),
-    fetchNhlSkaters(3),
-    fetchNhlGoalies(3),
-  ])
-
-  const scoring: Record<string, number> = {}
-  for (const r of scoringRows ?? []) scoring[r.stat_key] = Number(r.points)
-  const pts = {
-    goal: scoring.goal ?? 1, assist: scoring.assist ?? 1,
-    goalie_win: scoring.goalie_win ?? 2, goalie_otl: scoring.goalie_otl ?? 1,
-    goalie_shutout: scoring.goalie_shutout ?? 2,
-  }
-
-  const poolerMap = new Map<string, { name: string; total: number }>()
-  for (const row of rosterRows ?? []) {
-    const pooler = row.poolers as unknown as { id: string; name: string } | null
-    const player = row.players as unknown as { first_name: string; last_name: string; position: string } | null
-    if (!pooler || !player) continue
-    if (!poolerMap.has(pooler.id)) poolerMap.set(pooler.id, { name: pooler.name, total: 0 })
-
-    const key = normName(`${player.first_name} ${player.last_name}`)
-    let rowPts = 0
-    if (player.position === 'G') {
-      const stat = goaliesMap.get(key)
-      rowPts =
-        Math.max(0, (stat?.wins     ?? 0) - row.snap_goalie_wins)     * pts.goalie_win +
-        Math.max(0, (stat?.otLosses ?? 0) - row.snap_goalie_otl)      * pts.goalie_otl +
-        Math.max(0, (stat?.shutouts ?? 0) - row.snap_goalie_shutouts) * pts.goalie_shutout +
-        Math.max(0, (stat?.goals    ?? 0) - row.snap_goals)           * pts.goal +
-        Math.max(0, (stat?.assists  ?? 0) - row.snap_assists)         * pts.assist
-    } else {
-      const stat = skatersMap.get(key)
-      rowPts =
-        Math.max(0, (stat?.goals   ?? 0) - row.snap_goals)   * pts.goal +
-        Math.max(0, (stat?.assists ?? 0) - row.snap_assists) * pts.assist
-    }
-    poolerMap.get(pooler.id)!.total += rowPts
-  }
-
-  return Array.from(poolerMap.entries())
-    .map(([id, { name, total }]) => ({ poolerId: id, poolerName: name, totalPoints: total }))
-    .sort((a, b) => b.totalPoints - a.totalPoints || a.poolerName.localeCompare(b.poolerName))
 }
 
 const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
@@ -244,18 +188,12 @@ function ScheduleList({
 // ---------- header ----------
 
 function Header({
-  name, saison, ps, mode, hasActiveSaison, hasActiveSeries,
+  name, saison, seriesSaison,
 }: {
   name: string | null
   saison: { season: string; pool_cap: number } | null
-  ps: { season: string; current_round: number } | null
-  mode: 'saison' | 'series'
-  hasActiveSaison: boolean
-  hasActiveSeries: boolean
+  seriesSaison: { season: string; totalPoints?: number } | null
 }) {
-  const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
-  const roundLabel = ps ? (ROUND_LABEL[ps.current_round - 1] ?? `Ronde ${ps.current_round}`) : ''
-
   return (
     <div className="flex flex-col sm:flex-row sm:items-end gap-4">
       <div className="flex-1">
@@ -263,7 +201,7 @@ function Header({
           {name ? <>Bienvenue {name} sur DB Hockey Manager</> : 'DB Hockey Manager'}
         </h1>
         <p className="text-gray-500 mt-1">
-          {mode === 'saison' && saison && (
+          {saison && (
             <>
               Saison {saison.season} &middot; Cap pool :{' '}
               <span className="font-semibold text-blue-700">
@@ -271,25 +209,16 @@ function Header({
               </span>
             </>
           )}
-          {mode === 'series' && ps && <>Séries {ps.season} &middot; {roundLabel}</>}
         </p>
       </div>
-
-      {hasActiveSaison && hasActiveSeries && (
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm shrink-0">
-          <Link
-            href={mode === 'saison' ? '/' : '/?mode=saison'}
-            className={`px-4 py-2 font-medium transition-colors ${mode === 'saison' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-          >
-            Saison
-          </Link>
-          <Link
-            href={mode === 'series' ? '/' : '/?mode=series'}
-            className={`px-4 py-2 font-medium transition-colors border-l border-gray-200 ${mode === 'series' ? 'bg-orange-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-          >
-            Séries
-          </Link>
-        </div>
+      {seriesSaison && (
+        <Link
+          href="/classement-series"
+          className="shrink-0 flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-4 py-2 text-sm text-orange-700 hover:bg-orange-100 transition-colors"
+        >
+          <span className="font-semibold">Pool Séries {seriesSaison.season}</span>
+          <span className="text-orange-400">→</span>
+        </Link>
       )}
     </div>
   )
@@ -297,209 +226,153 @@ function Header({
 
 // ---------- page ----------
 
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<{ mode?: string }>
-}) {
-  const { mode: modeParam } = await searchParams
+export default async function Home() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: saison }, { data: ps }, { data: me }] = await Promise.all([
+  const [{ data: saison }, { data: seriesSaison }, { data: me }] = await Promise.all([
     supabase.from('pool_seasons').select('id, season, pool_cap').eq('is_active', true).eq('is_playoff', false).single(),
-    supabase.from('playoff_seasons').select('id, season, current_round, scoring_start_at').eq('is_active', true).single(),
+    supabase.from('pool_seasons').select('id, season').eq('is_active', true).eq('is_playoff', true).maybeSingle(),
     user
       ? supabase.from('poolers').select('id, name').eq('id', user.id).single()
       : Promise.resolve({ data: null }),
   ])
 
-  const hasActiveSaison = !!saison
-  const hasActiveSeries = !!ps
-  const defaultMode = hasActiveSeries ? 'series' : 'saison'
-  const mode = modeParam === 'saison' ? 'saison' : modeParam === 'series' ? 'series' : defaultMode
-
   const { date: todayDate, games: todayGames } = await fetchTodayGames()
   const playingTeams = new Set(todayGames.flatMap(g => [g.awayAbbrev, g.homeAbbrev]))
   const hasGames = todayGames.length > 0
 
-  // ---- Mode Saison ----
-  if (mode === 'saison') {
-    const standings = saison ? await buildStandings(supabase, saison.id) : []
+  const standings = saison ? await buildStandings(supabase, saison.id) : []
 
-    const activity: PoolerActivity[] = standings.map(pooler => {
-      const playing = pooler.players.filter(
-        p => p.playerType === 'actif' && playingTeams.has(p.teamAbbrev)
-      )
-      return {
-        poolerId: pooler.poolerId,
-        poolerName: pooler.poolerName,
-        count: playing.length,
-        detail: fmtDetail(playing),
-        isMe: me?.id === pooler.poolerId,
-      }
-    }).sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
-
-    return (
-      <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        <Header name={me?.name ?? null} saison={saison} ps={null}
-          mode="saison" hasActiveSaison={hasActiveSaison} hasActiveSeries={hasActiveSeries} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-2">
-            {standings.length > 0 ? (
-              <>
-                <SummaryTable standings={standings} />
-                <div className="text-right">
-                  <Link href="/classement" className="text-sm text-blue-600 hover:underline">
-                    Classement détaillé →
-                  </Link>
-                </div>
-              </>
-            ) : (
-              <div className="bg-white rounded-lg shadow p-6 text-gray-400 text-sm">
-                Aucune donnée de classement disponible.
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <ScheduleList todayDate={todayDate} games={todayGames} />
-            <ActivityTable activity={activity} todayDate={todayDate} hasGames={hasGames} />
-          </div>
-        </div>
-      </div>
+  const activity: PoolerActivity[] = standings.map(pooler => {
+    const playing = pooler.players.filter(
+      p => p.playerType === 'actif' && playingTeams.has(p.teamAbbrev)
     )
-  }
-
-  // ---- Mode Séries ----
-  const ROUND_LABEL = ['Quart de finale', 'Demi-finale', 'Finale de conférence', 'Finale de la Coupe Stanley']
-
-  // Joueurs actifs de tous les poolers en séries (pour l'activité)
-  const { data: allPicksRows } = ps ? await supabase
-    .from('playoff_rosters')
-    .select('pooler_id, poolers(id, name), players(position, teams(code))')
-    .eq('playoff_season_id', ps.id)
-    .eq('is_active', true)
-    : { data: null }
-
-  type PickRow = {
-    pooler_id: string
-    poolers: { id: string; name: string } | null
-    players: { position: string; teams: { code: string } | null } | null
-  }
-
-  const seriesPoolerMap = new Map<string, { name: string; playing: Array<{ position: string }> }>()
-  for (const row of (allPicksRows ?? []) as unknown as PickRow[]) {
-    const pooler = row.poolers
-    const player = row.players
-    if (!pooler || !player) continue
-    if (!seriesPoolerMap.has(pooler.id)) seriesPoolerMap.set(pooler.id, { name: pooler.name, playing: [] })
-    if (player.teams && playingTeams.has(player.teams.code)) {
-      seriesPoolerMap.get(pooler.id)!.playing.push({ position: player.position })
-    }
-  }
-
-  const seriesActivity: PoolerActivity[] = Array.from(seriesPoolerMap.entries())
-    .map(([id, { name, playing }]) => ({
-      poolerId: id,
-      poolerName: name,
+    return {
+      poolerId: pooler.poolerId,
+      poolerName: pooler.poolerName,
       count: playing.length,
       detail: fmtDetail(playing),
-      isMe: me?.id === id,
-    }))
-    .sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
-
-  // Classement séries
-  let playoffStandings: PlayoffRow[] = []
-  let waitingPoolers: string[] = []
-  if (ps?.scoring_start_at) {
-    playoffStandings = await buildPlayoffStandingsCompact(supabase, ps.id)
-  } else if (ps) {
-    const { data: picks } = await supabase
-      .from('playoff_rosters')
-      .select('pooler_id, poolers(name)')
-      .eq('playoff_season_id', ps.id)
-      .eq('is_active', true)
-    const seen = new Set<string>()
-    for (const p of picks ?? []) {
-      if (!seen.has(p.pooler_id)) {
-        seen.add(p.pooler_id)
-        const pooler = p.poolers as unknown as { name: string } | null
-        if (pooler) waitingPoolers.push(pooler.name)
-      }
+      isMe: me?.id === pooler.poolerId,
     }
-  }
+  }).sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
 
-  const roundLabel = ps ? (ROUND_LABEL[ps.current_round - 1] ?? `Ronde ${ps.current_round}`) : ''
+  // Compact playoff standings for the banner (top 4)
+  let playoffStandings: { poolerId: string; poolerName: string; totalPoints: number }[] = []
+  if (seriesSaison) {
+    const [{ data: snapshots }, { data: rosters }, { data: scoringRows }, { data: poolers }] = await Promise.all([
+      supabase.from('player_stat_snapshots').select('pooler_id, player_id, snapshot_type, goals, assists, goalie_wins, goalie_otl, goalie_shutouts').eq('pool_season_id', seriesSaison.id),
+      supabase.from('playoff_pool_rosters').select('pooler_id, player_id, is_active').eq('pool_season_id', seriesSaison.id),
+      supabase.from('scoring_config').select('stat_key, points, points_playoffs'),
+      supabase.from('poolers').select('id, name').order('name'),
+    ])
+    const cfg: Record<string, number> = {}
+    for (const row of scoringRows ?? []) cfg[row.stat_key] = row.points_playoffs != null ? row.points_playoffs : row.points
+
+    type SnapMap = Map<string, Map<number, { activation?: Record<string, number>; deactivation?: Record<string, number> }>>
+    const snapMap: SnapMap = new Map()
+    for (const s of snapshots ?? []) {
+      if (!snapMap.has(s.pooler_id)) snapMap.set(s.pooler_id, new Map())
+      const pm = snapMap.get(s.pooler_id)!
+      if (!pm.has(s.player_id)) pm.set(s.player_id, {})
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      pm.get(s.player_id)![s.snapshot_type as 'activation' | 'deactivation'] = s as any
+    }
+    const rosterMap = new Map<string, number[]>()
+    for (const r of rosters ?? []) {
+      if (!rosterMap.has(r.pooler_id)) rosterMap.set(r.pooler_id, [])
+      rosterMap.get(r.pooler_id)!.push(r.player_id)
+    }
+    const poolerNames = new Map((poolers ?? []).map(p => [p.id, p.name]))
+
+    playoffStandings = Array.from(rosterMap.entries()).map(([poolerId, playerIds]) => {
+      const pm = snapMap.get(poolerId) ?? new Map()
+      let total = 0
+      const seen = new Set<number>()
+      for (const pid of playerIds) {
+        if (seen.has(pid)) continue
+        seen.add(pid)
+        const snaps = pm.get(pid) ?? {}
+        const activation = snaps.activation
+        const deactivation = snaps.deactivation
+        if (!activation) continue
+        const end = deactivation ?? activation
+        total +=
+          Math.max(0, (end.goals ?? 0) - (activation.goals ?? 0)) * (cfg.goal ?? 1) +
+          Math.max(0, (end.assists ?? 0) - (activation.assists ?? 0)) * (cfg.assist ?? 1) +
+          Math.max(0, (end.goalie_wins ?? 0) - (activation.goalie_wins ?? 0)) * (cfg.goalie_win ?? 2) +
+          Math.max(0, (end.goalie_otl ?? 0) - (activation.goalie_otl ?? 0)) * (cfg.goalie_otl ?? 1)
+      }
+      return { poolerId, poolerName: poolerNames.get(poolerId) ?? poolerId, totalPoints: total }
+    }).sort((a, b) => b.totalPoints - a.totalPoints || a.poolerName.localeCompare(b.poolerName))
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-      <Header name={me?.name ?? null} saison={null} ps={ps ? { season: ps.season, current_round: ps.current_round } : null}
-        mode="series" hasActiveSaison={hasActiveSaison} hasActiveSeries={hasActiveSeries} />
+      <Header name={me?.name ?? null} saison={saison} seriesSaison={seriesSaison ?? null} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-2">
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="bg-slate-800 px-5 py-3">
-              <h2 className="text-white font-bold text-sm uppercase tracking-wide">
-                Classement séries — {roundLabel}
-              </h2>
-            </div>
-            {!ps?.scoring_start_at ? (
-              <div className="px-5 py-5 space-y-3">
-                <p className="text-sm text-gray-500">Le classement sera disponible une fois la comptabilisation démarrée par l&apos;admin.</p>
-                {waitingPoolers.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">{waitingPoolers.length} pooler{waitingPoolers.length > 1 ? 's ont' : ' a'} soumis ses choix :</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {waitingPoolers.map(n => (
-                        <span key={n} className="text-xs bg-green-100 text-green-700 rounded-full px-3 py-0.5">{n}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {me && (
-                  <Link href="/series/picks" className="inline-block text-sm text-blue-600 hover:underline">
-                    Soumettre / modifier mes choix →
-                  </Link>
-                )}
+          {/* Classement Pool Séries compact */}
+          {seriesSaison && (
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="bg-slate-800 px-5 py-3 flex items-center justify-between">
+                <h2 className="text-white font-bold text-sm uppercase tracking-wide">
+                  Classement séries {seriesSaison.season}
+                </h2>
               </div>
-            ) : playoffStandings.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-gray-400">Aucun pooler n&apos;a encore soumis ses choix.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-400 uppercase tracking-wide">
-                    <tr>
-                      <th className="px-4 py-2 text-left w-8">#</th>
-                      <th className="px-4 py-2 text-left">Pooler</th>
-                      <th className="px-2 py-2 text-blue-500">PTS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {playoffStandings.map((pooler, i) => (
-                      <tr key={pooler.poolerId} className="hover:bg-gray-50">
-                        <td className={`px-4 py-2.5 font-bold text-center ${RANK_COLOR[i] ?? 'text-gray-500'}`}>{i + 1}</td>
-                        <td className="px-4 py-2.5 font-semibold text-gray-800">{pooler.poolerName}</td>
-                        <td className="px-2 py-2.5 text-center font-bold text-blue-600">{fmtPts(pooler.totalPoints)}</td>
+              {playoffStandings.length === 0 ? (
+                <p className="px-5 py-4 text-sm text-gray-400">Aucun point enregistré pour l&apos;instant.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs text-gray-400 uppercase tracking-wide">
+                      <tr>
+                        <th className="px-4 py-2 text-left w-8">#</th>
+                        <th className="px-4 py-2 text-left">Pooler</th>
+                        <th className="px-2 py-2 text-blue-500">PTS</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {playoffStandings.map((pooler, i) => (
+                        <tr key={pooler.poolerId} className="hover:bg-gray-50">
+                          <td className={`px-4 py-2.5 font-bold text-center ${RANK_COLOR[i] ?? 'text-gray-500'}`}>{i + 1}</td>
+                          <td className="px-4 py-2.5 font-semibold text-gray-800">{pooler.poolerName}</td>
+                          <td className="px-2 py-2.5 text-center font-bold text-blue-600">{fmtPts(pooler.totalPoints)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="px-5 py-2 border-t border-gray-100 text-right">
+                <Link href="/classement-series" className="text-sm text-blue-600 hover:underline">
+                  Classement détaillé →
+                </Link>
               </div>
-            )}
-          </div>
-          <div className="text-right">
-            <Link href="/series" className="text-sm text-blue-600 hover:underline">
-              Classement détaillé →
-            </Link>
-          </div>
+            </div>
+          )}
+
+          {/* Classement Pool Saison */}
+          {standings.length > 0 ? (
+            <>
+              <SummaryTable standings={standings} />
+              <div className="text-right">
+                <Link href="/classement" className="text-sm text-blue-600 hover:underline">
+                  Classement détaillé →
+                </Link>
+              </div>
+            </>
+          ) : (
+            <div className="bg-white rounded-lg shadow p-6 text-gray-400 text-sm">
+              Aucune donnée de classement disponible.
+            </div>
+          )}
         </div>
 
         <div className="space-y-4">
           <ScheduleList todayDate={todayDate} games={todayGames} />
-          <ActivityTable activity={seriesActivity} todayDate={todayDate} hasGames={hasGames} />
+          <ActivityTable activity={activity} todayDate={todayDate} hasGames={hasGames} />
         </div>
       </div>
     </div>
