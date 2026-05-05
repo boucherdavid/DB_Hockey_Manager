@@ -330,6 +330,12 @@ export default function GestionSeriesManager({
   const entriesBySlot = (slot: 'F' | 'D' | 'G') => entries.filter(e => e.positionSlot === slot)
   const existingPlayerIds = new Set(entries.map(e => e.playerId))
 
+  const totalRequired = saison.maxF + saison.maxD + saison.maxG
+  const isComplete =
+    entriesBySlot('F').length === saison.maxF &&
+    entriesBySlot('D').length === saison.maxD &&
+    entriesBySlot('G').length === saison.maxG
+
   return (
     <div className="space-y-4">
 
@@ -371,6 +377,25 @@ export default function GestionSeriesManager({
           </p>
         )}
       </div>
+
+      {/* Avertissement alignement incomplet */}
+      {!loading && !isComplete && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">⚠ Alignement incomplet</span>
+          <span className="ml-2 text-amber-600">
+            {entries.length}/{totalRequired} joueurs sélectionnés
+            {' — '}
+            {[
+              entriesBySlot('F').length < saison.maxF && `${entriesBySlot('F').length}/${saison.maxF} F`,
+              entriesBySlot('D').length < saison.maxD && `${entriesBySlot('D').length}/${saison.maxD} D`,
+              entriesBySlot('G').length < saison.maxG && `${entriesBySlot('G').length}/${saison.maxG} G`,
+            ].filter(Boolean).join(', ')}
+          </span>
+          <p className="text-xs text-amber-600 mt-0.5">
+            L&apos;alignement ne sera pas comptabilisé tant qu&apos;il est incomplet.
+          </p>
+        </div>
+      )}
 
       {/* Layout deux colonnes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">

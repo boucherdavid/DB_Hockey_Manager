@@ -376,7 +376,7 @@ export async function getPlayoffPoolStandingsAction(
 ): Promise<PlayoffPoolStanding[]> {
   const supabase = await createClient()
 
-  const [{ data: snapshots }, { data: rosters }, { data: scoringRows }, { data: poolers }] = await Promise.all([
+  const [{ data: snapshots }, { data: rosters }, { data: scoringRows }, { data: poolers }, { data: saisonRow }] = await Promise.all([
     supabase
       .from('player_stat_snapshots')
       .select('pooler_id, player_id, snapshot_type, goals, assists, goalie_wins, goalie_otl, goalie_shutouts')
@@ -387,7 +387,12 @@ export async function getPlayoffPoolStandingsAction(
       .eq('pool_season_id', poolSeasonId),
     supabase.from('scoring_config').select('stat_key, points, points_playoffs'),
     supabase.from('poolers').select('id, name').order('name'),
+    supabase.from('pool_seasons').select('playoff_max_f, playoff_max_d, playoff_max_g').eq('id', poolSeasonId).single(),
   ])
+
+  const maxF = saisonRow?.playoff_max_f ?? 5
+  const maxD = saisonRow?.playoff_max_d ?? 3
+  const maxG = saisonRow?.playoff_max_g ?? 1
 
   const cfg: Record<string, number> = {}
   for (const row of scoringRows ?? []) {
@@ -415,6 +420,12 @@ export async function getPlayoffPoolStandingsAction(
   const standings: PlayoffPoolStanding[] = []
 
   for (const [poolerId, rosterEntries] of rosterMap.entries()) {
+    // Ne compter que les alignements complets
+    const activeEntries = rosterEntries.filter((r: any) => r.is_active)
+    const countF = activeEntries.filter((r: any) => r.position_slot === 'F').length
+    const countD = activeEntries.filter((r: any) => r.position_slot === 'D').length
+    const countG = activeEntries.filter((r: any) => r.position_slot === 'G').length
+    if (countF < maxF || countD < maxD || countG < maxG) continue
     const pm = snapMap.get(poolerId) ?? new Map()
     const players: PlayoffPoolStanding['players'] = []
     let total = 0

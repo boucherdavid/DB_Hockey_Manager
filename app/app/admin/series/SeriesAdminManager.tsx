@@ -224,7 +224,16 @@ function AlignmentsTab({
         <div key={poolerId} className="border rounded-lg overflow-hidden">
           <div className="bg-slate-100 px-4 py-2 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700">{poolerName}</span>
-            <span className="text-xs text-gray-500">{entries.length} / {saison.maxF + saison.maxD + saison.maxG} joueurs</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">{entries.length} / {saison.maxF + saison.maxD + saison.maxG} joueurs</span>
+              {entries.length === saison.maxF + saison.maxD + saison.maxG &&
+               entries.filter(e => e.positionSlot === 'F').length === saison.maxF &&
+               entries.filter(e => e.positionSlot === 'D').length === saison.maxD &&
+               entries.filter(e => e.positionSlot === 'G').length === saison.maxG
+                ? <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">✓ Complet</span>
+                : <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">⚠ Incomplet</span>
+              }
+            </div>
           </div>
           {entries.length === 0 ? (
             <p className="px-4 py-3 text-sm text-gray-400 italic">Aucun alignement soumis.</p>
