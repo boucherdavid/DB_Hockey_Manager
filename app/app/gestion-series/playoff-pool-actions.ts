@@ -4,6 +4,14 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+// "2026-PO" → "2025-26"  (format utilisé dans player_contracts.season)
+function toNhlSeason(poolSeason: string): string {
+  const year = parseInt(poolSeason)
+  return `${year - 1}-${String(year).slice(-2)}`
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type PlayoffPoolSaison = {
@@ -125,7 +133,7 @@ export async function getPlayoffPoolRosterAction(
     teamCode: r.players?.teams?.code ?? null,
     teamId: r.players?.teams?.id ?? null,
     nhlId: r.players?.nhl_id ?? null,
-    capNumber: r.players?.player_contracts?.find((c: any) => c.season === season)?.cap_number ?? null,
+    capNumber: r.players?.player_contracts?.find((c: any) => c.season === toNhlSeason(season))?.cap_number ?? null,
     teamEliminated: eliminatedIds.has(r.players?.teams?.id),
     addedAt: r.added_at,
   }))
@@ -178,7 +186,7 @@ export async function searchPlayoffPoolPlayersAction(
     teamCode: p.teams?.code ?? null,
     teamId: p.teams?.id ?? null,
     nhlId: p.nhl_id ?? null,
-    capNumber: p.player_contracts?.find((c: any) => c.season === season)?.cap_number ?? null,
+    capNumber: p.player_contracts?.find((c: any) => c.season === toNhlSeason(season))?.cap_number ?? null,
     teamEliminated: eliminatedIds.has(p.teams?.id),
   }))
 }
@@ -211,7 +219,7 @@ export async function getAllPlayoffPoolRostersAction(
       teamCode: (r.players as any)?.teams?.code ?? null,
       teamId: (r.players as any)?.teams?.id ?? null,
       nhlId: (r.players as any)?.nhl_id ?? null,
-      capNumber: (r.players as any)?.player_contracts?.find((c: any) => c.season === season)?.cap_number ?? null,
+      capNumber: (r.players as any)?.player_contracts?.find((c: any) => c.season === toNhlSeason(season))?.cap_number ?? null,
       teamEliminated: eliminatedIds.has((r.players as any)?.teams?.id),
       addedAt: r.added_at,
     })
