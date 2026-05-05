@@ -72,6 +72,20 @@ Ajout dans `markTeamEliminatedAction` (`admin/series/series-admin-actions.ts`) :
 
 ---
 
+**Sélecteur joueur pool des séries — liste + filtres**
+
+Nouveau composant `PlayerPicker` remplace la barre de recherche simple dans `/gestion-series` :
+- Charge tous les joueurs des équipes participantes au montage via `getAvailablePlayoffPlayersAction` (filtre sur `playoff_participating_teams`)
+- Filtre position Tous/F/D/G (suit le slot actif par défaut, modifiable)
+- Filtre équipe (dropdown des équipes participantes)
+- Recherche par nom (filtre client-side)
+- Liste scrollable avec nom, équipe, position, salaire, badge ÉL.
+- Compteur de résultats en pied de liste
+
+Commit : `8d549de`
+
+---
+
 **Validation alignement complet obligatoire**
 
 Trois points de contrôle ajoutés pour s'assurer qu'un alignement incomplet ne compte pas :
