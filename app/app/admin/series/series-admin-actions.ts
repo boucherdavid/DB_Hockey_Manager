@@ -110,6 +110,44 @@ export async function removeEliminationAction(eliminationId: number): Promise<{ 
   }
 }
 
+export async function sendDeadlineReminderAction(
+  poolSeasonId: number,
+): Promise<{ error?: string; sent?: number }> {
+  try {
+    const db = createAdminClient()
+    const { data: saison } = await db
+      .from('pool_seasons')
+      .select('season, playoff_submission_deadline')
+      .eq('id', poolSeasonId)
+      .single()
+    if (!saison) return { error: 'Saison introuvable' }
+    if (!saison.playoff_submission_deadline) return { error: 'Aucune deadline configurée' }
+
+    const deadline = new Date(saison.playoff_submission_deadline)
+    const deadlineStr = deadline.toLocaleString('fr-CA', {
+      day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+      timeZone: 'America/Toronto', timeZoneName: 'short',
+    })
+
+    const { data: poolers } = await db.from('poolers').select('id').eq('is_admin', false)
+    const ids = (poolers ?? []).map((p: any) => p.id)
+
+    await Promise.allSettled(
+      ids.map((id: string) =>
+        sendPushToUser(id, {
+          title: '⏰ Rappel — Pool des séries',
+          body: `Date limite de soumission : ${deadlineStr}`,
+          url: '/gestion-series',
+        }),
+      ),
+    )
+
+    return { sent: ids.length }
+  } catch (e: any) {
+    return { error: e?.message ?? 'Erreur inconnue' }
+  }
+}
+
 export async function getParticipatingTeamsAction(poolSeasonId: number): Promise<number[]> {
   const db = createAdminClient()
   const { data } = await db

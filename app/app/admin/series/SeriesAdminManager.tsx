@@ -5,6 +5,7 @@ import {
   markTeamEliminatedAction,
   removeEliminationAction,
   setParticipatingTeamsAction,
+  sendDeadlineReminderAction,
 } from './series-admin-actions'
 import {
   getPlayoffPoolStandingsAction,
@@ -337,6 +338,18 @@ export default function SeriesAdminManager({
   allRosters: { poolerId: string; poolerName: string; entries: PlayoffPoolEntry[] }[]
 }) {
   const [tab, setTab] = useState<'equipes' | 'alignements' | 'scoring'>('equipes')
+  const [reminderPending, setReminderPending] = useState(false)
+  const [reminderMsg, setReminderMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  async function handleSendReminder() {
+    setReminderPending(true)
+    setReminderMsg(null)
+    const r = await sendDeadlineReminderAction(saison.id)
+    setReminderPending(false)
+    if (r.error) setReminderMsg({ type: 'error', text: r.error })
+    else setReminderMsg({ type: 'success', text: `Rappel envoyé à ${r.sent} pooler${(r.sent ?? 0) > 1 ? 's' : ''}.` })
+    setTimeout(() => setReminderMsg(null), 4000)
+  }
 
   const tabs = [
     { key: 'equipes' as const,     label: 'Équipes' },
@@ -346,11 +359,27 @@ export default function SeriesAdminManager({
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-lg shadow p-4 text-sm text-gray-600 flex flex-wrap gap-4">
+      <div className="bg-white rounded-lg shadow p-4 text-sm text-gray-600 flex flex-wrap items-center gap-4">
         <span>Composition : <strong>{saison.maxF}F / {saison.maxD}D / {saison.maxG}G</strong></span>
         <span>Changements volontaires max : <strong>{saison.maxChanges}</strong></span>
         <span>Changements élimination max : <strong>{saison.maxElimChanges}</strong></span>
         <span>Deadline : <strong>{saison.submissionDeadline ? new Date(saison.submissionDeadline).toLocaleString('fr-CA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'Aucune'}</strong></span>
+        {saison.submissionDeadline && (
+          <div className="ml-auto flex items-center gap-3">
+            {reminderMsg && (
+              <span className={`text-xs ${reminderMsg.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                {reminderMsg.text}
+              </span>
+            )}
+            <button
+              onClick={handleSendReminder}
+              disabled={reminderPending}
+              className="text-xs bg-amber-50 border border-amber-300 text-amber-700 px-3 py-1.5 rounded hover:bg-amber-100 disabled:opacity-50 whitespace-nowrap"
+            >
+              {reminderPending ? 'Envoi...' : '🔔 Rappel deadline'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-1 border-b border-gray-200">
