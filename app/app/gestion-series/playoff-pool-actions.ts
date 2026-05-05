@@ -157,6 +157,43 @@ export async function getPlayoffChangeCountsAction(
   }
 }
 
+export async function getAvailablePlayoffPlayersAction(
+  poolSeasonId: number,
+  season: string,
+): Promise<PlayoffPoolPlayerResult[]> {
+  const supabase = await createClient()
+  const nhlSeason = toNhlSeason(season)
+
+  const [{ data: participating }, { data: elims }] = await Promise.all([
+    supabase.from('playoff_participating_teams').select('team_id').eq('pool_season_id', poolSeasonId),
+    supabase.from('playoff_eliminations').select('team_id').eq('pool_season_id', poolSeasonId),
+  ])
+
+  const teamIds = (participating ?? []).map((r: any) => r.team_id)
+  if (teamIds.length === 0) return []
+
+  const { data: players } = await supabase
+    .from('players')
+    .select('id, first_name, last_name, position, nhl_id, teams(id, code), player_contracts(season, cap_number)')
+    .in('team_id', teamIds)
+    .eq('is_available', true)
+    .order('last_name')
+
+  const eliminatedIds = new Set((elims ?? []).map((e: any) => e.team_id))
+
+  return (players ?? []).map((p: any) => ({
+    id: p.id,
+    firstName: p.first_name,
+    lastName: p.last_name,
+    position: p.position ?? null,
+    teamCode: p.teams?.code ?? null,
+    teamId: p.teams?.id ?? null,
+    nhlId: p.nhl_id ?? null,
+    capNumber: (p.player_contracts as any[])?.find((c: any) => c.season === nhlSeason)?.cap_number ?? null,
+    teamEliminated: eliminatedIds.has(p.teams?.id),
+  }))
+}
+
 export async function searchPlayoffPoolPlayersAction(
   query: string,
   poolSeasonId: number,

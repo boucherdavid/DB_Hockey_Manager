@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect, useTransition, useMemo } from 'react'
 import {
   getPlayoffPoolRosterAction,
   getPlayoffChangeCountsAction,
-  searchPlayoffPoolPlayersAction,
+  getAvailablePlayoffPlayersAction,
   submitPlayoffPoolChangeAction,
 } from './playoff-pool-actions'
 import type {
@@ -87,80 +87,143 @@ function CapBar({ entries, poolCap, addingPlayer }: {
   )
 }
 
-// ─── Player search ────────────────────────────────────────────────────────────
+// ─── Player picker ────────────────────────────────────────────────────────────
 
-function PlayerSearch({
-  poolSeasonId, season, onSelect, excludeIds, key: _key,
+function posGroup(pos: string | null): 'F' | 'D' | 'G' {
+  if (!pos) return 'F'
+  if (pos === 'G') return 'G'
+  if (['D', 'LD', 'RD'].includes(pos)) return 'D'
+  return 'F'
+}
+
+function PlayerPicker({
+  poolSeasonId, season, excludeIds, activeSlot, selected, onSelect, resetKey,
 }: {
   poolSeasonId: number
   season: string
-  onSelect: (p: PlayoffPoolPlayerResult | null) => void
   excludeIds: Set<number>
-  key?: number
+  activeSlot: 'F' | 'D' | 'G'
+  selected: PlayoffPoolPlayerResult | null
+  onSelect: (p: PlayoffPoolPlayerResult | null) => void
+  resetKey: number
 }) {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<PlayoffPoolPlayerResult[]>([])
-  const [selected, setSelected] = useState<PlayoffPoolPlayerResult | null>(null)
+  const [allPlayers, setAllPlayers] = useState<PlayoffPoolPlayerResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [nameFilter, setNameFilter] = useState('')
+  const [posFilter, setPosFilter] = useState<'all' | 'F' | 'D' | 'G'>(activeSlot)
+  const [teamFilter, setTeamFilter] = useState('')
 
   useEffect(() => {
-    setQuery('')
-    setResults([])
-    setSelected(null)
-  }, [_key])
-
-  useEffect(() => {
-    if (query.length < 2) { setResults([]); return }
-    const t = setTimeout(async () => {
-      setLoading(true)
-      setResults(await searchPlayoffPoolPlayersAction(query, poolSeasonId, season))
+    setLoading(true)
+    setNameFilter('')
+    setTeamFilter('')
+    getAvailablePlayoffPlayersAction(poolSeasonId, season).then(p => {
+      setAllPlayers(p)
       setLoading(false)
-    }, 300)
-    return () => clearTimeout(t)
-  }, [query, poolSeasonId, season])
+    })
+  }, [poolSeasonId, season, resetKey])
+
+  useEffect(() => { setPosFilter(activeSlot) }, [activeSlot])
+
+  const teams = useMemo(() =>
+    [...new Set(allPlayers.map(p => p.teamCode).filter(Boolean) as string[])].sort(),
+    [allPlayers],
+  )
+
+  const filtered = useMemo(() =>
+    allPlayers.filter(p => {
+      if (excludeIds.has(p.id)) return false
+      if (posFilter !== 'all' && posGroup(p.position) !== posFilter) return false
+      if (teamFilter && p.teamCode !== teamFilter) return false
+      if (nameFilter.trim()) {
+        const q = nameFilter.trim().toLowerCase()
+        if (!`${p.firstName} ${p.lastName}`.toLowerCase().includes(q)) return false
+      }
+      return true
+    }),
+    [allPlayers, excludeIds, posFilter, teamFilter, nameFilter],
+  )
 
   if (selected) return (
-    <div className="flex items-center gap-2 border border-green-300 bg-green-50 rounded px-3 py-2 text-sm">
+    <div className="border border-green-300 bg-green-50 rounded-lg px-3 py-2 text-sm flex items-center gap-2">
       <div className="flex-1 min-w-0">
         <span className="font-medium text-gray-800">{selected.lastName}, {selected.firstName}</span>
         <span className="text-xs text-gray-500 ml-2">{selected.teamCode} — {selected.position}</span>
         {selected.teamEliminated && <span className="ml-1 text-xs text-red-600 font-medium">ÉLIMINÉ</span>}
       </div>
       {selected.capNumber != null && (
-        <span className="text-xs font-medium text-gray-600 tabular-nums shrink-0">{capFmt(selected.capNumber)}</span>
+        <span className="text-xs font-semibold text-gray-600 tabular-nums shrink-0">{capFmt(selected.capNumber)}</span>
       )}
-      <button onClick={() => { setSelected(null); setQuery(''); onSelect(null) }}
-        className="text-gray-400 hover:text-gray-600 text-xs shrink-0">✕</button>
+      <button onClick={() => onSelect(null)} className="text-gray-400 hover:text-gray-600 text-xs shrink-0">✕</button>
     </div>
   )
 
   return (
-    <div className="relative">
-      <input
-        type="text" value={query} onChange={e => setQuery(e.target.value)}
-        placeholder="Rechercher un joueur..."
-        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-      />
-      {loading && <p className="text-xs text-gray-400 mt-1">Recherche...</p>}
-      {results.length > 0 && (
-        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-52 overflow-y-auto">
-          {results.filter(p => !excludeIds.has(p.id)).map(p => (
+    <div className="space-y-2">
+      {/* Filtres position + équipe */}
+      <div className="flex gap-2">
+        <div className="flex rounded border border-gray-200 overflow-hidden text-xs shrink-0">
+          {(['all', 'F', 'D', 'G'] as const).map(p => (
             <button
-              key={p.id}
-              onClick={() => { setSelected(p); setResults([]); setQuery(''); onSelect(p) }}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-50 last:border-0 ${p.teamEliminated ? 'opacity-40' : ''}`}
-              disabled={p.teamEliminated}
+              key={p}
+              onClick={() => setPosFilter(p)}
+              className={`px-2.5 py-1.5 font-semibold transition-colors ${posFilter === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
             >
-              <div className="flex items-center gap-2">
-                <span className="flex-1 font-medium text-gray-800">{p.lastName}, {p.firstName}</span>
-                <span className="text-xs text-gray-400">{p.teamCode} — {p.position}</span>
-                {p.capNumber != null && (
-                  <span className="text-xs font-semibold text-gray-600 tabular-nums">{capFmt(p.capNumber)}</span>
-                )}
-                {p.teamEliminated && <span className="text-xs text-red-500">ÉL.</span>}
-              </div>
+              {p === 'all' ? 'Tous' : p}
             </button>
           ))}
+        </div>
+        <select
+          value={teamFilter}
+          onChange={e => setTeamFilter(e.target.value)}
+          className="flex-1 border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-700 bg-white min-w-0"
+        >
+          <option value="">Toutes les équipes</option>
+          {teams.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+
+      {/* Recherche par nom */}
+      <input
+        type="text"
+        value={nameFilter}
+        onChange={e => setNameFilter(e.target.value)}
+        placeholder="Rechercher par nom..."
+        className="w-full border border-gray-200 rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+      />
+
+      {/* Liste */}
+      {loading ? (
+        <p className="text-xs text-gray-400 text-center py-6">Chargement...</p>
+      ) : (
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="max-h-60 overflow-y-auto divide-y divide-gray-50">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-6 text-xs text-gray-400 text-center">Aucun joueur pour ces filtres.</p>
+            ) : filtered.map(p => (
+              <button
+                key={p.id}
+                onClick={() => onSelect(p)}
+                disabled={p.teamEliminated}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${p.teamEliminated ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 font-medium text-gray-800 truncate">{p.lastName}, {p.firstName}</span>
+                  <span className="text-xs text-gray-400 shrink-0">{p.teamCode}</span>
+                  <span className="text-xs text-gray-400 shrink-0 w-6">{p.position}</span>
+                  {p.capNumber != null
+                    ? <span className="text-xs font-semibold text-gray-600 tabular-nums shrink-0">{capFmt(p.capNumber)}</span>
+                    : <span className="text-xs text-gray-300 shrink-0 w-20">—</span>
+                  }
+                  {p.teamEliminated && <span className="text-xs text-red-400 shrink-0">ÉL.</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="px-3 py-1.5 bg-gray-50 border-t text-xs text-gray-400">
+            {filtered.length} joueur{filtered.length > 1 ? 's' : ''}
+            {allPlayers.length !== filtered.length && ` / ${allPlayers.length} au total`}
+          </div>
         </div>
       )}
     </div>
@@ -461,9 +524,9 @@ export default function GestionSeriesManager({
                 <p className="text-sm font-semibold text-gray-700">Ajouter un joueur</p>
               )}
 
-              {/* Position */}
+              {/* Slot cible */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Position</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Slot à remplir</label>
                 <div className="flex gap-2">
                   {(['F', 'D', 'G'] as const).map(s => (
                     <button
@@ -480,17 +543,16 @@ export default function GestionSeriesManager({
                 </div>
               </div>
 
-              {/* Recherche */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Joueur</label>
-                <PlayerSearch
-                  key={searchKey}
-                  poolSeasonId={saison.id}
-                  season={saison.season}
-                  onSelect={setAddPlayer}
-                  excludeIds={existingPlayerIds}
-                />
-              </div>
+              {/* Sélecteur joueur */}
+              <PlayerPicker
+                poolSeasonId={saison.id}
+                season={saison.season}
+                excludeIds={existingPlayerIds}
+                activeSlot={activeSlot}
+                selected={addPlayer}
+                onSelect={setAddPlayer}
+                resetKey={searchKey}
+              />
 
               {error && <p className="text-sm text-red-600">{error}</p>}
               {success && <p className="text-sm text-green-600 font-medium">✓ Changement enregistré.</p>}
