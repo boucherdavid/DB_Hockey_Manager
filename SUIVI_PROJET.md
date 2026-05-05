@@ -72,6 +72,17 @@ Ajout dans `markTeamEliminatedAction` (`admin/series/series-admin-actions.ts`) :
 
 ---
 
+**Validation alignement complet obligatoire**
+
+Trois points de contrôle ajoutés pour s'assurer qu'un alignement incomplet ne compte pas :
+- `GestionSeriesManager` : bannière ambre ⚠ visible au pooler quand F/D/G requis non atteints, avec détail par position
+- `getPlayoffPoolStandingsAction` : poolers avec alignement incomplet exclus du classement (filtre sur `is_active` + comparaison vs `playoff_max_f/d/g`)
+- `SeriesAdminManager` AlignmentsTab : badge ✓ Complet / ⚠ Incomplet par pooler
+
+Commit : `6d065eb`
+
+---
+
 **Rappel deadline — bouton manuel push**
 
 Bouton "🔔 Rappel deadline" dans la barre de résumé de `/admin/series`, visible uniquement quand une deadline est configurée. Envoie un push à tous les poolers (non-admin) avec la date limite et un lien vers `/gestion-series`. Confirmation inline après envoi. Commit : `52ac8a4`
