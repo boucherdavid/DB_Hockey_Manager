@@ -72,6 +72,12 @@ Ajout dans `markTeamEliminatedAction` (`admin/series/series-admin-actions.ts`) :
 
 ---
 
+**Rappel deadline — bouton manuel push**
+
+Bouton "🔔 Rappel deadline" dans la barre de résumé de `/admin/series`, visible uniquement quand une deadline est configurée. Envoie un push à tous les poolers (non-admin) avec la date limite et un lien vers `/gestion-series`. Confirmation inline après envoi. Commit : `52ac8a4`
+
+---
+
 **Onglet Équipes — sélection participantes + éliminations par grille**
 
 Nouvelle table `playoff_participating_teams (pool_season_id, team_id)` créée en prod. Onglet "Éliminations" renommé "Équipes", restructuré en deux phases :
