@@ -56,6 +56,28 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-06 (suite)
+
+**Fix — badges poolers dans `/statistiques` (mode Séries)** (`statistiques/page.tsx`) :
+`fetchPlayoffPicksMap()` lisait encore les anciennes tables `playoff_seasons` et `playoff_rosters` (supprimées). Rebranché sur `pool_seasons` (is_playoff=true) + `series_round_rosters` de la ronde active. Les badges poolers en mode Séries reflètent maintenant correctement les picks du nouveau système. Commit : `954f897`.
+
+**Indicateurs de séquence dans `/statistiques`** (`statistiques/page.tsx`, `statistiques/StatsTable.tsx`) :
+Badge emoji (🔥✅🧊🚨📈📉) affiché inline après le nom du joueur, uniquement pour les joueurs dans un pool (pas les 333 joueurs) :
+- Mode saison régulière → joueurs `actif` + `reserviste` du pool actif (config seuils depuis `pool_seasons`)
+- Mode séries → picks de la ronde active (game-log playoffs)
+Fetches en parallèle côté serveur, cache 30 min. Commit : `954f897`.
+
+**Suppression — `transitionToNextRoundAction`** (`gestion-series/actions.ts`) :
+Fonction jamais appelée (aucun UI ne l'utilisait) et devenue obsolète avec le nouveau mécanisme du pool des séries (fonctionnement proche de la saison régulière, sans copie d'alignement entre rondes). Supprimée avec son import. Commit : `c401365`.
+
+**État des notifications — résumé** :
+- Automatiques : ajout/retrait/changement type joueur (roster admin → pooler), élimination équipe séries (→ poolers impactés), feedback pooler (→ admin), mouvement d'effectifs (→ pooler)
+- Manuelle admin : rappel deadline séries (→ tous poolers non-admin, usage à discrétion de l'admin)
+- Pooler : toggle global ON/OFF par appareil dans `/compte`
+- Intentionnellement absentes pour l'instant : notifications transactions inter-poolers, ouverture/fermeture gestion séries
+
+---
+
 ### 2026-05-06
 
 **Fichier de référence — indicateurs de séquence** (`docs/hockey-pool-indicators.md`) :
