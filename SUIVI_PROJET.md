@@ -56,6 +56,37 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-06
+
+**Fichier de référence — indicateurs de séquence** (`docs/hockey-pool-indicators.md`) :
+Nouveau fichier de référence documentant les idées de bonification des indicateurs (badges EN FEU/EN HAUSSE/EN FORME/EN FROID/EN BAISSE/EN CRISE, tendance haussière/baissière, formules, paramètres configurables). Sert de base pour une éventuelle itération future sur `lib/streaks.ts`.
+
+**Brainstorm — réorganisation du menu Admin** :
+Proposition de restructuration des items du menu d'administration en 9 catégories ordonnées :
+1. Gestion des poolers
+2. Gestion initiale des rosters
+3. Configuration présaison
+4. Assignation des recrues par pooler
+5. Gestion d'effectifs — pooler
+6. Transactions inter-poolers
+7. Configuration des pools (saison et séries)
+8. Suivi des activités
+9. Boîte de réception
+
+À discuter et implémenter dans `Navbar.tsx` (menu admin) — regroupement et ordre à valider avec l'admin.
+
+**Brainstorm — clarification `/admin/presaison`** :
+L'outil de présaison couvre trois étapes séquentielles :
+1. **Repêchage des recrues** — ordre inverse du classement précédent.
+2. **Ajustements d'alignement** — activations de recrues, libérations pour conformité cap, décisions recrues non protégées (règle 5 ans / ELC expiré). Peut chevaucher l'étape 3.
+3. **Repêchage d'agents libres** — ordre inverse du classement précédent, minuteur configurable par tour (si temps expiré : le pooler perd son tour, glisse d'un rang; le prochain choisit, puis on revient à lui).
+
+Les poolers doivent pouvoir suivre le repêchage en temps réel (rafraîchissement navigateur). L'admin contrôle le flux.
+
+Point à valider : les saisons de séries ne doivent pas apparaître dans le menu de présaison.
+
+---
+
 ### 2026-05-04 (suite)
 
 **Suivi des activités — suppression de lignes**
