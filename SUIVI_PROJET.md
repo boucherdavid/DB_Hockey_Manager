@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-05-06
+Derniere mise a jour: 2026-05-06 (session 2)
 
 ## Role du fichier
 
@@ -1623,6 +1623,12 @@ Fichiers modifiés:
   - Badge "⚠ Dépassement" visible si la somme des salaires N+1 (actifs + réservistes) dépasse le cap N+1 du pool.
 
 ### 2026-05-05
+
+**Fix — classement-series rebranché + stats en direct** (`classement-series/page.tsx`, `playoff-pool-actions.ts`):
+- La page `/classement-series` lisait les anciennes tables (`series_round_snapshots`, `series_round_rosters`) — vides pour la saison 2026-PO gérée via `/gestion-series`. Fix en deux parties :
+  1. `getPlayoffPoolStandingsAction` : nouveau paramètre `fetchLive` (défaut `false`). Quand `true`, fetche les stats LNH séries pour chaque joueur actif en parallèle (déduplication par player_id), ce qui donne un classement en direct sans intervention admin.
+  2. `/classement-series` : rebranché sur `getPlayoffPoolSaisonAction` + `getPlayoffPoolStandingsAction(id, true)`. Layout : tableau synthèse + détail par pooler avec stats en direct. Joueurs retirés en gris.
+- Commit : `39f57a9`.
 
 **Bugfix — compteur de changements volontaires incorrect** (`playoff-pool-actions.ts`):
 - Les changements effectués avant la deadline étaient enregistrés avec `removal_reason = 'voluntary'` et comptaient dans le budget post-deadline. Fix : `removal_reason = null` quand `!isLocked` — le compteur `getPlayoffChangeCountsAction` ignore les `null`. Les entrées existantes corrigées via SQL (`UPDATE ... SET removal_reason = NULL WHERE removed_at < deadline AND removal_reason = 'voluntary'`). Commit : `c35b694`.
