@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-05-06 (session 2)
+Derniere mise a jour: 2026-05-06 (session 3)
 
 ## Role du fichier
 
@@ -1623,6 +1623,14 @@ Fichiers modifiés:
   - Badge "⚠ Dépassement" visible si la somme des salaires N+1 (actifs + réservistes) dépasse le cap N+1 du pool.
 
 ### 2026-05-05
+
+**Indicateurs de performance — page alignement pooler** (`lib/streaks.ts`, `poolers/[id]/PoolerPageTabs.tsx`, `poolers/[id]/page.tsx`, `admin/config/ConfigForm.tsx`, `admin/config/actions.ts`):
+- 6 badges affichés dans l'onglet Alignement de `/poolers/[id]` : 🔥 EN FEU · ✅ EN FORME · 🧊 EN FROID · 🚨 EN CRISE · 📈 EN HAUSSE · 📉 EN BAISSE.
+- `lib/streaks.ts` : refonte complète — anciens types `StreakType`/`MIN_STREAK` supprimés, remplacés par `BadgeType` + `IndicatorConfig` configurable. Calcul de tendance ajouté (pts/match fenêtre récente vs précédente). Gardiens scorés sur V×2 + DP + BL×2.
+- Seuils configurables par saison via 3 nouvelles colonnes `pool_seasons` (`indicator_streak_chaud=3`, `indicator_streak_froid=5`, `indicator_fenetre_tendance=5`, migration SQL exécutée).
+- Section "Indicateurs de performance" ajoutée dans `/admin/config` (saisons régulières seulement).
+- Priorité : streak > tendance. Streak froid + 3 = EN CRISE.
+- Commit : `e4b259d`.
 
 **Fix — classement-series rebranché + stats en direct** (`classement-series/page.tsx`, `playoff-pool-actions.ts`):
 - La page `/classement-series` lisait les anciennes tables (`series_round_snapshots`, `series_round_rosters`) — vides pour la saison 2026-PO gérée via `/gestion-series`. Fix en deux parties :
