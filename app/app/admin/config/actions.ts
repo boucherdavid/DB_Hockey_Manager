@@ -378,6 +378,9 @@ export async function updateCapAction(
     playoffMaxF?: number
     playoffMaxD?: number
     playoffMaxG?: number
+    indicatorStreakChaud?: number
+    indicatorStreakFroid?: number
+    indicatorFenetreTendance?: number
   },
 ): Promise<{ error?: string }> {
   if (!nhlCap || nhlCap < 1_000_000) return { error: 'Cap NHL invalide.' }
@@ -397,6 +400,9 @@ export async function updateCapAction(
   if (opts?.playoffMaxF !== undefined) updates.playoff_max_f = opts.playoffMaxF
   if (opts?.playoffMaxD !== undefined) updates.playoff_max_d = opts.playoffMaxD
   if (opts?.playoffMaxG !== undefined) updates.playoff_max_g = opts.playoffMaxG
+  if (opts?.indicatorStreakChaud !== undefined) updates.indicator_streak_chaud = opts.indicatorStreakChaud
+  if (opts?.indicatorStreakFroid !== undefined) updates.indicator_streak_froid = opts.indicatorStreakFroid
+  if (opts?.indicatorFenetreTendance !== undefined) updates.indicator_fenetre_tendance = opts.indicatorFenetreTendance
 
   const { error } = await supabase
     .from('pool_seasons')

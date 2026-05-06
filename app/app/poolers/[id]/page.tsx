@@ -6,7 +6,7 @@ import PoolerPageTabs from './PoolerPageTabs'
 import OrganisationToggle from './OrganisationToggle'
 import PlayerLink from '@/components/PlayerLink'
 import { buildStandings } from '@/lib/standings'
-import { fetchStreaks } from '@/lib/streaks'
+import { fetchStreaks, DEFAULT_INDICATOR_CONFIG } from '@/lib/streaks'
 import type { StreakInfo } from '@/lib/streaks'
 
 const DASH = '\u2014'
@@ -541,9 +541,15 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     ? (await buildStandings(supabase, saison.id)).find(s => s.poolerId === id)?.players ?? []
     : []
 
+  const indicatorConfig = {
+    streakChaud:      (saison as any)?.indicator_streak_chaud      ?? DEFAULT_INDICATOR_CONFIG.streakChaud,
+    streakFroid:      (saison as any)?.indicator_streak_froid      ?? DEFAULT_INDICATOR_CONFIG.streakFroid,
+    fenetreTendance:  (saison as any)?.indicator_fenetre_tendance  ?? DEFAULT_INDICATOR_CONFIG.fenetreTendance,
+  }
   const streaksMap = await fetchStreaks(
     alignementPlayers.map(p => ({ nhlId: p.nhlId, isGoalie: p.position === 'G' })),
     2,
+    indicatorConfig,
   )
   const streaks: Record<number, StreakInfo> = {}
   streaksMap.forEach((v, k) => { streaks[k] = v })

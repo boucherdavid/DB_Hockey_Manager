@@ -71,11 +71,25 @@ function formatDate(iso: string): string {
   }).format(new Date(iso))
 }
 
+const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; label: string; cls: string }> = {
+  en_feu:    { emoji: '🔥', label: 'En feu',    cls: 'text-orange-500' },
+  en_forme:  { emoji: '✅', label: 'En forme',  cls: 'text-green-500'  },
+  en_froid:  { emoji: '🧊', label: 'En froid',  cls: 'text-sky-500'    },
+  en_crise:  { emoji: '🚨', label: 'En crise',  cls: 'text-red-500'    },
+  en_hausse: { emoji: '📈', label: 'En hausse', cls: 'text-emerald-500' },
+  en_baisse: { emoji: '📉', label: 'En baisse', cls: 'text-amber-500'  },
+}
+
 function StreakBadge({ info }: { info: StreakInfo | undefined }) {
-  if (!info || info.type === null) return null
-  if (info.type === 'hot')
-    return <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-orange-100 text-orange-600 text-xs font-bold" title={`Séquence chaude : ${info.count} matchs consécutifs avec ≥ 1 pt`}>{info.count}</span>
-  return <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-100 text-sky-600 text-xs font-bold" title={`Séquence froide : ${info.count} matchs consécutifs sans point`}>{info.count}</span>
+  if (!info || !info.badge) return null
+  const meta = BADGE_META[info.badge]
+  const hasCount = info.badge === 'en_feu' || info.badge === 'en_forme' || info.badge === 'en_froid' || info.badge === 'en_crise'
+  const title = hasCount ? `${meta.label} — ${info.count} matchs consécutifs` : meta.label
+  return (
+    <span className={`ml-1 text-sm ${meta.cls}`} title={title}>
+      {meta.emoji}
+    </span>
+  )
 }
 
 function PlayerStatsRow({ p, streaks }: { p: PlayerContrib; streaks: Record<number, StreakInfo> }) {
