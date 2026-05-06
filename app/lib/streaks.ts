@@ -111,9 +111,21 @@ export async function fetchStreaks(
   players: { nhlId: number | null; isGoalie: boolean }[],
   gameType: 2 | 3,
   config: IndicatorConfig = DEFAULT_INDICATOR_CONFIG,
+  batchSize?: number,
 ): Promise<Map<number, StreakInfo>> {
   const valid = players.filter((p): p is { nhlId: number; isGoalie: boolean } => p.nhlId !== null)
-  const results = await Promise.all(valid.map(p => fetchStreak(p.nhlId, p.isGoalie, gameType, config)))
+
+  let results: StreakInfo[]
+  if (batchSize && batchSize > 0 && valid.length > batchSize) {
+    results = []
+    for (let i = 0; i < valid.length; i += batchSize) {
+      const batch = valid.slice(i, i + batchSize)
+      results.push(...await Promise.all(batch.map(p => fetchStreak(p.nhlId, p.isGoalie, gameType, config))))
+    }
+  } else {
+    results = await Promise.all(valid.map(p => fetchStreak(p.nhlId, p.isGoalie, gameType, config)))
+  }
+
   const map = new Map<number, StreakInfo>()
   valid.forEach((p, i) => map.set(p.nhlId, results[i]))
   return map

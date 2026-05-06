@@ -305,7 +305,7 @@ async function fetchStreaksForStats(gameType: number): Promise<Record<number, St
         .filter(Boolean)
         .map(p => ({ nhlId: p!.nhl_id, isGoalie: p!.position === 'G' }))
 
-      const map = await fetchStreaks(players, 2, config)
+      const map = await fetchStreaks(players, 2, config, 5)
       const result: Record<number, StreakInfo> = {}
       map.forEach((v, k) => { result[k] = v })
       return result
@@ -339,7 +339,7 @@ async function fetchStreaksForStats(gameType: number): Promise<Record<number, St
           seen.set(p.nhl_id, { nhlId: p.nhl_id, isGoalie: p.position === 'G' })
       }
 
-      const map = await fetchStreaks([...seen.values()], 3)
+      const map = await fetchStreaks([...seen.values()], 3, DEFAULT_INDICATOR_CONFIG, 5)
       const result: Record<number, StreakInfo> = {}
       map.forEach((v, k) => { result[k] = v })
       return result
