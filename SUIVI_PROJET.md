@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-05-04
+Derniere mise a jour: 2026-05-05
 
 ## Role du fichier
 
@@ -1621,6 +1621,16 @@ Fichiers modifiés:
   - Colonne "Cap N+1" ajoutée dans la table Banque de recrues (et Activation obligatoire).
   - Barre de masse salariale N+1 affichée sous la barre courante si `next_nhl_cap` est configuré.
   - Badge "⚠ Dépassement" visible si la somme des salaires N+1 (actifs + réservistes) dépasse le cap N+1 du pool.
+
+### 2026-05-05
+
+**Bugfix — sélecteur joueurs vide dans /gestion-series** (`playoff-pool-actions.ts`):
+- `getAvailablePlayoffPlayersAction` retournait 0 joueur à cause de deux bugs combinés :
+  1. `playoff_participating_teams` a RLS activé sans aucune politique → deny all pour les clients authentifiés. Fix : utiliser `createAdminClient()` pour lire cette table (et `playoff_eliminations` par cohérence).
+  2. Le filtre `.eq('is_available', true)` bloquait tous les joueurs : le script Python met `is_available = false` pour les joueurs absents du dernier run de scraping, et certains joueurs en séries se retrouvaient ainsi bloqués. Fix : quand des équipes participantes sont configurées, le filtre `team_id IN [...]` est suffisant — `is_available` n'est pertinent qu'en saison régulière. `is_available` est conservé comme garde-fou uniquement quand aucune équipe n'est configurée.
+- Commit : `5d62ada`.
+
+---
 
 ### 2026-04-21 (sessions 22-23)
 
