@@ -1,5 +1,6 @@
 import StatsTable from './StatsTable'
 import { createClient } from '@/lib/supabase/server'
+import { fetchStreaks, DEFAULT_INDICATOR_CONFIG, type StreakInfo } from '@/lib/streaks'
 
 export const metadata = { title: 'Statistiques LNH' }
 export const dynamic = 'force-dynamic'
@@ -235,16 +236,25 @@ async function fetchPlayoffPicksMap(): Promise<Record<string, string[]>> {
   try {
     const supabase = await createClient()
     const { data: season } = await supabase
-      .from('playoff_seasons')
+      .from('pool_seasons')
       .select('id')
       .eq('is_active', true)
+      .eq('is_playoff', true)
       .single()
     if (!season) return {}
 
+    const { data: round } = await supabase
+      .from('playoff_rounds')
+      .select('id')
+      .eq('pool_season_id', season.id)
+      .eq('is_active', true)
+      .single()
+    if (!round) return {}
+
     const { data: picks } = await supabase
-      .from('playoff_rosters')
+      .from('series_round_rosters')
       .select('players (first_name, last_name), poolers (name)')
-      .eq('playoff_season_id', season.id)
+      .eq('round_id', round.id)
       .eq('is_active', true)
 
     const map: Record<string, string[]> = {}
@@ -263,6 +273,82 @@ async function fetchPlayoffPicksMap(): Promise<Record<string, string[]>> {
   }
 }
 
+type PlayerNhlRow = { nhl_id: number | null; position: string }
+
+async function fetchStreaksForStats(gameType: number): Promise<Record<number, StreakInfo>> {
+  try {
+    const supabase = await createClient()
+
+    if (gameType === 2) {
+      const { data: season } = await supabase
+        .from('pool_seasons')
+        .select('id, indicator_streak_chaud, indicator_streak_froid, indicator_fenetre_tendance')
+        .eq('is_active', true)
+        .eq('is_playoff', false)
+        .single()
+      if (!season) return {}
+
+      const config = {
+        streakChaud:     (season as any).indicator_streak_chaud     ?? DEFAULT_INDICATOR_CONFIG.streakChaud,
+        streakFroid:     (season as any).indicator_streak_froid     ?? DEFAULT_INDICATOR_CONFIG.streakFroid,
+        fenetreTendance: (season as any).indicator_fenetre_tendance ?? DEFAULT_INDICATOR_CONFIG.fenetreTendance,
+      }
+
+      const { data: rosters } = await supabase
+        .from('pooler_rosters')
+        .select('players(nhl_id, position)')
+        .eq('pool_season_id', season.id)
+        .in('player_type', ['actif', 'reserviste'])
+
+      const players = (rosters ?? [])
+        .map(r => r.players as unknown as PlayerNhlRow | null)
+        .filter(Boolean)
+        .map(p => ({ nhlId: p!.nhl_id, isGoalie: p!.position === 'G' }))
+
+      const map = await fetchStreaks(players, 2, config)
+      const result: Record<number, StreakInfo> = {}
+      map.forEach((v, k) => { result[k] = v })
+      return result
+    } else {
+      const { data: season } = await supabase
+        .from('pool_seasons')
+        .select('id')
+        .eq('is_active', true)
+        .eq('is_playoff', true)
+        .single()
+      if (!season) return {}
+
+      const { data: round } = await supabase
+        .from('playoff_rounds')
+        .select('id')
+        .eq('pool_season_id', season.id)
+        .eq('is_active', true)
+        .single()
+      if (!round) return {}
+
+      const { data: picks } = await supabase
+        .from('series_round_rosters')
+        .select('players(nhl_id, position)')
+        .eq('round_id', round.id)
+        .eq('is_active', true)
+
+      const seen = new Map<number, { nhlId: number; isGoalie: boolean }>()
+      for (const r of picks ?? []) {
+        const p = r.players as unknown as PlayerNhlRow | null
+        if (p?.nhl_id && !seen.has(p.nhl_id))
+          seen.set(p.nhl_id, { nhlId: p.nhl_id, isGoalie: p.position === 'G' })
+      }
+
+      const map = await fetchStreaks([...seen.values()], 3)
+      const result: Record<number, StreakInfo> = {}
+      map.forEach((v, k) => { result[k] = v })
+      return result
+    }
+  } catch {
+    return {}
+  }
+}
+
 export default async function StatistiquesPage({
   searchParams,
 }: {
@@ -271,13 +357,14 @@ export default async function StatistiquesPage({
   const { saison } = await searchParams
   const gameType = saison === 'series' ? 3 : 2
 
-  const [skaters, goalies, takenNames, rookieNames, currentTeamMap, playoffPicksMap] = await Promise.all([
+  const [skaters, goalies, takenNames, rookieNames, currentTeamMap, playoffPicksMap, streaksMap] = await Promise.all([
     fetchSkaters(gameType),
     fetchGoalies(gameType),
     fetchTakenNames(),
     fetchRookieNames(),
     fetchCurrentTeamMap(),
     gameType === 3 ? fetchPlayoffPicksMap() : Promise.resolve({} as Record<string, string[]>),
+    fetchStreaksForStats(gameType),
   ])
 
   // Replace multi-team abbrevs ("2 TM", "ANA,CGY", etc.) with the player's current team from DB
@@ -304,6 +391,7 @@ export default async function StatistiquesPage({
         rookieNames={rookieNames}
         gameMode={saison === 'series' ? 'series' : 'regular'}
         playoffPicksMap={playoffPicksMap}
+        streaksMap={streaksMap}
       />
     </div>
   )

@@ -5,6 +5,24 @@ import { useRouter, usePathname } from 'next/navigation'
 import type { SkaterStat, GoalieStat } from './page'
 import TeamBadge from '@/components/TeamBadge'
 import PlayerLink from '@/components/PlayerLink'
+import type { StreakInfo } from '@/lib/streaks'
+
+const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; label: string }> = {
+  en_feu:    { emoji: '🔥', label: 'En feu'    },
+  en_forme:  { emoji: '✅', label: 'En forme'  },
+  en_froid:  { emoji: '🧊', label: 'En froid'  },
+  en_crise:  { emoji: '🚨', label: 'En crise'  },
+  en_hausse: { emoji: '📈', label: 'En hausse' },
+  en_baisse: { emoji: '📉', label: 'En baisse' },
+}
+
+function StreakBadge({ info }: { info: StreakInfo | undefined }) {
+  if (!info?.badge) return null
+  const meta = BADGE_META[info.badge]
+  const hasCount = info.badge === 'en_feu' || info.badge === 'en_forme' || info.badge === 'en_froid' || info.badge === 'en_crise'
+  const title = hasCount ? `${meta.label} — ${info.count} matchs consécutifs` : meta.label
+  return <span className="text-sm" title={title}>{meta.emoji}</span>
+}
 
 type Tab = 'skaters' | 'goalies'
 
@@ -60,6 +78,7 @@ export default function StatsTable({
   rookieNames,
   gameMode,
   playoffPicksMap = {},
+  streaksMap = {},
 }: {
   skaters: SkaterStat[]
   goalies: GoalieStat[]
@@ -67,6 +86,7 @@ export default function StatsTable({
   rookieNames: string[]
   gameMode: 'regular' | 'series'
   playoffPicksMap?: Record<string, string[]>
+  streaksMap?: Record<number, StreakInfo>
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -289,6 +309,7 @@ export default function StatsTable({
                             {s.lastName}, {s.firstName}
                           </PlayerLink>
                           {gameMode === 'regular' && isRookie(s.firstName, s.lastName) && <RookieBadge />}
+                          <StreakBadge info={streaksMap[s.id]} />
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-gray-600">
@@ -356,6 +377,7 @@ export default function StatsTable({
                             {g.lastName}, {g.firstName}
                           </PlayerLink>
                           {gameMode === 'regular' && isRookie(g.firstName, g.lastName) && <RookieBadge />}
+                          <StreakBadge info={streaksMap[g.id]} />
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-gray-600">

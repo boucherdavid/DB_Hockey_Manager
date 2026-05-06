@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { sendPushToUser } from '@/lib/push'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -645,6 +646,24 @@ export async function transitionToNextRoundAction(
       .from('series_round_rosters')
       .upsert(toInsert, { onConflict: 'round_id,pooler_id,player_id', ignoreDuplicates: true })
     if (error) return { error: error.message }
+
+    // Notifier les participants de la nouvelle ronde
+    const { data: round } = await db
+      .from('playoff_rounds')
+      .select('round_number')
+      .eq('id', toRoundId)
+      .single()
+    const roundLabel = round ? `Ronde ${round.round_number}` : 'nouvelle ronde'
+    const uniquePoolerIds = [...new Set(entries.map((e: any) => e.pooler_id as string))]
+    await Promise.allSettled(
+      uniquePoolerIds.map(poolerId =>
+        sendPushToUser(poolerId, {
+          title: '🏒 Pool des séries — ' + roundLabel,
+          body: 'Les alignements ont été copiés. Vérifiez et ajustez vos choix avant la deadline.',
+          url: '/gestion-series',
+        }),
+      ),
+    )
 
     revalidatePath('/admin/series')
     revalidatePath('/gestion-series')
