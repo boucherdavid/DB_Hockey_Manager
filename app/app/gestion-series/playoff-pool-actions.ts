@@ -162,24 +162,33 @@ export async function getAvailablePlayoffPlayersAction(
   season: string,
 ): Promise<PlayoffPoolPlayerResult[]> {
   const supabase = await createClient()
+  const db = createAdminClient()
   const nhlSeason = toNhlSeason(season)
 
+  // playoff_participating_teams a RLS sans politique — utiliser le client admin
   const [{ data: participating }, { data: elims }] = await Promise.all([
-    supabase.from('playoff_participating_teams').select('team_id').eq('pool_season_id', poolSeasonId),
-    supabase.from('playoff_eliminations').select('team_id').eq('pool_season_id', poolSeasonId),
+    db.from('playoff_participating_teams').select('team_id').eq('pool_season_id', poolSeasonId),
+    db.from('playoff_eliminations').select('team_id').eq('pool_season_id', poolSeasonId),
   ])
 
   const teamIds = (participating ?? []).map((r: any) => r.team_id)
-  if (teamIds.length === 0) return []
+  const eliminatedIds = new Set((elims ?? []).map((e: any) => e.team_id))
 
-  const { data: players } = await supabase
+  // Charger les joueurs : si équipes participantes configurées, filtrer par équipe
+  // (is_available inutile ici — le filtre team_id est suffisant)
+  // sinon retourner tous les joueurs disponibles (is_available comme garde-fou)
+  let query = supabase
     .from('players')
     .select('id, first_name, last_name, position, nhl_id, teams(id, code), player_contracts(season, cap_number)')
-    .in('team_id', teamIds)
-    .eq('is_available', true)
     .order('last_name')
 
-  const eliminatedIds = new Set((elims ?? []).map((e: any) => e.team_id))
+  if (teamIds.length > 0) {
+    query = query.in('team_id', teamIds)
+  } else {
+    query = query.eq('is_available', true)
+  }
+
+  const { data: players } = await query
 
   return (players ?? []).map((p: any) => ({
     id: p.id,
