@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { sendPushToUser } from '@/lib/push'
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -616,62 +616,6 @@ export async function activateRoundAction(
   }
 }
 
-export async function transitionToNextRoundAction(
-  fromRoundId: number,
-  toRoundId: number,
-): Promise<{ error?: string; copied?: number }> {
-  try {
-    await requireAdmin()
-    const db = createAdminClient()
-
-    // Récupérer tous les alignements actifs de la ronde précédente
-    const { data: entries } = await db
-      .from('series_round_rosters')
-      .select('pooler_id, player_id, position_slot')
-      .eq('round_id', fromRoundId)
-      .eq('is_active', true)
-    if (!entries || entries.length === 0) return { error: 'Aucun alignement à copier.' }
-
-    const now = new Date().toISOString()
-    const toInsert = entries.map((e: any) => ({
-      round_id: toRoundId,
-      pooler_id: e.pooler_id,
-      player_id: e.player_id,
-      position_slot: e.position_slot,
-      is_active: true,
-      added_at: now,
-    }))
-
-    const { error } = await db
-      .from('series_round_rosters')
-      .upsert(toInsert, { onConflict: 'round_id,pooler_id,player_id', ignoreDuplicates: true })
-    if (error) return { error: error.message }
-
-    // Notifier les participants de la nouvelle ronde
-    const { data: round } = await db
-      .from('playoff_rounds')
-      .select('round_number')
-      .eq('id', toRoundId)
-      .single()
-    const roundLabel = round ? `Ronde ${round.round_number}` : 'nouvelle ronde'
-    const uniquePoolerIds = [...new Set(entries.map((e: any) => e.pooler_id as string))]
-    await Promise.allSettled(
-      uniquePoolerIds.map(poolerId =>
-        sendPushToUser(poolerId, {
-          title: '🏒 Pool des séries — ' + roundLabel,
-          body: 'Les alignements ont été copiés. Vérifiez et ajustez vos choix avant la deadline.',
-          url: '/gestion-series',
-        }),
-      ),
-    )
-
-    revalidatePath('/admin/series')
-    revalidatePath('/gestion-series')
-    return { copied: toInsert.length }
-  } catch (e: any) {
-    return { error: e?.message ?? 'Erreur inconnue' }
-  }
-}
 
 export async function markTeamEliminatedAction(
   poolSeasonId: number,
