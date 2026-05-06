@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-05-05
+Derniere mise a jour: 2026-05-06
 
 ## Role du fichier
 
@@ -1623,6 +1623,9 @@ Fichiers modifiés:
   - Badge "⚠ Dépassement" visible si la somme des salaires N+1 (actifs + réservistes) dépasse le cap N+1 du pool.
 
 ### 2026-05-05
+
+**Bugfix — compteur de changements volontaires incorrect** (`playoff-pool-actions.ts`):
+- Les changements effectués avant la deadline étaient enregistrés avec `removal_reason = 'voluntary'` et comptaient dans le budget post-deadline. Fix : `removal_reason = null` quand `!isLocked` — le compteur `getPlayoffChangeCountsAction` ignore les `null`. Les entrées existantes corrigées via SQL (`UPDATE ... SET removal_reason = NULL WHERE removed_at < deadline AND removal_reason = 'voluntary'`). Commit : `c35b694`.
 
 **Bugfix — sélecteur joueurs vide dans /gestion-series** (`playoff-pool-actions.ts`):
 - `getAvailablePlayoffPlayersAction` retournait 0 joueur à cause de deux bugs combinés :
