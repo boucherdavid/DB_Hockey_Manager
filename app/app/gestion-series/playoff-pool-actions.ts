@@ -348,7 +348,9 @@ export async function submitPlayoffPoolChangeAction(input: {
 
   // Remove player
   if (input.removeEntryId) {
-    const reason = input.isEliminationReplacement ? 'elimination' : 'voluntary'
+    // Avant la deadline, les changements sont libres et ne comptent pas dans le budget —
+    // removal_reason reste null pour qu'ils soient ignorés par getPlayoffChangeCountsAction.
+    const reason = !isLocked ? null : input.isEliminationReplacement ? 'elimination' : 'voluntary'
     const { error } = await db
       .from('playoff_pool_rosters')
       .update({ is_active: false, removed_at: now, removal_reason: reason })
