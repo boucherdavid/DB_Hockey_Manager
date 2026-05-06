@@ -421,6 +421,7 @@ export async function submitPlayoffPoolChangeAction(input: {
 
 export async function getPlayoffPoolStandingsAction(
   poolSeasonId: number,
+  fetchLive = false,
 ): Promise<PlayoffPoolStanding[]> {
   const supabase = await createClient()
 
@@ -457,6 +458,23 @@ export async function getPlayoffPoolStandingsAction(
     pm.get(s.player_id)![s.snapshot_type as 'activation' | 'deactivation'] = s
   }
 
+  // Fetch live NHL playoff stats for currently active players (one call per unique player)
+  const liveMap = new Map<number, any>() // playerId → SnapshotStats
+  if (fetchLive) {
+    const uniqueActive = new Map<number, number>() // playerId → nhlId
+    for (const r of rosters ?? []) {
+      if (!r.is_active || uniqueActive.has(r.player_id)) continue
+      const nhlId = (r.players as any)?.nhl_id
+      if (nhlId) uniqueActive.set(r.player_id, nhlId)
+    }
+    const { fetchPlayerStatsById } = await import('@/lib/nhl-snapshot')
+    await Promise.all(
+      [...uniqueActive.entries()].map(([playerId, nhlId]) =>
+        fetchPlayerStatsById(nhlId, 3).then(stats => liveMap.set(playerId, stats))
+      )
+    )
+  }
+
   // Group rosters by pooler (all entries, active and inactive)
   const rosterMap = new Map<string, any[]>()
   for (const r of rosters ?? []) {
@@ -489,11 +507,13 @@ export async function getPlayoffPoolStandingsAction(
       const deactivation = snaps.deactivation
       if (!activation) continue // Never had a snapshot — skip
 
-      const end = deactivation ?? activation // If no deactivation, delta = 0 for removed; for active, use activation as baseline
+      // Active players: use live NHL stats if available, otherwise 0
+      // Removed players: use deactivation snapshot
+      const end = r.is_active && liveMap.has(r.player_id)
+        ? liveMap.get(r.player_id)
+        : (deactivation ?? activation)
       const isActive = r.is_active
 
-      // For active players: delta = deactivation (latest snapshot) - activation
-      // For removed players: same
       const delta = {
         goals:          (end.goals ?? 0)          - (activation.goals ?? 0),
         assists:        (end.assists ?? 0)         - (activation.assists ?? 0),
