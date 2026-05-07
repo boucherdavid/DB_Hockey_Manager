@@ -56,6 +56,19 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-07
+
+**Fix — encodage mobile Navbar** (`components/Navbar.tsx`) :
+Le lien admin mobile "Gestion/Création Pool des séries" affichait littéralement `é` car JSX texte n'interprète pas les escapes Unicode. Fix : envelopper dans `{'...'}` — dans une string JS, `é` est bien interprété. Commit : `d8ef435`.
+
+**Fix — points négatifs dans classement séries** (`admin/series/series-admin-actions.ts`, `admin/series/SeriesAdminManager.tsx`) :
+Les scores négatifs indiquent que les snapshots d'activation ont capturé les stats de saison régulière (gameType=2) au lieu des séries (gameType=3). Le delta (live_playoffs − activation_régulière) donne un résultat négatif.
+- Nouvelle action `resetActivationSnapshotsAction` : recapture les stats séries actuelles (gameType=3) pour tous les joueurs actifs du pool et upsert dans `player_stat_snapshots`.
+- Nouveau bouton "Réinitialiser les snapshots" (fond ambre, avec confirmation) dans l'onglet Scoring de `/admin/series`.
+- Commit : `d8ef435`.
+
+---
+
 ### 2026-05-06 (suite 2)
 
 **Classement-séries — corrections UX** (`classement-series/ClassementSeriesTable.tsx`, `classement-series/page.tsx`, `gestion-series/playoff-pool-actions.ts`) :
