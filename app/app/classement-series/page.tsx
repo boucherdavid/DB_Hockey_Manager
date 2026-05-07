@@ -2,7 +2,9 @@ import {
   getPlayoffPoolSaisonAction,
   getPlayoffPoolStandingsAction,
 } from '@/app/gestion-series/playoff-pool-actions'
+import { fetchStreaks } from '@/lib/streaks'
 import ClassementSeriesTable from './ClassementSeriesTable'
+import type { StreakInfo } from '@/lib/streaks'
 
 export const metadata = { title: 'Classement — Pool des séries' }
 export const dynamic = 'force-dynamic'
@@ -21,6 +23,28 @@ export default async function ClassementSeriesPage() {
 
   const standings = await getPlayoffPoolStandingsAction(saison.id, true)
 
+  // Streaks — fetch des game logs séries pour les joueurs actifs (fire-and-forget avec timeout)
+  let streaks: Record<number, StreakInfo> = {}
+  if (standings.length > 0) {
+    const activePlayers = standings
+      .flatMap(s => s.players)
+      .filter(p => p.isActive && p.nhlId !== null)
+    const unique = new Map<number, boolean>()
+    for (const p of activePlayers) {
+      if (p.nhlId && !unique.has(p.nhlId)) unique.set(p.nhlId, p.positionSlot === 'G')
+    }
+    const players = [...unique.entries()].map(([nhlId, isGoalie]) => ({ nhlId, isGoalie }))
+    try {
+      const map = await Promise.race([
+        fetchStreaks(players, 3, undefined, 5),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000)),
+      ])
+      for (const [nhlId, info] of map) streaks[nhlId] = info
+    } catch {
+      // Timeout ou erreur NHL API — classement s'affiche quand même sans indicateurs
+    }
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
       <div>
@@ -33,7 +57,7 @@ export default async function ClassementSeriesPage() {
           Aucun alignement complet soumis pour l&apos;instant.
         </p>
       ) : (
-        <ClassementSeriesTable standings={standings} />
+        <ClassementSeriesTable standings={standings} streaks={streaks} />
       )}
     </div>
   )

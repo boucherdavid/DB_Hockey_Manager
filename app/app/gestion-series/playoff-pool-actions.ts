@@ -65,6 +65,7 @@ export type PlayoffPoolStanding = {
   totalPoints: number
   players: {
     playerId: number
+    nhlId: number | null
     firstName: string
     lastName: string
     teamCode: string | null
@@ -550,6 +551,7 @@ export async function getPlayoffPoolStandingsAction(
 
       players.push({
         playerId:       r.player_id,
+        nhlId:          (r.players as any)?.nhl_id ?? null,
         firstName:      (r.players as any)?.first_name ?? '',
         lastName:       (r.players as any)?.last_name ?? '',
         teamCode:       (r.players as any)?.teams?.code ?? null,

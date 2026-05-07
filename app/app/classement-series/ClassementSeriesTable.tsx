@@ -1,113 +1,192 @@
 'use client'
 
 import { useState } from 'react'
+import { fmtPts } from '@/lib/nhl-stats'
 import type { PlayoffPoolStanding } from '@/app/gestion-series/playoff-pool-actions'
+import type { StreakInfo } from '@/lib/streaks'
 
-const slotColor: Record<'F' | 'D' | 'G', string> = {
-  F: 'text-blue-500',
-  D: 'text-green-500',
-  G: 'text-purple-500',
+const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
+
+const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; label: string }> = {
+  en_feu:    { emoji: '🔥', label: 'En feu'    },
+  en_forme:  { emoji: '✅', label: 'En forme'  },
+  en_froid:  { emoji: '🧊', label: 'En froid'  },
+  en_crise:  { emoji: '🚨', label: 'En crise'  },
+  en_hausse: { emoji: '📈', label: 'En hausse' },
+  en_baisse: { emoji: '📉', label: 'En baisse' },
 }
 
-function fmt(pts: number) {
-  return Math.round(pts)
+const slotLabel: Record<'F' | 'D' | 'G', string> = { F: 'Attaquants', D: 'Défenseurs', G: 'Gardiens' }
+const slotOrder: Record<'F' | 'D' | 'G', number> = { F: 0, D: 1, G: 2 }
+
+function StreakBadge({ nhlId, streaks }: { nhlId: number | null; streaks: Record<number, StreakInfo> }) {
+  if (!nhlId) return null
+  const info = streaks[nhlId]
+  if (!info?.badge) return null
+  const meta = BADGE_META[info.badge]
+  const hasCount = info.badge === 'en_feu' || info.badge === 'en_forme' || info.badge === 'en_froid' || info.badge === 'en_crise'
+  const title = hasCount ? `${meta.label} — ${info.count} matchs consécutifs` : meta.label
+  return <span className="text-sm" title={title}>{meta.emoji}</span>
 }
 
-export default function ClassementSeriesTable({ standings }: { standings: PlayoffPoolStanding[] }) {
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(standings.map(s => s.poolerId))
-  )
-
-  function toggle(poolerId: string) {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      if (next.has(poolerId)) next.delete(poolerId)
-      else next.add(poolerId)
-      return next
-    })
+function groupBySlot(players: PlayoffPoolStanding['players']) {
+  const groups: Record<'F' | 'D' | 'G', PlayoffPoolStanding['players']> = { F: [], D: [], G: [] }
+  for (const p of players) groups[p.positionSlot].push(p)
+  for (const slot of ['F', 'D', 'G'] as const) {
+    groups[slot].sort((a, b) => b.points - a.points || (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0))
   }
+  return (['F', 'D', 'G'] as const).map(slot => ({ slot, players: groups[slot] })).filter(g => g.players.length > 0)
+}
+
+export default function ClassementSeriesTable({
+  standings,
+  streaks = {},
+}: {
+  standings: PlayoffPoolStanding[]
+  streaks?: Record<number, StreakInfo>
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   return (
-    <>
+    <div>
       {/* Tableau synthèse */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-50 border-b">
-              <th className="text-left px-4 py-2 font-medium text-gray-600 w-8">#</th>
-              <th className="text-left px-4 py-2 font-medium text-gray-600">Pooler</th>
-              <th className="text-right px-4 py-2 font-bold text-gray-700">Points</th>
-            </tr>
-          </thead>
-          <tbody>
-            {standings.map((s, i) => (
-              <tr
-                key={s.poolerId}
-                className={`border-b cursor-pointer ${i === 0 ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-gray-50'}`}
-                onClick={() => toggle(s.poolerId)}
-              >
-                <td className="px-4 py-2 text-gray-400 font-medium">{i + 1}</td>
-                <td className="px-4 py-2 font-medium text-blue-600 underline-offset-2 hover:underline">
-                  {s.poolerName}
-                </td>
-                <td className="text-right px-4 py-2 font-bold text-blue-700 tabular-nums">
-                  {fmt(s.totalPoints)}
-                </td>
+      <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
+        <div className="bg-slate-800 px-5 py-3">
+          <h2 className="text-white font-bold text-sm uppercase tracking-wide">Classement — Pool des séries</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs text-gray-400 uppercase tracking-wide">
+              <tr>
+                <th className="px-4 py-2 text-left w-8">#</th>
+                <th className="px-4 py-2 text-left">Pooler</th>
+                <th className="px-2 py-2 text-blue-500">PTS</th>
+                <th className="px-2 py-2 hidden sm:table-cell">B</th>
+                <th className="px-2 py-2 hidden sm:table-cell">A</th>
+                <th className="px-2 py-2 hidden sm:table-cell">V</th>
+                <th className="px-2 py-2 hidden sm:table-cell">DP</th>
+                <th className="px-2 py-2 hidden sm:table-cell">BL</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {standings.map((s, i) => {
+                const active = s.players.filter(p => p.isActive)
+                const goals    = active.reduce((acc, p) => acc + p.goals, 0)
+                const assists  = active.reduce((acc, p) => acc + p.assists, 0)
+                const wins     = active.reduce((acc, p) => acc + p.goalieWins, 0)
+                const otl      = active.reduce((acc, p) => acc + p.goalieOtl, 0)
+                const shutouts = active.reduce((acc, p) => acc + p.goalieShutouts, 0)
+                return (
+                  <tr key={s.poolerId} className="hover:bg-gray-50">
+                    <td className={`px-4 py-2.5 font-bold text-center ${RANK_COLOR[i] ?? 'text-gray-500'}`}>{i + 1}</td>
+                    <td className="px-4 py-2.5 font-semibold text-gray-800">{s.poolerName}</td>
+                    <td className="px-2 py-2.5 text-center font-bold text-blue-600">{fmtPts(s.totalPoints)}</td>
+                    <td className="px-2 py-2.5 text-center text-gray-600 hidden sm:table-cell">{goals}</td>
+                    <td className="px-2 py-2.5 text-center text-gray-600 hidden sm:table-cell">{assists}</td>
+                    <td className="px-2 py-2.5 text-center text-gray-600 hidden sm:table-cell">{wins}</td>
+                    <td className="px-2 py-2.5 text-center text-gray-600 hidden sm:table-cell">{otl}</td>
+                    <td className="px-2 py-2.5 text-center text-gray-600 hidden sm:table-cell">{shutouts}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Détail par pooler */}
-      {standings.map((s, i) => (
-        <div key={s.poolerId} className="bg-white rounded-lg shadow overflow-hidden">
-          <button
-            type="button"
-            onClick={() => toggle(s.poolerId)}
-            className={`w-full px-4 py-3 flex items-center justify-between ${i === 0 ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-blue-600 hover:bg-blue-700'} transition-colors`}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-white font-bold text-sm">#{i + 1}</span>
-              <span className="text-white font-semibold text-sm">{s.poolerName}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-white font-bold tabular-nums">{fmt(s.totalPoints)} pts</span>
-              <span className="text-white/70 text-xs">{expanded.has(s.poolerId) ? '▲' : '▼'}</span>
-            </div>
-          </button>
+      <h2 className="hidden sm:block text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Détail par pooler</h2>
+      <div className="hidden sm:block space-y-2">
+        {standings.map((s, i) => {
+          const groups = groupBySlot(s.players)
+          return (
+            <div key={s.poolerId} className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className={`text-base font-bold w-7 text-center shrink-0 ${RANK_COLOR[i] ?? 'text-gray-500'}`}>
+                  {i + 1}
+                </span>
+                <span className="flex-1 font-semibold text-gray-800">{s.poolerName}</span>
+                <span className="text-xl font-bold text-blue-600">{fmtPts(s.totalPoints)}</span>
+                <span className="text-sm text-gray-400">pts</span>
+                <button
+                  type="button"
+                  className="text-gray-300 text-xs ml-1 hover:text-gray-500 px-1"
+                  onClick={() => setExpanded(expanded === s.poolerId ? null : s.poolerId)}
+                  aria-label={expanded === s.poolerId ? 'Réduire' : 'Développer'}
+                >
+                  {expanded === s.poolerId ? '▲' : '▼'}
+                </button>
+              </div>
 
-          {expanded.has(s.poolerId) && (
-            <div className="divide-y divide-gray-50">
-              {s.players.map(p => (
-                <div key={p.playerId} className="flex items-center gap-2 px-4 py-2 text-sm">
-                  <span className={`font-bold text-xs w-4 ${slotColor[p.positionSlot]}`}>
-                    {p.positionSlot}
-                  </span>
-                  <span className={`flex-1 font-medium ${p.isActive ? 'text-gray-800' : 'text-gray-400'}`}>
-                    {p.lastName}, {p.firstName}
-                  </span>
-                  <span className="text-xs text-gray-400 shrink-0">{p.teamCode}</span>
-                  <span className="tabular-nums text-gray-500 text-xs shrink-0">
-                    {p.goals}B {p.assists}A
-                  </span>
-                  {(p.goalieWins > 0 || p.goalieOtl > 0 || p.goalieShutouts > 0) && (
-                    <span className="tabular-nums text-gray-500 text-xs shrink-0">
-                      {p.goalieWins}V {p.goalieOtl}DP {p.goalieShutouts}BL
-                    </span>
-                  )}
-                  {!p.isActive && (
-                    <span className="text-xs text-gray-300 shrink-0">retiré</span>
-                  )}
-                  <span className="font-semibold text-blue-600 tabular-nums w-14 text-right shrink-0">
-                    {fmt(p.points)} pts
-                  </span>
+              {expanded === s.poolerId && (
+                <div className="border-t overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-400 text-xs uppercase tracking-wide">
+                      <tr>
+                        <th className="px-4 py-2 text-left">Joueur</th>
+                        <th className="px-2 py-2">Éq.</th>
+                        <th className="px-2 py-2">B</th>
+                        <th className="px-2 py-2">A</th>
+                        <th className="px-2 py-2">V</th>
+                        <th className="px-2 py-2">DP</th>
+                        <th className="px-2 py-2">BL</th>
+                        <th className="px-2 py-2 text-blue-500">Pts</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {groups.map(({ slot, players }) => (
+                        <>
+                          <tr key={`grp-${slot}`} className="bg-gray-100">
+                            <td colSpan={8} className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              {slotLabel[slot]}
+                            </td>
+                          </tr>
+                          {players.map(p => (
+                            <tr key={p.playerId} className={p.isActive ? 'hover:bg-gray-50' : 'hover:bg-gray-50 opacity-50'}>
+                              <td className="px-4 py-2">
+                                <span className={`font-medium ${p.isActive ? 'text-gray-800' : 'text-gray-500'}`}>
+                                  {p.lastName}, {p.firstName}
+                                </span>
+                                {!p.isActive && (
+                                  <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">retiré</span>
+                                )}
+                                {p.isActive && (
+                                  <span className="ml-1.5">
+                                    <StreakBadge nhlId={p.nhlId} streaks={streaks} />
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-2 py-2 text-center text-gray-500 text-xs">{p.teamCode ?? '—'}</td>
+                              <td className="px-2 py-2 text-center text-gray-500">{p.positionSlot === 'G' ? '—' : p.goals}</td>
+                              <td className="px-2 py-2 text-center text-gray-500">{p.positionSlot === 'G' ? '—' : p.assists}</td>
+                              <td className="px-2 py-2 text-center text-gray-500">{p.goalieWins || '—'}</td>
+                              <td className="px-2 py-2 text-center text-gray-500">{p.goalieOtl || '—'}</td>
+                              <td className="px-2 py-2 text-center text-gray-500">{p.goalieShutouts || '—'}</td>
+                              <td className={`px-2 py-2 text-center font-bold ${p.isActive ? 'text-blue-600' : 'text-gray-400'}`}>
+                                {fmtPts(p.points)}
+                              </td>
+                            </tr>
+                          ))}
+                        </>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-blue-50 border-t">
+                        <td colSpan={7} className="px-4 py-2 text-sm font-medium text-blue-600">
+                          Total
+                        </td>
+                        <td className="px-2 py-2 text-center font-bold text-blue-700">
+                          {fmtPts(s.totalPoints)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
-      ))}
-    </>
+          )
+        })}
+      </div>
+    </div>
   )
 }

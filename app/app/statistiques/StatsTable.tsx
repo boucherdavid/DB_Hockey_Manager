@@ -264,6 +264,13 @@ export default function StatsTable({
         )}
       </div>
 
+      {/* Légende indicateurs */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400 mb-2">
+        {(Object.entries(BADGE_META) as [NonNullable<StreakInfo['badge']>, { emoji: string; label: string }][]).map(([, meta]) => (
+          <span key={meta.label}>{meta.emoji} {meta.label}</span>
+        ))}
+      </div>
+
       {/* Table patineurs */}
       {tab === 'skaters' && (
         <div className="bg-white rounded-lg shadow overflow-x-auto">
