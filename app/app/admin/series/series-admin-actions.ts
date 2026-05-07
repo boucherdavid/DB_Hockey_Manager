@@ -148,51 +148,6 @@ export async function sendDeadlineReminderAction(
   }
 }
 
-export async function resetActivationSnapshotsAction(
-  poolSeasonId: number,
-): Promise<{ error?: string; updated?: number }> {
-  try {
-    const db = createAdminClient()
-
-    // Tous les joueurs actifs dans le pool des séries, avec leur nhl_id
-    const { data: entries } = await db
-      .from('playoff_pool_rosters')
-      .select('pooler_id, player_id, players(nhl_id)')
-      .eq('pool_season_id', poolSeasonId)
-      .eq('is_active', true)
-    if (!entries || entries.length === 0) return { updated: 0 }
-
-    const { fetchPlayerStatsById } = await import('@/lib/nhl-snapshot')
-
-    let updated = 0
-    for (const entry of entries) {
-      const nhlId = (entry.players as any)?.nhl_id
-      if (!nhlId) continue
-      const stats = await fetchPlayerStatsById(nhlId, 3)
-      const { error } = await db
-        .from('player_stat_snapshots')
-        .upsert(
-          {
-            player_id: entry.player_id,
-            pooler_id: entry.pooler_id,
-            pool_season_id: poolSeasonId,
-            snapshot_type: 'activation',
-            taken_at: new Date().toISOString(),
-            ...stats,
-          },
-          { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' },
-        )
-      if (!error) updated++
-    }
-
-    revalidatePath('/admin/series')
-    revalidatePath('/classement-series')
-    return { updated }
-  } catch (e: any) {
-    return { error: e?.message ?? 'Erreur inconnue' }
-  }
-}
-
 export async function getParticipatingTeamsAction(poolSeasonId: number): Promise<number[]> {
   const db = createAdminClient()
   const { data } = await db
