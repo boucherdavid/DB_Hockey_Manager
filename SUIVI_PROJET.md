@@ -64,6 +64,28 @@ Le lien admin mobile "Gestion/Création Pool des séries" affichait littéraleme
 **Fix — points négatifs dans classement séries** (`admin/series/series-admin-actions.ts`, `admin/series/SeriesAdminManager.tsx`) :
 Les scores négatifs indiquaient que les snapshots d'activation avaient capturé les stats de saison régulière (gameType=2) au lieu des séries (gameType=3). Le code `submitPlayoffPoolChangeAction` utilise maintenant correctement `gameType=3` pour les deux snapshots (activation et désactivation). Le bouton "Réinitialiser les snapshots" (correctif ponctuel ajouté lors de la session précédente) a été retiré — il servait à corriger des données corrompues en base, mais était risqué en production (un clic accidentel aurait effacé le scoring accumulé). Commit : `d8ef435` (bug fix code) + `202874b` (suppression bouton).
 
+**Fix — sélecteur joueurs pool séries + classement masqué avant deadline** (`gestion-series/GestionSeriesManager.tsx`, `classement-series/page.tsx`) :
+- Position affichée = premier code seulement (`RW` au lieu de `RW,LV`) + largeur fixe sur le salaire pour éviter l'empilement dans la liste.
+- `/classement-series` masqué tant que la deadline n'est pas passée — message informatif avec la date limite. S'affiche automatiquement après.
+- Commit : `da7e061`.
+
+**Baseline automatique à la deadline** (`gestion-series/playoff-pool-actions.ts`, `lib/snapshot.ts`) :
+- Nouveau type de snapshot `deadline_baseline`. Au premier appel du classement après la deadline, les stats actuelles de chaque joueur actif sont capturées automatiquement comme baseline (opération idempotente, une seule fois en base).
+- Points = stats actuelles − baseline deadline (joueurs ajoutés avant la deadline) ou − snapshot d'activation (joueurs ajoutés après). Résultat : le scoring part toujours de zéro à la date limite.
+- Même mécanique prévue pour la saison régulière (deadline = date de début de saison).
+- Commit : `498bbe5`.
+
+**Mode vue pooler pour l'admin** (`components/Navbar.tsx`) :
+- Toggle "Vue pooler" dans le dropdown profil (et menu mobile) — masque le menu Admin et les liens admin dans Pool Séries.
+- Bannière ambre visible en haut de la Navbar quand le mode est actif, avec lien direct pour revenir en mode admin.
+- Persisté dans `localStorage` — survit aux changements de page.
+- Commit : `aa69110`.
+
+**Légende indicateurs de séquence partagée** (`components/StreakLegend.tsx`, `statistiques/StatsTable.tsx`, `poolers/[id]/PoolerPageTabs.tsx`, `classement-series/ClassementSeriesTable.tsx`) :
+- Nouveau composant `StreakLegend` : grille 2 colonnes avec emoji, label et explication des seuils (🔥 3+ matchs avec pts, ✅ 2 matchs, 🧊 5+ sans pt, 🚨 8+ sans pt, 📈/📉 tendance sur 5 matchs).
+- Intégré sur les 3 pages qui affichent des indicateurs. Un seul fichier à modifier si les seuils changent.
+- Commit : `6ec8abb`.
+
 **Classement séries — uniformisation + indicateurs + légende** (`classement-series/ClassementSeriesTable.tsx`, `classement-series/page.tsx`, `gestion-series/playoff-pool-actions.ts`, `statistiques/StatsTable.tsx`) :
 - `/classement-series` réécrit pour correspondre exactement au style de `/classement` (saison régulière) : bannière slate-800, tableau synthèse avec B/A/V/DP/BL par pooler, détail expand/collapse par pooler avec couleurs de rang, joueurs groupés par position (Attaquants/Défenseurs/Gardiens) dans un tableau propre, joueurs retirés avec opacité + badge "retiré".
 - Indicateurs de séquence (🔥✅🧊🚨📈📉) ajoutés pour les joueurs actifs — fetch game logs séries (gameType=3), batching 5, timeout 6 s.
