@@ -62,6 +62,7 @@ export default function Navbar({
 
   const [userName, setUserName] = useState<string | null>(initialUserName)
   const [isAdmin, setIsAdmin] = useState(initialIsAdmin)
+  const [isPoolerView, setIsPoolerView] = useState(false)
   const [unreadCount] = useState(initialUnreadCount)
   const newPlayoffActive = initialNewPlayoffActive
   const [menuOpen, setMenuOpen] = useState(false)
@@ -109,6 +110,18 @@ export default function Navbar({
     setIsAdmin(initialIsAdmin)
   }, [initialUserName, initialIsAdmin])
 
+  useEffect(() => {
+    setIsPoolerView(localStorage.getItem('poolerView') === '1')
+  }, [])
+
+  const effectiveIsAdmin = isAdmin && !isPoolerView
+
+  const togglePoolerView = () => {
+    const next = !isPoolerView
+    setIsPoolerView(next)
+    localStorage.setItem('poolerView', next ? '1' : '0')
+  }
+
   const handleInstall = async () => {
     if (!installPrompt) return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -150,6 +163,12 @@ export default function Navbar({
 
   return (
     <nav className="bg-pool-navy shadow" ref={navRef}>
+      {isPoolerView && (
+        <div className="bg-amber-400 text-amber-900 text-xs font-semibold text-center py-1 px-4 flex items-center justify-center gap-3">
+          <span>Mode vue pooler actif — menu admin masqué</span>
+          <button onClick={togglePoolerView} className="underline hover:no-underline">Revenir en mode admin</button>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-14">
 
@@ -228,14 +247,14 @@ export default function Navbar({
                   <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
                     {userName && <Link href="/gestion-series" className={dropdownLinkClass('/gestion-series')}>Choix des joueurs</Link>}
                     {newPlayoffActive && <Link href="/classement-series" className={dropdownLinkClass('/classement-series')}>Classement</Link>}
-                    {isAdmin && <div className="border-t my-1" />}
-                    {isAdmin && <Link href="/admin/series" className={dropdownLinkClass('/admin/series')}>Gestion/Création Pool des séries</Link>}
+                    {effectiveIsAdmin &&<div className="border-t my-1" />}
+                    {effectiveIsAdmin &&<Link href="/admin/series" className={dropdownLinkClass('/admin/series')}>Gestion/Création Pool des séries</Link>}
                   </div>
                 )}
               </div>
 
               {/* Admin */}
-              {isAdmin && (
+              {effectiveIsAdmin &&(
                 <div className="relative">
                   <button onClick={() => toggle('admin')}
                     className={navBtnClass(isActive('/admin'))}>
@@ -299,6 +318,17 @@ export default function Navbar({
                       <Link href="/aide"     className={dropdownLinkClass('/aide')}>Aide &amp; Règlements</Link>
                       <Link href="/signaler" className={dropdownLinkClass('/signaler')}>Signaler un problème</Link>
                     </div>
+                    {isAdmin && (
+                      <div className="py-1 border-t">
+                        <button
+                          onClick={togglePoolerView}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
+                        >
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${isPoolerView ? 'bg-amber-400' : 'bg-gray-300'}`} />
+                          {isPoolerView ? 'Revenir en mode admin' : 'Vue pooler'}
+                        </button>
+                      </div>
+                    )}
                     <div className="py-1 border-t">
                       <button onClick={handleLogout}
                         className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
@@ -347,7 +377,7 @@ export default function Navbar({
             <MobileSection label={'Pool S\u00e9ries'} />
             {userName && <Link href="/gestion-series" className={mobileLinkClass('/gestion-series')}>Choix des joueurs</Link>}
             {newPlayoffActive && <Link href="/classement-series" className={mobileLinkClass('/classement-series')}>Classement</Link>}
-            {isAdmin && <Link href="/admin/series" className={mobileLinkClass('/admin/series')}>{'Gestion/Cr\u00e9ation Pool des s\u00e9ries'}</Link>}
+            {effectiveIsAdmin &&<Link href="/admin/series" className={mobileLinkClass('/admin/series')}>{'Gestion/Cr\u00e9ation Pool des s\u00e9ries'}</Link>}
 
             {userName && (
               <div className="mt-1 pt-1 border-t border-pool-navy-light flex flex-col gap-0.5">
@@ -355,23 +385,29 @@ export default function Navbar({
                 <Link href="/compte"   className={mobileLinkClass('/compte')}>Mon compte</Link>
                 <Link href="/aide"     className={mobileLinkClass('/aide')}>Aide &amp; Règlements</Link>
                 <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler un problème</Link>
-                {isAdmin && <MobileSection label="Admin" />}
-                {isAdmin && <Link href="/admin/poolers"      className={mobileLinkClass('/admin/poolers')}>Gestion des poolers</Link>}
-                {isAdmin && <Link href="/admin/rosters"      className={mobileLinkClass('/admin/rosters')}>Gestion initiale des rosters</Link>}
-                {isAdmin && <Link href="/admin/presaison"    className={mobileLinkClass('/admin/presaison')}>Configuration présaison</Link>}
-                {isAdmin && <Link href="/admin/recrues"      className={mobileLinkClass('/admin/recrues')}>Assignation des recrues</Link>}
-                {isAdmin && <Link href="/admin/mouvements"  className={mobileLinkClass('/admin/mouvements')}>Gestion d&apos;effectifs — pooler</Link>}
-                {isAdmin && <Link href="/admin/transactions" className={mobileLinkClass('/admin/transactions')}>Transactions inter-pooler</Link>}
-                {isAdmin && <Link href="/admin/joueurs"      className={mobileLinkClass('/admin/joueurs')}>Procédure mise à jour</Link>}
-                {isAdmin && <Link href="/admin/config"       className={mobileLinkClass('/admin/config')}>Configuration des pools</Link>}
-                {isAdmin && <Link href="/admin/suivi"        className={mobileLinkClass('/admin/suivi')}>Suivi des activités</Link>}
-                {isAdmin && (
+                {effectiveIsAdmin &&<MobileSection label="Admin" />}
+                {effectiveIsAdmin &&<Link href="/admin/poolers"      className={mobileLinkClass('/admin/poolers')}>Gestion des poolers</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/rosters"      className={mobileLinkClass('/admin/rosters')}>Gestion initiale des rosters</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/presaison"    className={mobileLinkClass('/admin/presaison')}>Configuration présaison</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/recrues"      className={mobileLinkClass('/admin/recrues')}>Assignation des recrues</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/mouvements"  className={mobileLinkClass('/admin/mouvements')}>Gestion d&apos;effectifs — pooler</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/transactions" className={mobileLinkClass('/admin/transactions')}>Transactions inter-pooler</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/joueurs"      className={mobileLinkClass('/admin/joueurs')}>Procédure mise à jour</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/config"       className={mobileLinkClass('/admin/config')}>Configuration des pools</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/suivi"        className={mobileLinkClass('/admin/suivi')}>Suivi des activités</Link>}
+                {effectiveIsAdmin &&(
                   <Link href="/admin/feedback" className={mobileLinkClass('/admin/feedback')}>
                     <span className="flex items-center justify-between">
                       {'Boîte de réception'}
                       {unreadCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>}
                     </span>
                   </Link>
+                )}
+                {isAdmin && (
+                  <button onClick={togglePoolerView}
+                    className="block text-left px-3 py-2 rounded text-sm font-medium text-amber-300 hover:bg-pool-navy-light transition-colors">
+                    {isPoolerView ? 'Revenir en mode admin' : 'Vue pooler'}
+                  </button>
                 )}
                 <button onClick={handleLogout}
                   className="block text-left px-3 py-2 rounded text-sm font-medium text-red-400 hover:bg-pool-navy-light hover:text-red-300 transition-colors">
