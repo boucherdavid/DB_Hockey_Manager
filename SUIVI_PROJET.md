@@ -64,6 +64,14 @@ Le lien admin mobile "Gestion/Création Pool des séries" affichait littéraleme
 **Fix — points négatifs dans classement séries** (`admin/series/series-admin-actions.ts`, `admin/series/SeriesAdminManager.tsx`) :
 Les scores négatifs indiquaient que les snapshots d'activation avaient capturé les stats de saison régulière (gameType=2) au lieu des séries (gameType=3). Le code `submitPlayoffPoolChangeAction` utilise maintenant correctement `gameType=3` pour les deux snapshots (activation et désactivation). Le bouton "Réinitialiser les snapshots" (correctif ponctuel ajouté lors de la session précédente) a été retiré — il servait à corriger des données corrompues en base, mais était risqué en production (un clic accidentel aurait effacé le scoring accumulé). Commit : `d8ef435` (bug fix code) + `202874b` (suppression bouton).
 
+**Transactions — sélecteur de saison** (`transactions/page.tsx`, `transactions/TransactionsClient.tsx`) :
+Dropdown en haut à droite de `/transactions` permettant de consulter l'historique par saison. Par défaut : saison régulière active. Changement via URL (`?saison=2025-26`) — rechargement serveur, page partageable. Saison active marquée `(active)` dans la liste. Visible seulement si plusieurs saisons existent. Commit : `3d7f1af`.
+
+**Feuille de route — mise à jour** :
+- Chantier A et Chantier I marqués complétés (confirmés via captures d'écran).
+- Étape 4 (validation classement) abandonnée — preuve de concept faite par le pool des séries en production, aucun snapshot historique 2025-26 à comparer.
+- Étape 3 (transactions historiques) recadrée : utile pour tester l'outil et offrir un historique aux poolers via `/transactions`, pas pour valider le scoring.
+
 **Fix — sélecteur joueurs pool séries + classement masqué avant deadline** (`gestion-series/GestionSeriesManager.tsx`, `classement-series/page.tsx`) :
 - Position affichée = premier code seulement (`RW` au lieu de `RW,LV`) + largeur fixe sur le salaire pour éviter l'empilement dans la liste.
 - `/classement-series` masqué tant que la deadline n'est pas passée — message informatif avec la date limite. S'affiche automatiquement après.
