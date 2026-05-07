@@ -411,6 +411,17 @@ export async function submitPlayoffPoolChangeAction(input: {
     }
   }
 
+  // Notifier l'admin des changements faits par un pooler (pas par l'admin lui-même)
+  if (!isAdmin) {
+    const { data: poolerRow } = await db.from('poolers').select('name').eq('id', input.poolerId).single()
+    const { sendPushToAdmins } = await import('@/lib/push')
+    sendPushToAdmins({
+      title: 'Pool des séries — Changement d\'alignement',
+      body: `${poolerRow?.name ?? 'Un pooler'} a modifié ses choix.`,
+      url: '/admin/series',
+    }, user.id).catch(() => {})
+  }
+
   revalidatePath('/gestion-series')
   revalidatePath('/admin/series')
   revalidatePath('/classement-series')
