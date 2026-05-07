@@ -226,7 +226,7 @@ export default function Navbar({
                 </button>
                 {openDropdown === 'series' && (
                   <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
-                    {userName && <Link href="/gestion-series" className={dropdownLinkClass('/gestion-series')}>Gestion d&apos;effectifs</Link>}
+                    {userName && <Link href="/gestion-series" className={dropdownLinkClass('/gestion-series')}>Choix des joueurs</Link>}
                     {newPlayoffActive && <Link href="/classement-series" className={dropdownLinkClass('/classement-series')}>Classement</Link>}
                     {isAdmin && <div className="border-t my-1" />}
                     {isAdmin && <Link href="/admin/series" className={dropdownLinkClass('/admin/series')}>Gestion/Création Pool des séries</Link>}
@@ -345,7 +345,7 @@ export default function Navbar({
             <Link href="/calendrier" className={mobileLinkClass('/calendrier')}>Calendrier</Link>
 
             <MobileSection label={'Pool S\u00e9ries'} />
-            {userName && <Link href="/gestion-series" className={mobileLinkClass('/gestion-series')}>Gestion d&apos;effectifs</Link>}
+            {userName && <Link href="/gestion-series" className={mobileLinkClass('/gestion-series')}>Choix des joueurs</Link>}
             {newPlayoffActive && <Link href="/classement-series" className={mobileLinkClass('/classement-series')}>Classement</Link>}
             {isAdmin && <Link href="/admin/series" className={mobileLinkClass('/admin/series')}>Gestion/Cr\u00e9ation Pool des s\u00e9ries</Link>}
 

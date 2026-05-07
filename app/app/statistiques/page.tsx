@@ -364,7 +364,10 @@ export default async function StatistiquesPage({
     fetchRookieNames(),
     fetchCurrentTeamMap(),
     gameType === 3 ? fetchPlayoffPicksMap() : Promise.resolve({} as Record<string, string[]>),
-    fetchStreaksForStats(gameType),
+    Promise.race([
+      fetchStreaksForStats(gameType),
+      new Promise<Record<number, StreakInfo>>(resolve => setTimeout(() => resolve({}), 5000)),
+    ]),
   ])
 
   // Replace multi-team abbrevs ("2 TM", "ANA,CGY", etc.) with the player's current team from DB
