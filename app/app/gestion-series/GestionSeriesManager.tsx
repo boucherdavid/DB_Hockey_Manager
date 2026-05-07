@@ -210,10 +210,10 @@ function PlayerPicker({
                 <div className="flex items-center gap-2">
                   <span className="flex-1 font-medium text-gray-800 truncate">{p.lastName}, {p.firstName}</span>
                   <span className="text-xs text-gray-400 shrink-0">{p.teamCode}</span>
-                  <span className="text-xs text-gray-400 shrink-0 w-6">{p.position}</span>
+                  <span className="text-xs text-gray-400 shrink-0 w-5">{(p.position ?? '').split(',')[0]}</span>
                   {p.capNumber != null
-                    ? <span className="text-xs font-semibold text-gray-600 tabular-nums shrink-0">{capFmt(p.capNumber)}</span>
-                    : <span className="text-xs text-gray-300 shrink-0 w-20">—</span>
+                    ? <span className="text-xs font-semibold text-gray-600 tabular-nums shrink-0 w-24 text-right">{capFmt(p.capNumber)}</span>
+                    : <span className="text-xs text-gray-300 shrink-0 w-24 text-right">—</span>
                   }
                   {p.teamEliminated && <span className="text-xs text-red-400 shrink-0">ÉL.</span>}
                 </div>

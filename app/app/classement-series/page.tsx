@@ -21,6 +21,25 @@ export default async function ClassementSeriesPage() {
     )
   }
 
+  const deadline = saison.submissionDeadline ? new Date(saison.submissionDeadline) : null
+  const beforeDeadline = deadline ? new Date() < deadline : false
+
+  if (beforeDeadline) {
+    const fmt = deadline!.toLocaleString('fr-CA', {
+      day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+      timeZone: 'America/Toronto',
+    })
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
+        <h1 className="text-2xl font-bold text-gray-800">Classement — Pool des séries {saison.season}</h1>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-5 py-4 text-sm text-blue-700">
+          Le classement sera disponible après la date limite de soumission :<br />
+          <strong>{fmt}</strong>
+        </div>
+      </div>
+    )
+  }
+
   const standings = await getPlayoffPoolStandingsAction(saison.id, true)
 
   // Streaks — fetch des game logs séries pour les joueurs actifs (fire-and-forget avec timeout)
