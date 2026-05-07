@@ -432,7 +432,7 @@ export async function getPlayoffPoolStandingsAction(
       .eq('pool_season_id', poolSeasonId),
     supabase
       .from('playoff_pool_rosters')
-      .select('pooler_id, player_id, position_slot, is_active, players(first_name, last_name, nhl_id, teams(code))')
+      .select('pooler_id, player_id, position_slot, is_active, removal_reason, players(first_name, last_name, nhl_id, teams(code))')
       .eq('pool_season_id', poolSeasonId),
     supabase.from('scoring_config').select('stat_key, points, points_playoffs'),
     supabase.from('poolers').select('id, name').order('name'),
@@ -497,10 +497,18 @@ export async function getPlayoffPoolStandingsAction(
     let total = 0
 
     // Unique players (a player may have multiple entries if added/removed/re-added)
+    // Active entries first, then post-deadline removals, then pre-deadline removals
+    const sortedEntries = [...rosterEntries].sort((a: any, b: any) => {
+      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
+      if (!!a.removal_reason !== !!b.removal_reason) return a.removal_reason ? -1 : 1
+      return 0
+    })
     const seen = new Set<number>()
-    for (const r of rosterEntries) {
+    for (const r of sortedEntries) {
       if (seen.has(r.player_id)) continue
       seen.add(r.player_id)
+      // Retrait avant deadline : removal_reason = null → ne pas afficher
+      if (!r.is_active && !r.removal_reason) continue
 
       const snaps = pm.get(r.player_id) ?? {}
       const activation = snaps.activation
@@ -550,7 +558,9 @@ export async function getPlayoffPoolStandingsAction(
       poolerId,
       poolerName: poolerNames.get(poolerId) ?? poolerId,
       totalPoints: total,
-      players: players.sort((a, b) => b.points - a.points),
+      players: players.sort((a, b) =>
+        b.points - a.points || (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0)
+      ),
     })
   }
 
