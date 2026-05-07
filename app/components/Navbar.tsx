@@ -347,7 +347,7 @@ export default function Navbar({
             <MobileSection label={'Pool S\u00e9ries'} />
             {userName && <Link href="/gestion-series" className={mobileLinkClass('/gestion-series')}>Choix des joueurs</Link>}
             {newPlayoffActive && <Link href="/classement-series" className={mobileLinkClass('/classement-series')}>Classement</Link>}
-            {isAdmin && <Link href="/admin/series" className={mobileLinkClass('/admin/series')}>Gestion/Cr\u00e9ation Pool des s\u00e9ries</Link>}
+            {isAdmin && <Link href="/admin/series" className={mobileLinkClass('/admin/series')}>{'Gestion/Cr\u00e9ation Pool des s\u00e9ries'}</Link>}
 
             {userName && (
               <div className="mt-1 pt-1 border-t border-pool-navy-light flex flex-col gap-0.5">

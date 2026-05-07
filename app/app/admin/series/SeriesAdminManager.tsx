@@ -6,6 +6,7 @@ import {
   removeEliminationAction,
   setParticipatingTeamsAction,
   sendDeadlineReminderAction,
+  resetActivationSnapshotsAction,
 } from './series-admin-actions'
 import {
   getPlayoffPoolStandingsAction,
@@ -264,6 +265,8 @@ function ScoringTab({ poolSeasonId }: { poolSeasonId: number }) {
   const [standings, setStandings] = useState<PlayoffPoolStanding[]>([])
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [resetPending, setResetPending] = useState(false)
+  const [resetMsg, setResetMsg] = useState<string | null>(null)
 
   async function calculate() {
     setLoading(true)
@@ -276,6 +279,16 @@ function ScoringTab({ poolSeasonId }: { poolSeasonId: number }) {
       setMsg('Erreur lors du calcul.')
     }
     setLoading(false)
+  }
+
+  async function resetSnapshots() {
+    if (!confirm('Réinitialiser tous les snapshots d\'activation avec les stats séries actuelles ?')) return
+    setResetPending(true)
+    setResetMsg(null)
+    const r = await resetActivationSnapshotsAction(poolSeasonId)
+    setResetPending(false)
+    if (r.error) setResetMsg(`Erreur : ${r.error}`)
+    else setResetMsg(`${r.updated} snapshot(s) mis à jour.`)
   }
 
   return (
@@ -297,6 +310,25 @@ function ScoringTab({ poolSeasonId }: { poolSeasonId: number }) {
           </button>
         </div>
         {msg && <p className="text-xs text-gray-500">{msg}</p>}
+      </div>
+
+      <div className="border rounded-lg p-4 border-amber-200 bg-amber-50">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-amber-800">Réinitialiser les snapshots d&apos;activation</p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              Recapture les stats séries actuelles comme point de départ. Utile si les points affichés sont négatifs ou incorrects.
+            </p>
+          </div>
+          <button
+            onClick={resetSnapshots}
+            disabled={resetPending}
+            className="bg-amber-600 text-white text-sm px-4 py-2 rounded hover:bg-amber-700 disabled:opacity-50 shrink-0 ml-4"
+          >
+            {resetPending ? 'En cours...' : 'Réinitialiser'}
+          </button>
+        </div>
+        {resetMsg && <p className="text-xs text-amber-700 mt-2">{resetMsg}</p>}
       </div>
 
       {standings.length > 0 && (
