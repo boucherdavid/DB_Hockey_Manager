@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { fetchPlayerStatsById } from './nhl-snapshot'
 
-export type SnapshotType = 'activation' | 'deactivation' | 'season_end'
+export type SnapshotType = 'activation' | 'deactivation' | 'season_end' | 'deadline_baseline'
 
 type SnapshotParams = {
   playerId: number

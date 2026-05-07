@@ -448,7 +448,7 @@ export async function getPlayoffPoolStandingsAction(
       .eq('pool_season_id', poolSeasonId),
     supabase.from('scoring_config').select('stat_key, points, points_playoffs'),
     supabase.from('poolers').select('id, name').order('name'),
-    supabase.from('pool_seasons').select('playoff_max_f, playoff_max_d, playoff_max_g').eq('id', poolSeasonId).single(),
+    supabase.from('pool_seasons').select('playoff_max_f, playoff_max_d, playoff_max_g, playoff_submission_deadline').eq('id', poolSeasonId).single(),
   ])
 
   const maxF = saisonRow?.playoff_max_f ?? 5
@@ -461,13 +461,57 @@ export async function getPlayoffPoolStandingsAction(
   }
 
   // Group snapshots: poolerId → playerId → type → stats
-  type SnapMap = Map<string, Map<number, { activation?: any; deactivation?: any }>>
+  type SnapMap = Map<string, Map<number, { activation?: any; deactivation?: any; deadline_baseline?: any }>>
   const snapMap: SnapMap = new Map()
   for (const s of snapshots ?? []) {
     if (!snapMap.has(s.pooler_id)) snapMap.set(s.pooler_id, new Map())
     const pm = snapMap.get(s.pooler_id)!
     if (!pm.has(s.player_id)) pm.set(s.player_id, {})
-    pm.get(s.player_id)![s.snapshot_type as 'activation' | 'deactivation'] = s
+    pm.get(s.player_id)![s.snapshot_type as 'activation' | 'deactivation' | 'deadline_baseline'] = s
+  }
+
+  // Auto-création de la baseline deadline si la deadline est passée et aucune baseline n'existe
+  const deadlinePassed = saisonRow?.playoff_submission_deadline
+    ? new Date() > new Date(saisonRow.playoff_submission_deadline)
+    : false
+  const hasBaselines = (snapshots ?? []).some((s: any) => s.snapshot_type === 'deadline_baseline')
+
+  if (deadlinePassed && !hasBaselines) {
+    const db = createAdminClient()
+    const { fetchPlayerStatsById } = await import('@/lib/nhl-snapshot')
+    const statsCache = new Map<number, any>()
+    const activeRosters = (rosters ?? []).filter((r: any) => r.is_active)
+    const newBaselines: any[] = []
+    const now = new Date().toISOString()
+
+    for (const r of activeRosters) {
+      const nhlId = (r.players as any)?.nhl_id
+      if (!nhlId) continue
+      if (!statsCache.has(nhlId)) {
+        statsCache.set(nhlId, await fetchPlayerStatsById(nhlId, 3))
+      }
+      newBaselines.push({
+        player_id: r.player_id,
+        pooler_id: r.pooler_id,
+        pool_season_id: poolSeasonId,
+        snapshot_type: 'deadline_baseline',
+        taken_at: now,
+        ...statsCache.get(nhlId),
+      })
+    }
+
+    if (newBaselines.length > 0) {
+      await db.from('player_stat_snapshots').upsert(newBaselines, {
+        onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type',
+      })
+      // Injecter dans le snapMap pour que ce calcul utilise déjà les bonnes baselines
+      for (const b of newBaselines) {
+        if (!snapMap.has(b.pooler_id)) snapMap.set(b.pooler_id, new Map())
+        const pm = snapMap.get(b.pooler_id)!
+        if (!pm.has(b.player_id)) pm.set(b.player_id, {})
+        pm.get(b.player_id)!.deadline_baseline = b
+      }
+    }
   }
 
   // Fetch live NHL playoff stats for currently active players (one call per unique player)
@@ -523,23 +567,25 @@ export async function getPlayoffPoolStandingsAction(
       if (!r.is_active && !r.removal_reason) continue
 
       const snaps = pm.get(r.player_id) ?? {}
-      const activation = snaps.activation
+      // deadline_baseline prioritaire sur activation (joueurs ajoutés avant deadline)
+      // activation seul pour les joueurs ajoutés après deadline (pas de baseline pour eux)
+      const reference = snaps.deadline_baseline ?? snaps.activation
       const deactivation = snaps.deactivation
-      if (!activation) continue // Never had a snapshot — skip
+      if (!reference) continue // Jamais eu de snapshot — ignorer
 
       // Active players: use live NHL stats if available, otherwise 0
       // Removed players: use deactivation snapshot
       const end = r.is_active && liveMap.has(r.player_id)
         ? liveMap.get(r.player_id)
-        : (deactivation ?? activation)
+        : (deactivation ?? reference)
       const isActive = r.is_active
 
       const delta = {
-        goals:          (end.goals ?? 0)          - (activation.goals ?? 0),
-        assists:        (end.assists ?? 0)         - (activation.assists ?? 0),
-        goalie_wins:    (end.goalie_wins ?? 0)     - (activation.goalie_wins ?? 0),
-        goalie_otl:     (end.goalie_otl ?? 0)      - (activation.goalie_otl ?? 0),
-        goalie_shutouts:(end.goalie_shutouts ?? 0) - (activation.goalie_shutouts ?? 0),
+        goals:          (end.goals ?? 0)          - (reference.goals ?? 0),
+        assists:        (end.assists ?? 0)         - (reference.assists ?? 0),
+        goalie_wins:    (end.goalie_wins ?? 0)     - (reference.goalie_wins ?? 0),
+        goalie_otl:     (end.goalie_otl ?? 0)      - (reference.goalie_otl ?? 0),
+        goalie_shutouts:(end.goalie_shutouts ?? 0) - (reference.goalie_shutouts ?? 0),
       }
 
       const pts =
