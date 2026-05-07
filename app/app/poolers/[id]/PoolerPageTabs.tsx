@@ -5,6 +5,7 @@ import { fmtPts } from '@/lib/nhl-stats'
 import PlayerLink from '@/components/PlayerLink'
 import type { PlayerContrib } from '@/lib/standings'
 import type { StreakInfo } from '@/lib/streaks'
+import StreakLegend from '@/components/StreakLegend'
 
 type Tab = 'organisation' | 'alignement' | 'historique'
 
@@ -179,6 +180,8 @@ export default function PoolerPageTabs({
       {tab === 'organisation' && organisationContent}
 
       {tab === 'alignement' && (
+        <div className="space-y-4">
+        <StreakLegend />
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {alignementPlayers.length === 0 ? (
             <div className="p-8 text-center text-gray-400 text-sm">
@@ -228,6 +231,7 @@ export default function PoolerPageTabs({
               </table>
             </div>
           )}
+        </div>
         </div>
       )}
 

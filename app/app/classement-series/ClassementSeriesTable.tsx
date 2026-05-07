@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { fmtPts } from '@/lib/nhl-stats'
 import type { PlayoffPoolStanding } from '@/app/gestion-series/playoff-pool-actions'
 import type { StreakInfo } from '@/lib/streaks'
+import StreakLegend from '@/components/StreakLegend'
 
 const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
 
@@ -17,7 +18,6 @@ const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; labe
 }
 
 const slotLabel: Record<'F' | 'D' | 'G', string> = { F: 'Attaquants', D: 'Défenseurs', G: 'Gardiens' }
-const slotOrder: Record<'F' | 'D' | 'G', number> = { F: 0, D: 1, G: 2 }
 
 function StreakBadge({ nhlId, streaks }: { nhlId: number | null; streaks: Record<number, StreakInfo> }) {
   if (!nhlId) return null
@@ -48,7 +48,8 @@ export default function ClassementSeriesTable({
   const [expanded, setExpanded] = useState<string | null>(null)
 
   return (
-    <div>
+    <div className="space-y-6">
+      <StreakLegend />
       {/* Tableau synthèse */}
       <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
         <div className="bg-slate-800 px-5 py-3">

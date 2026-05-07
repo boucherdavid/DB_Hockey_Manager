@@ -6,6 +6,7 @@ import type { SkaterStat, GoalieStat } from './page'
 import TeamBadge from '@/components/TeamBadge'
 import PlayerLink from '@/components/PlayerLink'
 import type { StreakInfo } from '@/lib/streaks'
+import StreakLegend from '@/components/StreakLegend'
 
 const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; label: string }> = {
   en_feu:    { emoji: '🔥', label: 'En feu'    },
@@ -264,12 +265,7 @@ export default function StatsTable({
         )}
       </div>
 
-      {/* Légende indicateurs */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400 mb-2">
-        {(Object.entries(BADGE_META) as [NonNullable<StreakInfo['badge']>, { emoji: string; label: string }][]).map(([, meta]) => (
-          <span key={meta.label}>{meta.emoji} {meta.label}</span>
-        ))}
-      </div>
+      <div className="mb-4"><StreakLegend /></div>
 
       {/* Table patineurs */}
       {tab === 'skaters' && (
