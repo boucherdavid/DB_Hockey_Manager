@@ -1,24 +1,33 @@
 import { createClient } from '@/lib/supabase/server'
 import TransactionsClient from './TransactionsClient'
 
-export default async function TransactionsPage() {
+export default async function TransactionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saison?: string }>
+}) {
+  const { saison: saisonParam } = await searchParams
   const supabase = await createClient()
 
-  const { data: saison } = await supabase
+  const { data: saisons } = await supabase
     .from('pool_seasons')
-    .select('id, season')
-    .eq('is_active', true)
+    .select('id, season, is_active')
     .eq('is_playoff', false)
-    .single()
+    .order('season', { ascending: false })
 
-  if (!saison) {
+  if (!saisons || saisons.length === 0) {
     return (
       <div>
         <h1 className="text-2xl font-bold text-gray-800 mb-4">Transactions</h1>
-        <p className="text-gray-400">Aucune saison active.</p>
+        <p className="text-gray-400">Aucune saison disponible.</p>
       </div>
     )
   }
+
+  const activeSaison = saisons.find(s => s.is_active) ?? saisons[0]
+  const selectedSaison = saisonParam
+    ? (saisons.find(s => s.season === saisonParam) ?? activeSaison)
+    : activeSaison
 
   const { data: transactions } = await supabase
     .from('transactions')
@@ -32,8 +41,15 @@ export default async function TransactionsPage() {
         pick:pool_draft_picks!pick_id (round, pool_seasons (season), original_owner:poolers!original_owner_id (name))
       )
     `)
-    .eq('pool_season_id', saison.id)
+    .eq('pool_season_id', selectedSaison.id)
     .order('created_at', { ascending: false })
 
-  return <TransactionsClient transactions={(transactions ?? []) as any[]} saison={saison} />
+  return (
+    <TransactionsClient
+      transactions={(transactions ?? []) as any[]}
+      saison={selectedSaison}
+      saisons={saisons}
+      activeSaisonId={activeSaison.id}
+    />
+  )
 }

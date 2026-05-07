@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 const DASH = '—'
 
@@ -81,7 +82,18 @@ function formatDate(iso: string) {
   })
 }
 
-export default function TransactionsClient({ transactions, saison }: { transactions: any[]; saison: any }) {
+export default function TransactionsClient({
+  transactions,
+  saison,
+  saisons = [],
+  activeSaisonId,
+}: {
+  transactions: any[]
+  saison: any
+  saisons?: any[]
+  activeSaisonId?: number
+}) {
+  const router = useRouter()
   const [tab, setTab] = useState<TabKey>('tous')
 
   const classified = transactions.map((tx: any) => ({
@@ -108,6 +120,19 @@ export default function TransactionsClient({ transactions, saison }: { transacti
           <h1 className="text-2xl font-bold text-gray-800">Transactions</h1>
           <p className="text-gray-500 text-sm">Saison {saison.season}</p>
         </div>
+        {saisons.length > 1 && (
+          <select
+            value={saison.season}
+            onChange={e => router.push(`/transactions?saison=${e.target.value}`)}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white"
+          >
+            {saisons.map((s: any) => (
+              <option key={s.id} value={s.season}>
+                {s.season}{s.id === activeSaisonId ? ' (active)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Onglets */}
