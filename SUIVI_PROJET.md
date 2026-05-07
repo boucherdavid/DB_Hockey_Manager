@@ -56,6 +56,33 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-06 (suite 2)
+
+**Classement-séries — corrections UX** (`classement-series/ClassementSeriesTable.tsx`, `classement-series/page.tsx`, `gestion-series/playoff-pool-actions.ts`) :
+- Cartes pooler expand/collapse ouvertes par défaut; nom cliquable pour toggler (nouveau Client Component `ClassementSeriesTable.tsx`)
+- Plus de décimales : `Math.round` au lieu de `.toFixed(1)`
+- Joueurs triés : points décroissants, actifs avant retirés à points égaux
+- Retraits pré-deadline masqués : `removal_reason = null` → pas affiché (seuls `voluntary` / `elimination` apparaissent comme "retiré")
+- Commits : `2a2f251`
+
+**Fix — stats séries vides** (`statistiques/page.tsx`) :
+`fetchStreaksForStats` sans timeout pouvait bloquer toute la `Promise.all` sur Vercel et faire croire que l'API NHL revenait vide. Fix : `Promise.race` avec timeout 5 s — si les game logs sont trop lents, la page charge quand même avec les joueurs (sans indicateurs). Commit : `e0822ad`.
+
+**Indicateurs de séquence dans `/statistiques`** — batching game logs (`lib/streaks.ts`, `statistiques/page.tsx`) :
+`fetchStreaks` accepte un `batchSize` optionnel. La page `/statistiques` utilise `batchSize=5` (traitement par lots de 5 requêtes game-log) pour éviter le rate-limiting NHL API. Actif dans les deux modes (saison et séries). Commit : `5a2bb51`.
+
+**Navbar — titre et encodage** (`components/Navbar.tsx`) :
+- `/gestion-series` renommé "Choix des joueurs" (desktop + mobile)
+- Fix encodage `é` → `é` dans le lien admin mobile "Gestion/Création Pool des séries"
+- Commit : `e0822ad`
+
+**Notification admin — picks séries** (`gestion-series/playoff-pool-actions.ts`) :
+`submitPlayoffPoolChangeAction` envoie maintenant `sendPushToAdmins` quand un pooler (non-admin) modifie ses choix séries. Message inclut le nom du pooler, lien vers `/admin/series`. Fire-and-forget. Commit : `37243ee`.
+
+**Note — notification bug report** : le code `sendPushToAdmins` dans `signaler/actions.ts` est correct. L'admin doit avoir activé les notifications push dans `/compte` sur son appareil pour les recevoir.
+
+---
+
 ### 2026-05-06 (suite)
 
 **Fix — badges poolers dans `/statistiques` (mode Séries)** (`statistiques/page.tsx`) :
