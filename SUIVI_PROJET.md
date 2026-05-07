@@ -64,6 +64,13 @@ Le lien admin mobile "Gestion/Création Pool des séries" affichait littéraleme
 **Fix — points négatifs dans classement séries** (`admin/series/series-admin-actions.ts`, `admin/series/SeriesAdminManager.tsx`) :
 Les scores négatifs indiquaient que les snapshots d'activation avaient capturé les stats de saison régulière (gameType=2) au lieu des séries (gameType=3). Le code `submitPlayoffPoolChangeAction` utilise maintenant correctement `gameType=3` pour les deux snapshots (activation et désactivation). Le bouton "Réinitialiser les snapshots" (correctif ponctuel ajouté lors de la session précédente) a été retiré — il servait à corriger des données corrompues en base, mais était risqué en production (un clic accidentel aurait effacé le scoring accumulé). Commit : `d8ef435` (bug fix code) + `202874b` (suppression bouton).
 
+**Classement séries — uniformisation + indicateurs + légende** (`classement-series/ClassementSeriesTable.tsx`, `classement-series/page.tsx`, `gestion-series/playoff-pool-actions.ts`, `statistiques/StatsTable.tsx`) :
+- `/classement-series` réécrit pour correspondre exactement au style de `/classement` (saison régulière) : bannière slate-800, tableau synthèse avec B/A/V/DP/BL par pooler, détail expand/collapse par pooler avec couleurs de rang, joueurs groupés par position (Attaquants/Défenseurs/Gardiens) dans un tableau propre, joueurs retirés avec opacité + badge "retiré".
+- Indicateurs de séquence (🔥✅🧊🚨📈📉) ajoutés pour les joueurs actifs — fetch game logs séries (gameType=3), batching 5, timeout 6 s.
+- `nhlId` ajouté au type `PlayoffPoolStanding.players` et peuplé dans `getPlayoffPoolStandingsAction`.
+- Légende des indicateurs ajoutée dans `/statistiques`, sous les filtres.
+- Commit : `fbf0ba9`.
+
 ---
 
 ### 2026-05-06 (suite 2)
