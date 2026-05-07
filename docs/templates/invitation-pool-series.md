@@ -2,34 +2,65 @@
 
 ---
 
-**Objet :** Pool des séries 2026 — Faites vos choix !
+**Objet :** Pool des séries 2026 — Fais tes choix avant le [DATE LIMITE] !
 
 ---
 
 Salut [Prénom],
 
-Les séries éliminatoires approchent et il est temps de faire tes sélections pour le pool des séries !
+Les séries débutent bientôt — voici tout ce que tu dois savoir pour participer au pool des séries cette année.
 
-Cette année, on passe à la vitesse supérieure avec notre nouvelle application web. Tu peux y accéder directement depuis ton téléphone ou ton ordinateur sans rien installer — ou l'ajouter à ton écran d'accueil pour une expérience encore plus fluide.
+---
 
-**Comment accéder à l'application :**
-👉 [URL de l'application]
+**🏒 Ton alignement**
 
-**Pour l'installer sur ton appareil (optionnel mais recommandé) :**
-- **iPhone** : ouvre le lien dans Safari → appuie sur le bouton Partager → "Sur l'écran d'accueil"
-- **Android** : ouvre le lien dans Chrome → menu (⋮) → "Ajouter à l'écran d'accueil"
-- **Ordinateur** : ouvre le lien dans Chrome ou Edge → icône d'installation dans la barre d'adresse
+Tu dois choisir **[X] attaquants, [X] défenseurs et [X] gardien** parmi les joueurs des équipes participantes, dans un cap salarial de **[CAP] $**.
 
-Une fois connecté, tu trouveras la section Pool des séries pour soumettre tes choix. Tu pourras ajuster tes sélections entre chaque ronde selon les équipes encore en lice.
+Tes points s'accumulent tout au long des séries selon le barème suivant :
+- But : **[X] pt**
+- Passe : **[X] pt**
+- Victoire (gardien) : **[X] pts**
+- Défaite en prolongation (gardien) : **[X] pt**
+- Blanchissage (gardien) : **[X] pts**
 
-La date limite pour soumettre tes choix de la première ronde est le **[DATE LIMITE]**.
+---
 
-Des questions ? Réponds à ce courriel ou contacte-moi directement.
+**🔄 Les changements**
 
-Bonne chance à tous !
+Après la date limite initiale, tu disposes de deux budgets de changements :
+
+- **[X] changement(s) volontaire(s)** — tu peux remplacer un joueur de ton choix, peu importe la raison.
+- **[X] changement(s) suite à une élimination** — obligatoire si une de tes équipes est éliminée. Ces changements ne puisent pas dans ton budget volontaire.
+
+Les changements se font directement dans l'application, dans la section **Pool des séries → Choix des joueurs**.
+
+---
+
+**⏰ Date limite**
+
+Tu as jusqu'au **[DATE LIMITE, ex : 8 mai 2026 à 19 h]** pour soumettre ton alignement de départ. Après cette heure, les points commencent à compter.
+
+---
+
+**📱 Comment accéder**
+
+👉 **https://db-hockeypool-manager.vercel.app**
+
+Connecte-toi avec le courriel et le mot de passe que tu as déjà. Si tu as oublié ton mot de passe, utilise l'option "Mot de passe oublié" sur la page de connexion.
+
+**Installer l'application (optionnel, recommandé) :**
+- **iPhone** : Safari → bouton Partager → "Sur l'écran d'accueil"
+- **Android** : Chrome → menu ⋮ → "Ajouter à l'écran d'accueil"
+- **Ordinateur** : Chrome ou Edge → icône d'installation dans la barre d'adresse
+
+---
+
+Des questions ? Réponds à ce courriel.
+
+Bonne chance !
 
 [Ton prénom]
 
 ---
 
-*Tu reçois ce courriel parce que tu participes au pool de hockey. Pour te désabonner des futures communications, réponds à ce courriel.*
+*Tu reçois ce courriel parce que tu participes au pool de hockey.*
