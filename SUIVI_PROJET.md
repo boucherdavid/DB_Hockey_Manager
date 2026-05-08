@@ -64,6 +64,12 @@ Liste "Comptes récents" au-dessus du formulaire, alimentée par localStorage. C
 **Fix — cap disponible lors d'un remplacement séries** (`gestion-series/GestionSeriesManager.tsx`) :
 Le composant `CapBar` ne soustrayait pas le salaire du joueur en cours de retrait — le cap "Disponible" restait gonflé pendant la sélection du remplacement. Fix : `current = total - removingCap` pour refléter le cap réel après retrait. "Après ajout" renommé "Après échange". Commit : `864bdd8`.
 
+**Fix — cache NHL API 24h dans /statistiques** (`statistiques/page.tsx`) :
+Les fetches `fetchSkaters` et `fetchGoalies` utilisaient `cache: 'no-store'` — chaque chargement de page déclenchait un appel NHL frais, causant du rate limiting intermittent (0 joueurs affiché). Remplacé par `next: { revalidate: 86400 }` — cache 24h côté Next.js, valable pour saison régulière et séries. Premier chargement après expiration reconstruit en arrière-plan. Commit : `c6607fc`.
+
+**Notifications admin — journal + badge Navbar** (`lib/push.ts`, `layout.tsx`, `components/Navbar.tsx`, `admin/notifications/page.tsx`, `supabase_migrations/notification_log.sql`) :
+Chaque appel à `sendPushToAdmins` est maintenant enregistré dans la table `notification_log`. Badge rouge sur le bouton Admin dans la Navbar indique le nombre de non lues. Page `/admin/notifications` liste les 100 dernières notifications (barre bleue = non lue, lien "Voir →" vers la page concernée, bouton "Tout marquer comme lu"). Commit : `5bbf1c8`.
+
 **Fix — rotation clé Supabase service_role** :
 Clé legacy `service_role` remplacée par une nouvelle clé `sb_secret_...` (onglet "Publishable and secret API keys" de Supabase). Mise à jour dans Vercel et `.env.local`. Aucun changement de code — `admin.ts` lit toujours `process.env.SUPABASE_SERVICE_ROLE_KEY`.
 
