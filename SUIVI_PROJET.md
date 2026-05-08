@@ -56,6 +56,16 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-08
+
+**Fix — cap disponible lors d'un remplacement séries** (`gestion-series/GestionSeriesManager.tsx`) :
+Le composant `CapBar` ne soustrayait pas le salaire du joueur en cours de retrait — le cap "Disponible" restait gonflé pendant la sélection du remplacement. Fix : `current = total - removingCap` pour refléter le cap réel après retrait. "Après ajout" renommé "Après échange". Commit : `864bdd8`.
+
+**Fix — rotation clé Supabase service_role** :
+Clé legacy `service_role` remplacée par une nouvelle clé `sb_secret_...` (onglet "Publishable and secret API keys" de Supabase). Mise à jour dans Vercel et `.env.local`. Aucun changement de code — `admin.ts` lit toujours `process.env.SUPABASE_SERVICE_ROLE_KEY`.
+
+---
+
 ### 2026-05-07
 
 **Fix — encodage mobile Navbar** (`components/Navbar.tsx`) :
