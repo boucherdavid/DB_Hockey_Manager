@@ -181,8 +181,6 @@ export async function getAvailablePlayoffPlayersAction(
   let query = supabase
     .from('players')
     .select('id, first_name, last_name, position, nhl_id, teams(id, code), player_contracts(season, cap_number)')
-    .order('last_name')
-
   if (teamIds.length > 0) {
     query = query.in('team_id', teamIds)
   } else {
@@ -204,6 +202,14 @@ export async function getAvailablePlayoffPlayersAction(
       teamEliminated: eliminatedIds.has(p.teams?.id),
     }))
     .filter(p => p.nhlId !== null)
+    .sort((a, b) => {
+      const teamCmp = (a.teamCode ?? 'zzz').localeCompare(b.teamCode ?? 'zzz')
+      if (teamCmp !== 0) return teamCmp
+      const capA = a.capNumber ?? -1
+      const capB = b.capNumber ?? -1
+      if (capB !== capA) return capB - capA
+      return a.lastName.localeCompare(b.lastName)
+    })
 }
 
 export async function searchPlayoffPoolPlayersAction(
@@ -219,7 +225,6 @@ export async function searchPlayoffPoolPlayersAction(
       .select('id, first_name, last_name, position, nhl_id, teams(id, code), player_contracts(season, cap_number)')
       .or(`last_name.ilike.%${query}%,first_name.ilike.%${query}%`)
       .eq('is_available', true)
-      .order('last_name')
       .limit(30),
     supabase
       .from('playoff_eliminations')
@@ -238,6 +243,14 @@ export async function searchPlayoffPoolPlayersAction(
     capNumber: p.player_contracts?.find((c: any) => c.season === toNhlSeason(season))?.cap_number ?? null,
     teamEliminated: eliminatedIds.has(p.teams?.id),
   }))
+  .sort((a, b) => {
+    const teamCmp = (a.teamCode ?? 'zzz').localeCompare(b.teamCode ?? 'zzz')
+    if (teamCmp !== 0) return teamCmp
+    const capA = a.capNumber ?? -1
+    const capB = b.capNumber ?? -1
+    if (capB !== capA) return capB - capA
+    return a.lastName.localeCompare(b.lastName)
+  })
 }
 
 export async function getAllPlayoffPoolRostersAction(
