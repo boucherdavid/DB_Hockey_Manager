@@ -412,8 +412,9 @@ export async function submitPlayoffPoolChangeAction(input: {
     }
   }
 
-  // Notifier l'admin des changements faits par un pooler (pas par l'admin lui-même)
-  if (!isAdmin) {
+  // Notifier l'admin seulement après la deadline (changements avec budget)
+  // Avant la deadline : la confirmation d'alignement envoie la notification
+  if (!isAdmin && isLocked) {
     const { data: poolerRow } = await db.from('poolers').select('name').eq('id', input.poolerId).single()
     const { sendPushToAdmins } = await import('@/lib/push')
     sendPushToAdmins({
@@ -426,6 +427,24 @@ export async function submitPlayoffPoolChangeAction(input: {
   revalidatePath('/gestion-series')
   revalidatePath('/admin/series')
   revalidatePath('/classement-series')
+  return {}
+}
+
+// ─── Confirm alignment ────────────────────────────────────────────────────────
+
+export async function confirmPlayoffAlignmentAction(
+  poolerId: string,
+  poolerName: string,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || user.id !== poolerId) return { error: 'Non autorisé' }
+  const { sendPushToAdmins } = await import('@/lib/push')
+  sendPushToAdmins({
+    title: 'Pool des séries — Alignement confirmé',
+    body: `${poolerName} a confirmé son alignement.`,
+    url: '/admin/series',
+  }, user.id).catch(() => {})
   return {}
 }
 

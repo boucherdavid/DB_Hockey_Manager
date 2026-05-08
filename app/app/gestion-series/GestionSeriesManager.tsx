@@ -6,6 +6,7 @@ import {
   getPlayoffChangeCountsAction,
   getAvailablePlayoffPlayersAction,
   submitPlayoffPoolChangeAction,
+  confirmPlayoffAlignmentAction,
 } from './playoff-pool-actions'
 import type {
   PlayoffPoolSaison,
@@ -316,6 +317,8 @@ export default function GestionSeriesManager({
 
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [confirmed, setConfirmed] = useState(false)
+  const [confirmPending, setConfirmPending] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   const isLocked = saison.submissionDeadline ? new Date() > new Date(saison.submissionDeadline) : false
@@ -440,6 +443,32 @@ export default function GestionSeriesManager({
           </p>
         )}
       </div>
+
+      {/* Confirmation alignement — avant deadline, alignement complet, pooler seulement */}
+      {!loading && isComplete && !isLocked && !isAdmin && (
+        <div className={`rounded-lg border px-4 py-3 flex items-center justify-between gap-4 ${confirmed ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+          <div className="text-sm">
+            {confirmed
+              ? <span className="text-green-700 font-semibold">✓ Alignement confirmé — l&apos;admin a été notifié.</span>
+              : <span className="text-blue-700">Ton alignement est complet. Confirme-le pour aviser l&apos;admin.</span>
+            }
+          </div>
+          {!confirmed && (
+            <button
+              disabled={confirmPending}
+              onClick={async () => {
+                setConfirmPending(true)
+                await confirmPlayoffAlignmentAction(selfPoolerId, selfPoolerName)
+                setConfirmed(true)
+                setConfirmPending(false)
+              }}
+              className="shrink-0 bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {confirmPending ? 'Envoi...' : 'Confirmer mon alignement'}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Avertissement alignement incomplet */}
       {!loading && !isComplete && (
