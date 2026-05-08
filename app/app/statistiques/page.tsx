@@ -71,7 +71,7 @@ type Row = Record<string, unknown>
 
 async function fetchSkaters(gameType: number): Promise<SkaterStat[]> {
   try {
-    const res = await fetch(buildUrl('skater', gameType), { cache: 'no-store' })
+    const res = await fetch(buildUrl('skater', gameType), { next: { revalidate: 86400 } })
     if (!res.ok) return []
     const rows = ((await res.json()).data as Row[]) ?? []
 
@@ -124,7 +124,7 @@ async function fetchSkaters(gameType: number): Promise<SkaterStat[]> {
 
 async function fetchGoalies(gameType: number): Promise<GoalieStat[]> {
   try {
-    const res = await fetch(buildUrl('goalie', gameType), { cache: 'no-store' })
+    const res = await fetch(buildUrl('goalie', gameType), { next: { revalidate: 86400 } })
     if (!res.ok) return []
     const rows = ((await res.json()).data as Row[]) ?? []
 
