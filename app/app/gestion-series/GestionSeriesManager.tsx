@@ -114,7 +114,6 @@ function PlayerPicker({
   const [allPlayers, setAllPlayers] = useState<PlayoffPoolPlayerResult[]>([])
   const [loading, setLoading] = useState(false)
   const [nameFilter, setNameFilter] = useState('')
-  const [posFilter, setPosFilter] = useState<'all' | 'F' | 'D' | 'G'>(activeSlot)
   const [teamFilter, setTeamFilter] = useState('')
 
   useEffect(() => {
@@ -127,17 +126,15 @@ function PlayerPicker({
     })
   }, [poolSeasonId, season, resetKey])
 
-  useEffect(() => { setPosFilter(activeSlot) }, [activeSlot])
-
   const teams = useMemo(() =>
-    [...new Set(allPlayers.map(p => p.teamCode).filter(Boolean) as string[])].sort(),
-    [allPlayers],
+    [...new Set(allPlayers.filter(p => posGroup(p.position) === activeSlot).map(p => p.teamCode).filter(Boolean) as string[])].sort(),
+    [allPlayers, activeSlot],
   )
 
   const filtered = useMemo(() =>
     allPlayers.filter(p => {
       if (excludeIds.has(p.id)) return false
-      if (posFilter !== 'all' && posGroup(p.position) !== posFilter) return false
+      if (posGroup(p.position) !== activeSlot) return false
       if (teamFilter && p.teamCode !== teamFilter) return false
       if (nameFilter.trim()) {
         const q = nameFilter.trim().toLowerCase()
@@ -145,7 +142,7 @@ function PlayerPicker({
       }
       return true
     }),
-    [allPlayers, excludeIds, posFilter, teamFilter, nameFilter],
+    [allPlayers, excludeIds, activeSlot, teamFilter, nameFilter],
   )
 
   if (selected) return (
@@ -164,28 +161,15 @@ function PlayerPicker({
 
   return (
     <div className="space-y-2">
-      {/* Filtres position + équipe */}
-      <div className="flex gap-2">
-        <div className="flex rounded border border-gray-200 overflow-hidden text-xs shrink-0">
-          {(['all', 'F', 'D', 'G'] as const).map(p => (
-            <button
-              key={p}
-              onClick={() => setPosFilter(p)}
-              className={`px-2.5 py-1.5 font-semibold transition-colors ${posFilter === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
-            >
-              {p === 'all' ? 'Tous' : p}
-            </button>
-          ))}
-        </div>
-        <select
-          value={teamFilter}
-          onChange={e => setTeamFilter(e.target.value)}
-          className="flex-1 border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-700 bg-white min-w-0"
-        >
-          <option value="">Toutes les équipes</option>
-          {teams.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-      </div>
+      {/* Filtre équipe */}
+      <select
+        value={teamFilter}
+        onChange={e => setTeamFilter(e.target.value)}
+        className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-700 bg-white"
+      >
+        <option value="">Toutes les équipes</option>
+        {teams.map(t => <option key={t} value={t}>{t}</option>)}
+      </select>
 
       {/* Recherche par nom */}
       <input
@@ -362,17 +346,6 @@ export default function GestionSeriesManager({
   function handleSubmit() {
     if (!addPlayer && !removingEntry) return
     setError(null)
-
-    // Valider que la position du joueur correspond au slot actif
-    if (addPlayer) {
-      const playerGroup = posGroup(addPlayer.position)
-      if (playerGroup !== activeSlot) {
-        const slotNames = { F: 'attaquant', D: 'défenseur', G: 'gardien' }
-        const posNames  = { F: 'attaquant', D: 'défenseur', G: 'gardien' }
-        setError(`${addPlayer.lastName}, ${addPlayer.firstName} est ${posNames[playerGroup]} — ne peut pas occuper un slot ${slotNames[activeSlot]}.`)
-        return
-      }
-    }
 
     startTransition(async () => {
       const result = await submitPlayoffPoolChangeAction({
