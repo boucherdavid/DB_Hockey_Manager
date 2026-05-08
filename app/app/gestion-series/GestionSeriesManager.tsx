@@ -362,6 +362,18 @@ export default function GestionSeriesManager({
   function handleSubmit() {
     if (!addPlayer && !removingEntry) return
     setError(null)
+
+    // Valider que la position du joueur correspond au slot actif
+    if (addPlayer) {
+      const playerGroup = posGroup(addPlayer.position)
+      if (playerGroup !== activeSlot) {
+        const slotNames = { F: 'attaquant', D: 'défenseur', G: 'gardien' }
+        const posNames  = { F: 'attaquant', D: 'défenseur', G: 'gardien' }
+        setError(`${addPlayer.lastName}, ${addPlayer.firstName} est ${posNames[playerGroup]} — ne peut pas occuper un slot ${slotNames[activeSlot]}.`)
+        return
+      }
+    }
+
     startTransition(async () => {
       const result = await submitPlayoffPoolChangeAction({
         poolerId,
