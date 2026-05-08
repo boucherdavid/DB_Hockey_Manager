@@ -71,8 +71,9 @@ const GAME_STATE_LABEL: Record<string, string> = {
 // ---------- position helpers ----------
 
 function posGroup(pos: string): 'A' | 'D' | 'G' {
-  if (pos === 'G') return 'G'
-  if (['D', 'LD', 'RD'].includes(pos)) return 'D'
+  const p = (pos ?? '').split(',')[0].trim()
+  if (p === 'G') return 'G'
+  if (['D', 'LD', 'RD'].includes(p)) return 'D'
   return 'A'
 }
 
