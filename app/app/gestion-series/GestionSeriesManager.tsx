@@ -40,12 +40,15 @@ function deadlineLabel(deadline: string | null): string {
 
 // ─── Cap bar ──────────────────────────────────────────────────────────────────
 
-function CapBar({ entries, poolCap, addingPlayer }: {
+function CapBar({ entries, poolCap, addingPlayer, removingPlayer }: {
   entries: PlayoffPoolEntry[]
   poolCap: number
   addingPlayer: PlayoffPoolPlayerResult | null
+  removingPlayer: PlayoffPoolEntry | null
 }) {
-  const current = entries.reduce((s, e) => s + (e.capNumber ?? 0), 0)
+  const total = entries.reduce((s, e) => s + (e.capNumber ?? 0), 0)
+  const removingCap = removingPlayer?.capNumber ?? 0
+  const current = total - removingCap  // cap effectif une fois le retrait fait
   const preview = current + (addingPlayer?.capNumber ?? 0)
   const pct = poolCap > 0 ? Math.min(100, (current / poolCap) * 100) : 0
   const previewPct = poolCap > 0 ? Math.min(100, (preview / poolCap) * 100) : 0
@@ -79,7 +82,7 @@ function CapBar({ entries, poolCap, addingPlayer }: {
         </span>
         {addingPlayer?.capNumber && (
           <span className={`font-medium ${over ? 'text-red-600' : 'text-blue-600'}`}>
-            Après ajout : {capFmt(poolCap - preview)}
+            Après échange : {capFmt(poolCap - preview)}
             {over && ' ⚠ Dépassement'}
           </span>
         )}
@@ -527,7 +530,7 @@ export default function GestionSeriesManager({
         <div className="space-y-4">
 
           {/* Cap */}
-          <CapBar entries={entries} poolCap={saison.poolCap} addingPlayer={addPlayer} />
+          <CapBar entries={entries} poolCap={saison.poolCap} addingPlayer={addPlayer} removingPlayer={removingEntry} />
 
           {/* Sélecteur */}
           {canEdit ? (
