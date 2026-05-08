@@ -58,6 +58,9 @@ Je l'utiliserai pour:
 
 ### 2026-05-08
 
+**Fix — tri du sélecteur de joueurs dans le pool des séries** (`gestion-series/playoff-pool-actions.ts`) :
+Les joueurs étaient triés uniquement par nom de famille (`.order('last_name')` Supabase). Nouveau tri en JavaScript après le `.map()` : 1) équipe alphabétique, 2) salaire décroissant, 3) nom de famille si égalité. Appliqué aux deux fonctions : `getAvailablePlayoffPlayersAction` et `searchPlayoffPoolPlayersAction`. Le tri Supabase a été retiré puisque le salaire n'est disponible qu'après le join. Commit : `d81f3e1`.
+
 **Login — comptes récents avec sélection rapide** (`login/page.tsx`) :
 Liste "Comptes récents" au-dessus du formulaire, alimentée par localStorage. Cliquer un compte remplit l'email et donne le focus au mot de passe. ✕ pour retirer un compte. Max 8 comptes, plus récents en premier. Utile pour les tests multi-utilisateurs pendant le développement. Commit : `58368f7`.
 
