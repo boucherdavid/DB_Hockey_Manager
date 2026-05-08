@@ -1,8 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+
+const STORAGE_KEY = 'hockeypool_saved_accounts'
+
+function loadSavedAccounts(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
+  } catch {
+    return []
+  }
+}
+
+function saveAccount(email: string) {
+  const accounts = loadSavedAccounts()
+  const updated = [email, ...accounts.filter(e => e !== email)].slice(0, 8)
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+}
+
+function removeAccount(email: string) {
+  const accounts = loadSavedAccounts().filter(e => e !== email)
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts))
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,8 +32,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [savedAccounts, setSavedAccounts] = useState<string[]>([])
 
-  const handleLogin = async (e: React.FormEvent) => {
+  useEffect(() => {
+    setSavedAccounts(loadSavedAccounts())
+  }, [])
+
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setLoading(true)
     setError('')
@@ -23,9 +49,23 @@ export default function LoginPage() {
       setError('Email ou mot de passe invalide')
       setLoading(false)
     } else {
+      saveAccount(email)
       router.push('/dashboard')
       router.refresh()
     }
+  }
+
+  const selectAccount = (savedEmail: string) => {
+    setEmail(savedEmail)
+    setError('')
+    // Donner le focus au champ mot de passe
+    setTimeout(() => document.getElementById('password-input')?.focus(), 50)
+  }
+
+  const handleRemoveAccount = (e: React.MouseEvent, savedEmail: string) => {
+    e.stopPropagation()
+    removeAccount(savedEmail)
+    setSavedAccounts(prev => prev.filter(a => a !== savedEmail))
   }
 
   return (
@@ -33,6 +73,38 @@ export default function LoginPage() {
       <div className="bg-white rounded-xl shadow-md p-8 w-full max-w-sm">
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Connexion</h1>
         <p className="text-gray-500 text-sm mb-6">Hockey Pool — Accès poolers</p>
+
+        {/* Comptes sauvegardés */}
+        {savedAccounts.length > 0 && (
+          <div className="mb-5">
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Comptes récents</p>
+            <div className="flex flex-col gap-1">
+              {savedAccounts.map(saved => (
+                <button
+                  key={saved}
+                  type="button"
+                  onClick={() => selectAccount(saved)}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm text-left transition-colors ${
+                    email === saved
+                      ? 'border-blue-400 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  <span className="truncate">{saved}</span>
+                  <span
+                    role="button"
+                    onClick={e => handleRemoveAccount(e, saved)}
+                    className="ml-2 text-gray-300 hover:text-gray-500 text-xs shrink-0"
+                    title="Retirer"
+                  >
+                    ✕
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="border-t border-gray-100 my-4" />
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div>
@@ -48,6 +120,7 @@ export default function LoginPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
             <input
+              id="password-input"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
