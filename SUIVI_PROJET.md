@@ -64,6 +64,12 @@ Le lien admin mobile "Gestion/Création Pool des séries" affichait littéraleme
 **Fix — points négatifs dans classement séries** (`admin/series/series-admin-actions.ts`, `admin/series/SeriesAdminManager.tsx`) :
 Les scores négatifs indiquaient que les snapshots d'activation avaient capturé les stats de saison régulière (gameType=2) au lieu des séries (gameType=3). Le code `submitPlayoffPoolChangeAction` utilise maintenant correctement `gameType=3` pour les deux snapshots (activation et désactivation). Le bouton "Réinitialiser les snapshots" (correctif ponctuel ajouté lors de la session précédente) a été retiré — il servait à corriger des données corrompues en base, mais était risqué en production (un clic accidentel aurait effacé le scoring accumulé). Commit : `d8ef435` (bug fix code) + `202874b` (suppression bouton).
 
+**Fix — position primaire pour joueurs multi-positions + recrues sans contrat** (`gestion-series/GestionSeriesManager.tsx`, `gestion-series/playoff-pool-actions.ts`, `page.tsx`) :
+- `posGroup` corrigé dans le sélecteur séries et la page d'accueil : utilise `split(',')[0]` pour extraire la position primaire avant comparaison. Les joueurs avec des positions composées (`LD,RD`, `C,LW`) étaient classifiés comme attaquants au lieu de leur vraie position.
+- `getAvailablePlayoffPlayersAction` : filtre les joueurs sans contrat NHL pour la saison courante (`capNumber !== null`) — les recrues sans contrat (AHL, junior) n'apparaissent plus dans le sélecteur du pool des séries.
+- `ClassementTable.tsx` et `PoolerPageTabs.tsx` utilisaient déjà `.includes('D')` — non affectés.
+- Commits : `dd25eb6` + `680e620`.
+
 **Notification admin — confirmation d'alignement séries** (`gestion-series/playoff-pool-actions.ts`, `gestion-series/GestionSeriesManager.tsx`) :
 Avant la deadline : les picks s'auto-sauvegardent sans notifier l'admin. Quand l'alignement est complet, une bannière bleue apparaît avec un bouton "Confirmer mon alignement" — c'est ce clic unique qui envoie la notification. Après confirmation, bannière verte "✓ Alignement confirmé". Après la deadline : chaque changement (volontaire ou élimination) continue de notifier immédiatement. Nouvelle action `confirmPlayoffAlignmentAction`. Commit : `867bf2d`.
 
