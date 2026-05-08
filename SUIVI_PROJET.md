@@ -58,6 +58,9 @@ Je l'utiliserai pour:
 
 ### 2026-05-08
 
+**Login — comptes récents avec sélection rapide** (`login/page.tsx`) :
+Liste "Comptes récents" au-dessus du formulaire, alimentée par localStorage. Cliquer un compte remplit l'email et donne le focus au mot de passe. ✕ pour retirer un compte. Max 8 comptes, plus récents en premier. Utile pour les tests multi-utilisateurs pendant le développement. Commit : `58368f7`.
+
 **Fix — cap disponible lors d'un remplacement séries** (`gestion-series/GestionSeriesManager.tsx`) :
 Le composant `CapBar` ne soustrayait pas le salaire du joueur en cours de retrait — le cap "Disponible" restait gonflé pendant la sélection du remplacement. Fix : `current = total - removingCap` pour refléter le cap réel après retrait. "Après ajout" renommé "Après échange". Commit : `864bdd8`.
 
