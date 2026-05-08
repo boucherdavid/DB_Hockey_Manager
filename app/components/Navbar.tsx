@@ -50,11 +50,13 @@ export default function Navbar({
   initialUserName,
   initialIsAdmin,
   initialUnreadCount = 0,
+  initialUnreadNotifCount = 0,
   initialNewPlayoffActive = false,
 }: {
   initialUserName: string | null
   initialIsAdmin: boolean
   initialUnreadCount?: number
+  initialUnreadNotifCount?: number
   initialNewPlayoffActive?: boolean
 }) {
   const pathname = usePathname()
@@ -64,6 +66,7 @@ export default function Navbar({
   const [isAdmin, setIsAdmin] = useState(initialIsAdmin)
   const [isPoolerView, setIsPoolerView] = useState(false)
   const [unreadCount] = useState(initialUnreadCount)
+  const [unreadNotifCount] = useState(initialUnreadNotifCount)
   const newPlayoffActive = initialNewPlayoffActive
   const [menuOpen, setMenuOpen] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null)
@@ -259,7 +262,11 @@ export default function Navbar({
                   <button onClick={() => toggle('admin')}
                     className={navBtnClass(isActive('/admin'))}>
                     <span className="text-xs bg-blue-500 text-white rounded px-1 py-0.5 mr-1">A</span>
-                    Admin <Chevron open={openDropdown === 'admin'} />
+                    Admin
+                    {unreadNotifCount > 0 && (
+                      <span className="ml-1 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadNotifCount}</span>
+                    )}
+                    <Chevron open={openDropdown === 'admin'} />
                   </button>
                   {openDropdown === 'admin' && (
                     <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
@@ -278,6 +285,12 @@ export default function Navbar({
                         <span className="flex items-center justify-between">
                           {'Boîte de réception'}
                           {unreadCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>}
+                        </span>
+                      </Link>
+                      <Link href="/admin/notifications" className={dropdownLinkClass('/admin/notifications')}>
+                        <span className="flex items-center justify-between">
+                          Notifications
+                          {unreadNotifCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadNotifCount}</span>}
                         </span>
                       </Link>
                     </div>
@@ -400,6 +413,14 @@ export default function Navbar({
                     <span className="flex items-center justify-between">
                       {'Boîte de réception'}
                       {unreadCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>}
+                    </span>
+                  </Link>
+                )}
+                {effectiveIsAdmin &&(
+                  <Link href="/admin/notifications" className={mobileLinkClass('/admin/notifications')}>
+                    <span className="flex items-center justify-between">
+                      Notifications
+                      {unreadNotifCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadNotifCount}</span>}
                     </span>
                   </Link>
                 )}

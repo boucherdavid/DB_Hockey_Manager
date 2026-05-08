@@ -56,7 +56,14 @@ export async function sendPushToAdmins(payload: PushPayload, excludeUserId?: str
     .select('id, endpoint, p256dh, auth')
     .in('user_id', ids)
 
-  await sendToSubscriptions(subs ?? [], payload)
+  await Promise.all([
+    sendToSubscriptions(subs ?? [], payload),
+    supabase.from('notification_log').insert({
+      title: payload.title,
+      body: payload.body,
+      url: payload.url ?? null,
+    }),
+  ])
 }
 
 export async function sendPushToUser(userId: string, payload: PushPayload) {

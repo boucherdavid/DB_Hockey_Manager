@@ -49,16 +49,21 @@ export default async function RootLayout({
   }
 
   let unreadCount = 0
+  let unreadNotifCount = 0
   let newPlayoffActive = false
 
-  const [feedbackResult, playoffResult] = await Promise.all([
+  const [feedbackResult, playoffResult, notifResult] = await Promise.all([
     isAdmin
       ? supabase.from('feedback').select('*', { count: 'exact', head: true }).eq('status', 'nouveau')
       : Promise.resolve({ count: 0 }),
     supabase.from('pool_seasons').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('is_playoff', true),
+    isAdmin
+      ? supabase.from('notification_log').select('*', { count: 'exact', head: true }).is('read_at', null)
+      : Promise.resolve({ count: 0 }),
   ])
 
   unreadCount = feedbackResult.count ?? 0
+  unreadNotifCount = notifResult.count ?? 0
   newPlayoffActive = (playoffResult.count ?? 0) > 0
 
   return (
@@ -74,7 +79,7 @@ export default async function RootLayout({
       </head>
       <body className="bg-gray-50 min-h-screen">
         <ServiceWorkerProvider />
-        <Navbar initialUserName={userName} initialIsAdmin={isAdmin} initialUnreadCount={unreadCount} initialNewPlayoffActive={newPlayoffActive} />
+        <Navbar initialUserName={userName} initialIsAdmin={isAdmin} initialUnreadCount={unreadCount} initialUnreadNotifCount={unreadNotifCount} initialNewPlayoffActive={newPlayoffActive} />
         <InstallBanner />
         <main className="max-w-7xl mx-auto px-4 py-6">
           {children}
