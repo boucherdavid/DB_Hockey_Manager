@@ -203,7 +203,7 @@ export async function getAvailablePlayoffPlayersAction(
       capNumber: (p.player_contracts as any[])?.find((c: any) => c.season === nhlSeason)?.cap_number ?? null,
       teamEliminated: eliminatedIds.has(p.teams?.id),
     }))
-    .filter(p => p.capNumber !== null)
+    .filter(p => p.nhlId !== null)
 }
 
 export async function searchPlayoffPoolPlayersAction(
