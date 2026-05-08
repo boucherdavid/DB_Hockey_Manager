@@ -64,6 +64,9 @@ Le lien admin mobile "Gestion/Création Pool des séries" affichait littéraleme
 **Fix — points négatifs dans classement séries** (`admin/series/series-admin-actions.ts`, `admin/series/SeriesAdminManager.tsx`) :
 Les scores négatifs indiquaient que les snapshots d'activation avaient capturé les stats de saison régulière (gameType=2) au lieu des séries (gameType=3). Le code `submitPlayoffPoolChangeAction` utilise maintenant correctement `gameType=3` pour les deux snapshots (activation et désactivation). Le bouton "Réinitialiser les snapshots" (correctif ponctuel ajouté lors de la session précédente) a été retiré — il servait à corriger des données corrompues en base, mais était risqué en production (un clic accidentel aurait effacé le scoring accumulé). Commit : `d8ef435` (bug fix code) + `202874b` (suppression bouton).
 
+**Notification admin — confirmation d'alignement séries** (`gestion-series/playoff-pool-actions.ts`, `gestion-series/GestionSeriesManager.tsx`) :
+Avant la deadline : les picks s'auto-sauvegardent sans notifier l'admin. Quand l'alignement est complet, une bannière bleue apparaît avec un bouton "Confirmer mon alignement" — c'est ce clic unique qui envoie la notification. Après confirmation, bannière verte "✓ Alignement confirmé". Après la deadline : chaque changement (volontaire ou élimination) continue de notifier immédiatement. Nouvelle action `confirmPlayoffAlignmentAction`. Commit : `867bf2d`.
+
 **Transactions — sélecteur de saison** (`transactions/page.tsx`, `transactions/TransactionsClient.tsx`) :
 Dropdown en haut à droite de `/transactions` permettant de consulter l'historique par saison. Par défaut : saison régulière active. Changement via URL (`?saison=2025-26`) — rechargement serveur, page partageable. Saison active marquée `(active)` dans la liste. Visible seulement si plusieurs saisons existent. Commit : `3d7f1af`.
 
