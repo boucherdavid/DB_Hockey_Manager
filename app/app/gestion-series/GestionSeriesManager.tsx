@@ -91,9 +91,9 @@ function CapBar({ entries, poolCap, addingPlayer }: {
 // ─── Player picker ────────────────────────────────────────────────────────────
 
 function posGroup(pos: string | null): 'F' | 'D' | 'G' {
-  if (!pos) return 'F'
-  if (pos === 'G') return 'G'
-  if (['D', 'LD', 'RD'].includes(pos)) return 'D'
+  const p = (pos ?? '').split(',')[0].trim()
+  if (p === 'G') return 'G'
+  if (['D', 'LD', 'RD'].includes(p)) return 'D'
   return 'F'
 }
 

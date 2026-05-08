@@ -191,17 +191,19 @@ export async function getAvailablePlayoffPlayersAction(
 
   const { data: players } = await query
 
-  return (players ?? []).map((p: any) => ({
-    id: p.id,
-    firstName: p.first_name,
-    lastName: p.last_name,
-    position: p.position ?? null,
-    teamCode: p.teams?.code ?? null,
-    teamId: p.teams?.id ?? null,
-    nhlId: p.nhl_id ?? null,
-    capNumber: (p.player_contracts as any[])?.find((c: any) => c.season === nhlSeason)?.cap_number ?? null,
-    teamEliminated: eliminatedIds.has(p.teams?.id),
-  }))
+  return (players ?? [])
+    .map((p: any) => ({
+      id: p.id,
+      firstName: p.first_name,
+      lastName: p.last_name,
+      position: p.position ?? null,
+      teamCode: p.teams?.code ?? null,
+      teamId: p.teams?.id ?? null,
+      nhlId: p.nhl_id ?? null,
+      capNumber: (p.player_contracts as any[])?.find((c: any) => c.season === nhlSeason)?.cap_number ?? null,
+      teamEliminated: eliminatedIds.has(p.teams?.id),
+    }))
+    .filter(p => p.capNumber !== null)
 }
 
 export async function searchPlayoffPoolPlayersAction(
