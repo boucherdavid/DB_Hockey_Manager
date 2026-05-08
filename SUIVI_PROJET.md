@@ -58,6 +58,9 @@ Je l'utiliserai pour:
 
 ### 2026-05-08
 
+**Roadmap — staging + simulation de saison** :
+Discussion sur la validation de la logique métier avant le lancement. Décisions : (1) `setup_staging.py` déjà écrit couvre la mise en place du staging ; (2) le staging seul ne suffit pas pour valider le scoring — l'API NHL ne retourne pas les stats à une date passée ; (3) approche retenue : fonction `snapshotAsOfDate(playerId, date)` qui reconstruit les stats cumulatives à partir du game-log NHL, sans curseur de date global ni table de gamelogs à maintenir. À implémenter en même temps que l'Étape 4 staging. Roadmap mise à jour en mémoire CCE.
+
 **Fix — tri du sélecteur de joueurs dans le pool des séries** (`gestion-series/playoff-pool-actions.ts`) :
 Les joueurs étaient triés uniquement par nom de famille (`.order('last_name')` Supabase). Nouveau tri en JavaScript après le `.map()` : 1) équipe alphabétique, 2) salaire décroissant, 3) nom de famille si égalité. Appliqué aux deux fonctions : `getAvailablePlayoffPlayersAction` et `searchPlayoffPoolPlayersAction`. Le tri Supabase a été retiré puisque le salaire n'est disponible qu'après le join. Commit : `d81f3e1`.
 
