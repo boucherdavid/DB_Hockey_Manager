@@ -56,6 +56,17 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-09
+
+**Staging — mise en place complète** (`python_script/setup_staging.py`, `supabase_migrations/staging_setup.sql`, `start_staging.ps1`, `app/.env.staging.local`) :
+Projet Supabase `DB_Hockey_Manager_staging` créé. Script `setup_staging.py` complété et corrigé : copie prod → staging, création des comptes Auth avant la copie des données (fix FK), gestion des accents dans les emails, exclusion de `pool_cap` (colonne générée), vidage de `pool_draft_picks` avant copie (trigger auto-création). Fichier `staging_setup.sql` contient toutes les migrations manquantes par rapport à `schema.sql`. Script `start_staging.ps1` swaps `.env.local` temporairement. Commandes : `python setup_staging.py` pour recharger les données, `.\start_staging.ps1` pour lancer l'app.
+
+**Fix — affichage mobile "Détail par pooler"** (`classement/ClassementTable.tsx`, `classement-series/ClassementSeriesTable.tsx`) :
+La section "Détail par pooler" était cachée sur mobile (`hidden sm:block`). Retiré sur les deux pages de classement. Règle : ne jamais mettre `hidden sm:block` sur du contenu principal dans les pages de consultation publique. Commit : `44e4b9e`.
+
+**Fix — baselines séries via game log NHL** (`lib/nhl-snapshot.ts`, `gestion-series/playoff-pool-actions.ts`, `admin/series/series-admin-actions.ts`, `admin/series/SeriesAdminManager.tsx`) :
+Double cause racine des points à 0 : (1) contrainte CHECK sur `player_stat_snapshots.snapshot_type` n'incluait pas `deadline_baseline` → auto-création silencieusement ignorée ; (2) la création lazy utilisait les stats courantes au lieu des stats historiques (delta = 0). Fix : ajout de `fetchPlayerStatsAsOfDate(nhlId, gameType, deadline)` qui somme le game log avant la date deadline. La création lazy et le bouton admin utilisent maintenant cette fonction. Bouton "🔄 Recréer baselines" visible dans `/admin/series` une fois la deadline passée. Migration SQL appliquée sur staging et prod pour ajouter `deadline_baseline` au CHECK. 62 baselines recréées sur prod, points confirmés corrects. Commit : `44e4b9e`.
+
 ### 2026-05-08
 
 **Roadmap — staging + simulation de saison** :
