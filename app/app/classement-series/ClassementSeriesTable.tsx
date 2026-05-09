@@ -96,8 +96,8 @@ export default function ClassementSeriesTable({
       </div>
 
       {/* Détail par pooler */}
-      <h2 className="hidden sm:block text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Détail par pooler</h2>
-      <div className="hidden sm:block space-y-2">
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Détail par pooler</h2>
+      <div className="space-y-2">
         {standings.map((s, i) => {
           const groups = groupBySlot(s.players)
           return (

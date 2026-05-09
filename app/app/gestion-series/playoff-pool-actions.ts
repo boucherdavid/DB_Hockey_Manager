@@ -512,24 +512,24 @@ export async function getPlayoffPoolStandingsAction(
 
   if (deadlinePassed && !hasBaselines) {
     const db = createAdminClient()
-    const { fetchPlayerStatsById } = await import('@/lib/nhl-snapshot')
+    const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
+    const deadline = new Date(saisonRow!.playoff_submission_deadline)
     const statsCache = new Map<number, any>()
     const activeRosters = (rosters ?? []).filter((r: any) => r.is_active)
     const newBaselines: any[] = []
-    const now = new Date().toISOString()
 
     for (const r of activeRosters) {
       const nhlId = (r.players as any)?.nhl_id
       if (!nhlId) continue
       if (!statsCache.has(nhlId)) {
-        statsCache.set(nhlId, await fetchPlayerStatsById(nhlId, 3))
+        statsCache.set(nhlId, await fetchPlayerStatsAsOfDate(nhlId, 3, deadline))
       }
       newBaselines.push({
         player_id: r.player_id,
         pooler_id: r.pooler_id,
         pool_season_id: poolSeasonId,
         snapshot_type: 'deadline_baseline',
-        taken_at: now,
+        taken_at: deadline.toISOString(),
         ...statsCache.get(nhlId),
       })
     }

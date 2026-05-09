@@ -177,3 +177,66 @@ export async function setParticipatingTeamsAction(
     return { error: e?.message ?? 'Erreur inconnue' }
   }
 }
+
+export async function resetBaselineToDeadlineAction(
+  poolSeasonId: number,
+): Promise<{ error?: string; count?: number }> {
+  try {
+    const supabase = await createClient()
+    const db = createAdminClient()
+
+    const { data: saison } = await supabase
+      .from('pool_seasons')
+      .select('playoff_submission_deadline')
+      .eq('id', poolSeasonId)
+      .single()
+
+    if (!saison?.playoff_submission_deadline) return { error: 'Deadline non configurée.' }
+    const deadline = new Date(saison.playoff_submission_deadline)
+
+    const { data: rosters } = await db
+      .from('playoff_pool_rosters')
+      .select('player_id, pooler_id, players(nhl_id)')
+      .eq('pool_season_id', poolSeasonId)
+      .eq('is_active', true)
+
+    if (!rosters?.length) return { error: 'Aucun alignement actif.' }
+
+    const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
+    const statsCache = new Map<number, any>()
+    const newBaselines: any[] = []
+
+    for (const r of rosters) {
+      const nhlId = (r.players as any)?.nhl_id
+      if (!nhlId) continue
+      if (!statsCache.has(nhlId)) {
+        statsCache.set(nhlId, await fetchPlayerStatsAsOfDate(nhlId, 3, deadline))
+      }
+      newBaselines.push({
+        player_id: r.player_id,
+        pooler_id: r.pooler_id,
+        pool_season_id: poolSeasonId,
+        snapshot_type: 'deadline_baseline',
+        taken_at: deadline.toISOString(),
+        ...statsCache.get(nhlId),
+      })
+    }
+
+    await db
+      .from('player_stat_snapshots')
+      .delete()
+      .eq('pool_season_id', poolSeasonId)
+      .eq('snapshot_type', 'deadline_baseline')
+
+    if (newBaselines.length > 0) {
+      const { error } = await db.from('player_stat_snapshots').insert(newBaselines)
+      if (error) return { error: error.message }
+    }
+
+    revalidatePath('/classement-series')
+    revalidatePath('/admin/series')
+    return { count: newBaselines.length }
+  } catch (e: any) {
+    return { error: e?.message ?? 'Erreur inconnue' }
+  }
+}

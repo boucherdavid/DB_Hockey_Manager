@@ -6,6 +6,7 @@ import {
   removeEliminationAction,
   setParticipatingTeamsAction,
   sendDeadlineReminderAction,
+  resetBaselineToDeadlineAction,
 } from './series-admin-actions'
 import {
   getPlayoffPoolStandingsAction,
@@ -348,6 +349,8 @@ export default function SeriesAdminManager({
   const [tab, setTab] = useState<'equipes' | 'alignements' | 'scoring'>('equipes')
   const [reminderPending, setReminderPending] = useState(false)
   const [reminderMsg, setReminderMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [baselinePending, setBaselinePending] = useState(false)
+  const [baselineMsg, setBaselineMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   async function handleSendReminder() {
     setReminderPending(true)
@@ -357,6 +360,17 @@ export default function SeriesAdminManager({
     if (r.error) setReminderMsg({ type: 'error', text: r.error })
     else setReminderMsg({ type: 'success', text: `Rappel envoyé à ${r.sent} pooler${(r.sent ?? 0) > 1 ? 's' : ''}.` })
     setTimeout(() => setReminderMsg(null), 4000)
+  }
+
+  async function handleResetBaseline() {
+    if (!confirm('Recréer les baselines à partir du game log NHL (stats avant la deadline) ? Les baselines existantes seront effacées.')) return
+    setBaselinePending(true)
+    setBaselineMsg(null)
+    const r = await resetBaselineToDeadlineAction(saison.id)
+    setBaselinePending(false)
+    if (r.error) setBaselineMsg({ type: 'error', text: r.error })
+    else setBaselineMsg({ type: 'success', text: `${r.count} baselines recréées.` })
+    setTimeout(() => setBaselineMsg(null), 5000)
   }
 
   const tabs = [
@@ -374,18 +388,29 @@ export default function SeriesAdminManager({
         <span>Deadline : <strong>{saison.submissionDeadline ? new Date(saison.submissionDeadline).toLocaleString('fr-CA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'Aucune'}</strong></span>
         {saison.submissionDeadline && (
           <div className="ml-auto flex items-center gap-3">
-            {reminderMsg && (
-              <span className={`text-xs ${reminderMsg.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                {reminderMsg.text}
+            {(reminderMsg || baselineMsg) && (
+              <span className={`text-xs ${(reminderMsg ?? baselineMsg)!.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                {(reminderMsg ?? baselineMsg)!.text}
               </span>
             )}
-            <button
-              onClick={handleSendReminder}
-              disabled={reminderPending}
-              className="text-xs bg-amber-50 border border-amber-300 text-amber-700 px-3 py-1.5 rounded hover:bg-amber-100 disabled:opacity-50 whitespace-nowrap"
-            >
-              {reminderPending ? 'Envoi...' : '🔔 Rappel deadline'}
-            </button>
+            {new Date() < new Date(saison.submissionDeadline) && (
+              <button
+                onClick={handleSendReminder}
+                disabled={reminderPending}
+                className="text-xs bg-amber-50 border border-amber-300 text-amber-700 px-3 py-1.5 rounded hover:bg-amber-100 disabled:opacity-50 whitespace-nowrap"
+              >
+                {reminderPending ? 'Envoi...' : '🔔 Rappel deadline'}
+              </button>
+            )}
+            {new Date() > new Date(saison.submissionDeadline) && (
+              <button
+                onClick={handleResetBaseline}
+                disabled={baselinePending}
+                className="text-xs bg-red-50 border border-red-300 text-red-700 px-3 py-1.5 rounded hover:bg-red-100 disabled:opacity-50 whitespace-nowrap"
+              >
+                {baselinePending ? 'Recréation...' : '🔄 Recréer baselines'}
+              </button>
+            )}
           </div>
         )}
       </div>
