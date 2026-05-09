@@ -75,7 +75,7 @@ function formatDate(iso: string): string {
 const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; label: string; cls: string }> = {
   en_feu:    { emoji: '🔥', label: 'En feu',    cls: 'text-orange-500' },
   en_forme:  { emoji: '✅', label: 'En forme',  cls: 'text-green-500'  },
-  en_froid:  { emoji: '🧊', label: 'En froid',  cls: 'text-sky-500'    },
+  en_panne:  { emoji: '🧊', label: 'En panne',  cls: 'text-sky-500'    },
   en_crise:  { emoji: '🚨', label: 'En crise',  cls: 'text-red-500'    },
   en_hausse: { emoji: '📈', label: 'En hausse', cls: 'text-emerald-500' },
   en_baisse: { emoji: '📉', label: 'En baisse', cls: 'text-amber-500'  },
@@ -84,7 +84,7 @@ const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; labe
 function StreakBadge({ info }: { info: StreakInfo | undefined }) {
   if (!info || !info.badge) return null
   const meta = BADGE_META[info.badge]
-  const hasCount = info.badge === 'en_feu' || info.badge === 'en_forme' || info.badge === 'en_froid' || info.badge === 'en_crise'
+  const hasCount = info.badge === 'en_feu' || info.badge === 'en_forme' || info.badge === 'en_panne' || info.badge === 'en_crise'
   const title = hasCount ? `${meta.label} — ${info.count} matchs consécutifs` : meta.label
   return (
     <span className={`ml-1 text-sm ${meta.cls}`} title={title}>

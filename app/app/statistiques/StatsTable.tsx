@@ -11,7 +11,7 @@ import StreakLegend from '@/components/StreakLegend'
 const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; label: string }> = {
   en_feu:    { emoji: '🔥', label: 'En feu'    },
   en_forme:  { emoji: '✅', label: 'En forme'  },
-  en_froid:  { emoji: '🧊', label: 'En froid'  },
+  en_panne:  { emoji: '🧊', label: 'En panne'  },
   en_crise:  { emoji: '🚨', label: 'En crise'  },
   en_hausse: { emoji: '📈', label: 'En hausse' },
   en_baisse: { emoji: '📉', label: 'En baisse' },
@@ -20,7 +20,7 @@ const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; labe
 function StreakBadge({ info }: { info: StreakInfo | undefined }) {
   if (!info?.badge) return null
   const meta = BADGE_META[info.badge]
-  const hasCount = info.badge === 'en_feu' || info.badge === 'en_forme' || info.badge === 'en_froid' || info.badge === 'en_crise'
+  const hasCount = info.badge === 'en_feu' || info.badge === 'en_forme' || info.badge === 'en_panne' || info.badge === 'en_crise'
   const title = hasCount ? `${meta.label} — ${info.count} matchs consécutifs` : meta.label
   return <span className="text-sm" title={title}>{meta.emoji}</span>
 }

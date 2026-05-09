@@ -1,7 +1,7 @@
 const LEGEND = [
   { emoji: '🔥', label: 'En feu',    desc: '3+ matchs consécutifs avec au moins 1 point' },
   { emoji: '✅', label: 'En forme',  desc: '2 matchs consécutifs avec au moins 1 point'   },
-  { emoji: '🧊', label: 'En froid',  desc: '5+ matchs consécutifs sans point'              },
+  { emoji: '🧊', label: 'En panne',  desc: '5+ matchs consécutifs sans point'              },
   { emoji: '🚨', label: 'En crise',  desc: '8+ matchs consécutifs sans point'              },
   { emoji: '📈', label: 'En hausse', desc: 'Moyenne en hausse sur les 5 derniers matchs'  },
   { emoji: '📉', label: 'En baisse', desc: 'Moyenne en baisse sur les 5 derniers matchs'  },

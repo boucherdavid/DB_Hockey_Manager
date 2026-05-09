@@ -3,7 +3,7 @@ import { NHL_SEASON } from './nhl-stats'
 export type BadgeType =
   | 'en_feu'
   | 'en_forme'
-  | 'en_froid'
+  | 'en_panne'
   | 'en_crise'
   | 'en_hausse'
   | 'en_baisse'
@@ -87,7 +87,7 @@ function computeIndicator(
     else if (count >= 2)             badge = 'en_forme'
   } else {
     if (count >= config.streakFroid + 3) badge = 'en_crise'
-    else if (count >= config.streakFroid) badge = 'en_froid'
+    else if (count >= config.streakFroid) badge = 'en_panne'
   }
   if (badge === null) {
     if (tendance >= 0.5)       badge = 'en_hausse'

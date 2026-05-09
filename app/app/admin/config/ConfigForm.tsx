@@ -351,7 +351,7 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
                 onChange={e => setIndStreakFroid(e.target.value)}
                 className={inputCls}
               />
-              <p className="text-xs text-gray-400 mt-1">Matchs consécutifs sans pt pour EN FROID. +3 = EN CRISE.</p>
+              <p className="text-xs text-gray-400 mt-1">Matchs consécutifs sans pt pour EN PANNE. +3 = EN CRISE.</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">📈 Fenêtre tendance <span className="text-gray-400">(matchs)</span></p>
