@@ -22,7 +22,9 @@ type Saison = {
   playoff_max_d?: number | null
   playoff_max_g?: number | null
   indicator_streak_chaud?: number | null
+  indicator_streak_forme?: number | null
   indicator_streak_froid?: number | null
+  indicator_streak_crise?: number | null
   indicator_fenetre_tendance?: number | null
 }
 
@@ -58,7 +60,9 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
   const [poMaxD, setPoMaxD] = useState(String(saison.playoff_max_d ?? 3))
   const [poMaxG, setPoMaxG] = useState(String(saison.playoff_max_g ?? 1))
   const [indStreakChaud, setIndStreakChaud] = useState(String(saison.indicator_streak_chaud ?? 3))
+  const [indStreakForme, setIndStreakForme] = useState(String(saison.indicator_streak_forme ?? 2))
   const [indStreakFroid, setIndStreakFroid] = useState(String(saison.indicator_streak_froid ?? 5))
+  const [indStreakCrise, setIndStreakCrise] = useState(String(saison.indicator_streak_crise ?? 8))
   const [indFenetre, setIndFenetre] = useState(String(saison.indicator_fenetre_tendance ?? 5))
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -95,7 +99,9 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
         gestionEffectifsOuvert: toolOuvert,
         isPlayoff,
         indicatorStreakChaud: Math.max(1, parseInt(indStreakChaud) || 3),
+        indicatorStreakForme: Math.max(1, parseInt(indStreakForme) || 2),
         indicatorStreakFroid: Math.max(1, parseInt(indStreakFroid) || 5),
+        indicatorStreakCrise: Math.max(1, parseInt(indStreakCrise) || 8),
         indicatorFenetreTendance: Math.max(1, parseInt(indFenetre) || 5),
       },
     )
@@ -336,22 +342,40 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
           </div>
           <div className="px-3 py-3 grid grid-cols-3 gap-4">
             <div>
-              <p className="text-xs text-gray-500 mb-1">🔥 Streak chaud <span className="text-gray-400">(matchs)</span></p>
+              <p className="text-xs text-gray-500 mb-1">🔥 EN FEU <span className="text-gray-400">(matchs)</span></p>
               <input
                 type="number" min={1} max={20} step={1} value={indStreakChaud}
                 onChange={e => setIndStreakChaud(e.target.value)}
                 className={inputCls}
               />
-              <p className="text-xs text-gray-400 mt-1">Matchs consécutifs avec ≥1 pt pour EN FEU.</p>
+              <p className="text-xs text-gray-400 mt-1">Matchs consécutifs avec ≥1 pt.</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-1">🧊 Streak froid <span className="text-gray-400">(matchs)</span></p>
+              <p className="text-xs text-gray-500 mb-1">✅ EN FORME <span className="text-gray-400">(matchs)</span></p>
+              <input
+                type="number" min={1} max={20} step={1} value={indStreakForme}
+                onChange={e => setIndStreakForme(e.target.value)}
+                className={inputCls}
+              />
+              <p className="text-xs text-gray-400 mt-1">Matchs consécutifs avec ≥1 pt.</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">🧊 EN PANNE <span className="text-gray-400">(matchs)</span></p>
               <input
                 type="number" min={1} max={20} step={1} value={indStreakFroid}
                 onChange={e => setIndStreakFroid(e.target.value)}
                 className={inputCls}
               />
-              <p className="text-xs text-gray-400 mt-1">Matchs consécutifs sans pt pour EN PANNE. +3 = EN CRISE.</p>
+              <p className="text-xs text-gray-400 mt-1">Matchs consécutifs sans pt.</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">🚨 EN CRISE <span className="text-gray-400">(matchs)</span></p>
+              <input
+                type="number" min={1} max={20} step={1} value={indStreakCrise}
+                onChange={e => setIndStreakCrise(e.target.value)}
+                className={inputCls}
+              />
+              <p className="text-xs text-gray-400 mt-1">Matchs consécutifs sans pt.</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">📈 Fenêtre tendance <span className="text-gray-400">(matchs)</span></p>
@@ -360,7 +384,7 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
                 onChange={e => setIndFenetre(e.target.value)}
                 className={inputCls}
               />
-              <p className="text-xs text-gray-400 mt-1">Nombre de matchs pour comparer période récente vs précédente.</p>
+              <p className="text-xs text-gray-400 mt-1">Fenêtre pour comparer période récente vs précédente.</p>
             </div>
           </div>
         </div>

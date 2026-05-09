@@ -542,9 +542,11 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     : []
 
   const indicatorConfig = {
-    streakChaud:      (saison as any)?.indicator_streak_chaud      ?? DEFAULT_INDICATOR_CONFIG.streakChaud,
-    streakFroid:      (saison as any)?.indicator_streak_froid      ?? DEFAULT_INDICATOR_CONFIG.streakFroid,
-    fenetreTendance:  (saison as any)?.indicator_fenetre_tendance  ?? DEFAULT_INDICATOR_CONFIG.fenetreTendance,
+    streakChaud:     (saison as any)?.indicator_streak_chaud     ?? DEFAULT_INDICATOR_CONFIG.streakChaud,
+    streakForme:     (saison as any)?.indicator_streak_forme     ?? DEFAULT_INDICATOR_CONFIG.streakForme,
+    streakFroid:     (saison as any)?.indicator_streak_froid     ?? DEFAULT_INDICATOR_CONFIG.streakFroid,
+    streakCrise:     (saison as any)?.indicator_streak_crise     ?? DEFAULT_INDICATOR_CONFIG.streakCrise,
+    fenetreTendance: (saison as any)?.indicator_fenetre_tendance ?? DEFAULT_INDICATOR_CONFIG.fenetreTendance,
   }
   const streaksMap = await fetchStreaks(
     alignementPlayers.map(p => ({ nhlId: p.nhlId, isGoalie: p.position === 'G' })),

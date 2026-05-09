@@ -282,7 +282,7 @@ async function fetchStreaksForStats(gameType: number): Promise<Record<number, St
     if (gameType === 2) {
       const { data: season } = await supabase
         .from('pool_seasons')
-        .select('id, indicator_streak_chaud, indicator_streak_froid, indicator_fenetre_tendance')
+        .select('id, indicator_streak_chaud, indicator_streak_forme, indicator_streak_froid, indicator_streak_crise, indicator_fenetre_tendance')
         .eq('is_active', true)
         .eq('is_playoff', false)
         .single()
@@ -290,7 +290,9 @@ async function fetchStreaksForStats(gameType: number): Promise<Record<number, St
 
       const config = {
         streakChaud:     (season as any).indicator_streak_chaud     ?? DEFAULT_INDICATOR_CONFIG.streakChaud,
+        streakForme:     (season as any).indicator_streak_forme     ?? DEFAULT_INDICATOR_CONFIG.streakForme,
         streakFroid:     (season as any).indicator_streak_froid     ?? DEFAULT_INDICATOR_CONFIG.streakFroid,
+        streakCrise:     (season as any).indicator_streak_crise     ?? DEFAULT_INDICATOR_CONFIG.streakCrise,
         fenetreTendance: (season as any).indicator_fenetre_tendance ?? DEFAULT_INDICATOR_CONFIG.fenetreTendance,
       }
 

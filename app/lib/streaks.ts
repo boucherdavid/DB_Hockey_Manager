@@ -17,13 +17,17 @@ export type StreakInfo = {
 
 export type IndicatorConfig = {
   streakChaud: number      // min matchs consécutifs avec pts pour EN FEU
-  streakFroid: number      // min matchs consécutifs sans pts pour EN FROID
+  streakForme: number      // min matchs consécutifs avec pts pour EN FORME
+  streakFroid: number      // min matchs consécutifs sans pts pour EN PANNE
+  streakCrise: number      // min matchs consécutifs sans pts pour EN CRISE
   fenetreTendance: number  // taille fenêtre pour le calcul de tendance
 }
 
 export const DEFAULT_INDICATOR_CONFIG: IndicatorConfig = {
   streakChaud: 3,
+  streakForme: 2,
   streakFroid: 5,
+  streakCrise: 8,
   fenetreTendance: 5,
 }
 
@@ -83,10 +87,10 @@ function computeIndicator(
   // Badge — priorité : streak > tendance
   let badge: BadgeType = null
   if (isHot) {
-    if (count >= config.streakChaud) badge = 'en_feu'
-    else if (count >= 2)             badge = 'en_forme'
+    if (count >= config.streakChaud)     badge = 'en_feu'
+    else if (count >= config.streakForme) badge = 'en_forme'
   } else {
-    if (count >= config.streakFroid + 3) badge = 'en_crise'
+    if (count >= config.streakCrise)     badge = 'en_crise'
     else if (count >= config.streakFroid) badge = 'en_panne'
   }
   if (badge === null) {

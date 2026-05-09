@@ -379,7 +379,9 @@ export async function updateCapAction(
     playoffMaxD?: number
     playoffMaxG?: number
     indicatorStreakChaud?: number
+    indicatorStreakForme?: number
     indicatorStreakFroid?: number
+    indicatorStreakCrise?: number
     indicatorFenetreTendance?: number
   },
 ): Promise<{ error?: string }> {
@@ -401,7 +403,9 @@ export async function updateCapAction(
   if (opts?.playoffMaxD !== undefined) updates.playoff_max_d = opts.playoffMaxD
   if (opts?.playoffMaxG !== undefined) updates.playoff_max_g = opts.playoffMaxG
   if (opts?.indicatorStreakChaud !== undefined) updates.indicator_streak_chaud = opts.indicatorStreakChaud
+  if (opts?.indicatorStreakForme !== undefined) updates.indicator_streak_forme = opts.indicatorStreakForme
   if (opts?.indicatorStreakFroid !== undefined) updates.indicator_streak_froid = opts.indicatorStreakFroid
+  if (opts?.indicatorStreakCrise !== undefined) updates.indicator_streak_crise = opts.indicatorStreakCrise
   if (opts?.indicatorFenetreTendance !== undefined) updates.indicator_fenetre_tendance = opts.indicatorFenetreTendance
 
   const { error } = await supabase
