@@ -347,13 +347,18 @@ export async function submitPlayoffPoolChangeAction(input: {
       if (elimUsed >= (saisonRow.playoff_max_elim_changes ?? 5)) {
         return { error: `Limite de ${saisonRow.playoff_max_elim_changes} changements d'élimination atteinte.` }
       }
-      // Verify the removed player is actually on an eliminated team
+      // Verify the removed player is actually on an eliminated team (same dual logic as client)
       if (input.removePlayerId) {
         const { data: pTeam } = await db.from('players').select('teams(id)').eq('id', input.removePlayerId).single()
         const tid = (pTeam?.teams as any)?.id
         if (tid) {
-          const { data: elim } = await db.from('playoff_eliminations').select('id').eq('pool_season_id', input.poolSeasonId).eq('team_id', tid).maybeSingle()
-          if (!elim) return { error: "Ce joueur n'est pas sur une équipe éliminée." }
+          const [{ data: elimRow }, { data: participating }] = await Promise.all([
+            db.from('playoff_eliminations').select('id').eq('pool_season_id', input.poolSeasonId).eq('team_id', tid).maybeSingle(),
+            db.from('playoff_participating_teams').select('team_id').eq('pool_season_id', input.poolSeasonId),
+          ])
+          const participatingIds = new Set((participating ?? []).map((e: any) => e.team_id))
+          const isEliminated = !!elimRow || (participatingIds.size > 0 && !participatingIds.has(tid))
+          if (!isEliminated) return { error: "Ce joueur n'est pas sur une équipe éliminée." }
         }
       }
     } else {
