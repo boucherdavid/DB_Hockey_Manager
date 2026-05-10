@@ -56,6 +56,14 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite 3)
+
+**[Feat] — Joueurs en action adapté au pool actif** (`app/app/page.tsx`) :
+Pendant les séries, "Joueurs en action" affichait les joueurs du pool saison régulière, causant confusion (ex. gardien de BUF affiché alors que l'utilisateur pensait voir son gardien CAR du pool séries). Nouvelle fonction `fetchTodaySeriesActivity` qui interroge `playoff_pool_rosters` et filtre par les équipes jouant ce soir. Même logique que le classement : séries actives → pool séries, sinon → pool saison régulière. Commit : `1090d89`.
+
+**[Feat] — Bandeau statut pool séries — 3 états** (`app/app/gestion-series/GestionSeriesManager.tsx`) :
+"Alignement verrouillé" était affiché dès la deadline passée, même avec des changements restants. Nouveau `isTrulyLocked` = deadline + tous les budgets épuisés. Trois états : vert "Soumission libre" (avant deadline), orange "Comptabilisation en cours" (deadline passée, changements restants), rouge "Alignement verrouillé" (aucun changement possible). Commit : `d7272d0`.
+
 ### 2026-05-11 (suite 2)
 
 **[Fix] — Validation serveur remplacement élimination alignée avec logique client** (`app/app/gestion-series/playoff-pool-actions.ts`) :
