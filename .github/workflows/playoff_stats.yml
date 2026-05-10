@@ -7,9 +7,9 @@ on:
   # Déclenchement manuel depuis l'onglet Actions sur GitHub
   workflow_dispatch:
 
-  # Toutes les 3h — couvre la fin des matchs du soir (games se terminent ~23h-1h ET = 4h-6h UTC)
+  # Une fois par jour à 6h UTC (2h ET) — après la fin des matchs du soir
   schedule:
-    - cron: '0 */3 * * *'
+    - cron: '0 6 * * *'
 
 jobs:
   update-playoff-stats:
