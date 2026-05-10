@@ -111,19 +111,23 @@ export async function getPlayoffPoolRosterAction(
   season: string,
 ): Promise<PlayoffPoolEntry[]> {
   const supabase = await createClient()
-  const [{ data: entries }, { data: elims }] = await Promise.all([
+  const db = createAdminClient()
+  const [{ data: entries }, { data: elims }, { data: participating }] = await Promise.all([
     supabase
       .from('playoff_pool_rosters')
       .select('id, player_id, position_slot, added_at, players(first_name, last_name, position, nhl_id, teams(id, code), player_contracts(season, cap_number))')
       .eq('pooler_id', poolerId)
       .eq('pool_season_id', poolSeasonId)
       .eq('is_active', true),
-    supabase
-      .from('playoff_eliminations')
-      .select('team_id')
-      .eq('pool_season_id', poolSeasonId),
+    db.from('playoff_eliminations').select('team_id').eq('pool_season_id', poolSeasonId),
+    db.from('playoff_participating_teams').select('team_id').eq('pool_season_id', poolSeasonId),
   ])
   const eliminatedIds = new Set((elims ?? []).map((e: any) => e.team_id))
+  const participatingIds = new Set((participating ?? []).map((e: any) => e.team_id))
+  // Une équipe est "éliminée" si explicitement dans playoff_eliminations,
+  // ou si des équipes participantes sont configurées et que la sienne n'en fait plus partie.
+  const isEliminated = (teamId: number | undefined) =>
+    !!teamId && (eliminatedIds.has(teamId) || (participatingIds.size > 0 && !participatingIds.has(teamId)))
   return (entries ?? []).map((r: any) => ({
     id: r.id,
     playerId: r.player_id,
@@ -135,7 +139,7 @@ export async function getPlayoffPoolRosterAction(
     teamId: r.players?.teams?.id ?? null,
     nhlId: r.players?.nhl_id ?? null,
     capNumber: r.players?.player_contracts?.find((c: any) => c.season === toNhlSeason(season))?.cap_number ?? null,
-    teamEliminated: eliminatedIds.has(r.players?.teams?.id),
+    teamEliminated: isEliminated(r.players?.teams?.id),
     addedAt: r.added_at,
   }))
 }

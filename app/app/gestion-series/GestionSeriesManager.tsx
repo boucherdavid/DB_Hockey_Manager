@@ -266,7 +266,7 @@ function SlotRow({
               {isLocked && !!entry.teamEliminated ? '↺' : '✕'}
             </button>
           )}
-          {isLocked && !isAdmin && !entry.teamEliminated && (
+          {!canEdit && (
             <span className="text-xs text-gray-300 shrink-0">🔒</span>
           )}
         </>
