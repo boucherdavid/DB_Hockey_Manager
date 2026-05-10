@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { buildStandings } from '@/lib/standings'
-import { fmtPts } from '@/lib/nhl-stats'
+import { fmtPts, NHL_SEASON } from '@/lib/nhl-stats'
 import SummaryTable from '@/components/SummaryTable'
 import { getPlayoffPoolStandingsAction } from '@/app/gestion-series/playoff-pool-actions'
 import Link from 'next/link'
@@ -226,6 +226,86 @@ function Header({
   )
 }
 
+// ---------- points du soir séries ----------
+
+async function fetchTodayPlayoffPts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  poolSeasonId: number,
+  todayDate: string,
+  playingTeams: Set<string>,
+): Promise<Map<string, number>> {
+  if (!todayDate || playingTeams.size === 0) return new Map()
+
+  const [{ data: rosters }, { data: scoringRows }] = await Promise.all([
+    supabase
+      .from('playoff_pool_rosters')
+      .select('pooler_id, player_id, is_active, players(nhl_id, position, teams(code))')
+      .eq('pool_season_id', poolSeasonId)
+      .eq('is_active', true),
+    supabase.from('scoring_config').select('stat_key, points, points_playoffs'),
+  ])
+
+  const cfg: Record<string, number> = {}
+  for (const row of scoringRows ?? []) cfg[row.stat_key] = row.points_playoffs ?? row.points
+
+  // Joueurs actifs dont l'équipe joue ce soir
+  const playerMap = new Map<number, { poolerIds: string[]; isGoalie: boolean }>()
+  for (const r of rosters ?? []) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const player = (r as any).players
+    const nhlId: number | null = player?.nhl_id
+    const teamCode: string | null = player?.teams?.code
+    if (!nhlId || !teamCode || !playingTeams.has(teamCode)) continue
+    const isGoalie = (player?.position ?? '').toUpperCase() === 'G'
+    if (!playerMap.has(nhlId)) playerMap.set(nhlId, { poolerIds: [], isGoalie })
+    playerMap.get(nhlId)!.poolerIds.push(r.pooler_id)
+  }
+
+  if (playerMap.size === 0) return new Map()
+
+  // Game logs playoff en parallèle, filtrés à la date du jour
+  const results = await Promise.all(
+    [...playerMap.entries()].map(async ([nhlId, { isGoalie }]) => {
+      try {
+        const res = await fetch(
+          `https://api-web.nhle.com/v1/player/${nhlId}/game-log/${NHL_SEASON}/3`,
+          { next: { revalidate: 300 } },
+        )
+        if (!res.ok) return { nhlId, isGoalie, pts: 0 }
+        const data = await res.json()
+        const todayGames = ((data.gameLog ?? []) as Record<string, unknown>[]).filter(
+          g => g.gameDate === todayDate,
+        )
+        let pts = 0
+        for (const g of todayGames) {
+          if (isGoalie) {
+            const wins = g.decision === 'W' ? 1 : 0
+            const otl  = g.decision === 'O' ? 1 : 0
+            const so   = typeof g.shutouts === 'number' ? g.shutouts : 0
+            pts += wins * (cfg.goalie_win ?? 2) + otl * (cfg.goalie_otl ?? 1) + so * (cfg.goalie_shutout ?? 2)
+          } else {
+            const goals   = typeof g.goals   === 'number' ? g.goals   : 0
+            const assists = typeof g.assists === 'number' ? g.assists : 0
+            pts += goals * (cfg.goal ?? 1) + assists * (cfg.assist ?? 1)
+          }
+        }
+        return { nhlId, isGoalie, pts }
+      } catch {
+        return { nhlId, isGoalie: false, pts: 0 }
+      }
+    }),
+  )
+
+  const poolerPts = new Map<string, number>()
+  for (const { nhlId, pts } of results) {
+    if (pts === 0) continue
+    for (const poolerId of playerMap.get(nhlId)!.poolerIds) {
+      poolerPts.set(poolerId, (poolerPts.get(poolerId) ?? 0) + pts)
+    }
+  }
+  return poolerPts
+}
+
 // ---------- page ----------
 
 export default async function Home() {
@@ -259,15 +339,19 @@ export default async function Home() {
     }
   }).sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
 
-  // Classement séries en direct via la même action que /classement-series
-  let playoffStandings: { poolerId: string; poolerName: string; totalPoints: number }[] = []
+  // Classement séries en direct + points du soir
+  let playoffStandings: { poolerId: string; poolerName: string; totalPoints: number; todayPts: number }[] = []
   if (seriesSaison) {
     try {
-      const full = await getPlayoffPoolStandingsAction(seriesSaison.id, true)
+      const [full, todayMap] = await Promise.all([
+        getPlayoffPoolStandingsAction(seriesSaison.id, true),
+        fetchTodayPlayoffPts(supabase, seriesSaison.id, todayDate, playingTeams),
+      ])
       playoffStandings = full.map(s => ({
         poolerId: s.poolerId,
         poolerName: s.poolerName,
         totalPoints: s.totalPoints,
+        todayPts: todayMap.get(s.poolerId) ?? 0,
       }))
     } catch {
       // NHL API indisponible — on affiche rien plutôt que des points incorrects
@@ -298,6 +382,7 @@ export default async function Home() {
                         <th className="px-4 py-2 text-left w-8">#</th>
                         <th className="px-4 py-2 text-left">Pooler</th>
                         <th className="px-2 py-2 text-blue-500">PTS</th>
+                        {hasGames && <th className="px-3 py-2 text-orange-400">Ce soir</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -306,6 +391,11 @@ export default async function Home() {
                           <td className={`px-4 py-2.5 font-bold text-center ${RANK_COLOR[i] ?? 'text-gray-500'}`}>{i + 1}</td>
                           <td className="px-4 py-2.5 font-semibold text-gray-800">{pooler.poolerName}</td>
                           <td className="px-2 py-2.5 text-center font-bold text-blue-600">{fmtPts(pooler.totalPoints)}</td>
+                          {hasGames && (
+                            <td className="px-3 py-2.5 text-center font-semibold text-orange-500">
+                              {pooler.todayPts > 0 ? `+${pooler.todayPts}` : <span className="text-gray-300">—</span>}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
