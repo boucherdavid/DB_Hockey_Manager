@@ -56,6 +56,11 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite 4)
+
+**[Feat] — Panier de changements multi-slots (batch cart) pour le pool des séries** (`app/app/gestion-series/GestionSeriesManager.tsx`, `app/app/gestion-series/playoff-pool-actions.ts`) :
+Remplace le système "un changement à la fois" par un panier inspiré de `gestion-effectifs`. Les poolers peuvent préparer plusieurs swaps simultanément (élimination + volontaire mélangés), voir l'impact cap projeté en temps réel, puis confirmer en une seule action. Nouveaux mécanismes : `SeriesCartItem[]` (état local), `CapBar` mise à jour pour cap projetée après tout le panier, `SlotRow` affiche "avant → après" pour les slots en attente, budgets élim./volontaire reflètent le panier dans la bannière (ex. "0+2/4"), validation cap côté client avant soumission. Server action `submitSeriesBatchAction` : valide budget combiné + cap projeté + élimination côté serveur, applique tous les changements en boucle avec snapshots. Aligné avec la mécanique de `gestion-effectifs` pour préparer la saison régulière. Commit : `bdd022f`.
+
 ### 2026-05-11 (suite 3)
 
 **[Feat] — Joueurs en action adapté au pool actif** (`app/app/page.tsx`) :
