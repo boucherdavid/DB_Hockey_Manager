@@ -454,6 +454,188 @@ export async function submitPlayoffPoolChangeAction(input: {
   return {}
 }
 
+// ─── Batch change action ──────────────────────────────────────────────────────
+
+export type SeriesBatchItem = {
+  type: 'elimination' | 'voluntary' | 'add'
+  removeEntryId: number | null
+  removePlayerId: number | null
+  removeNhlId: number | null
+  addPlayerId: number
+  addNhlId: number | null
+  addPositionSlot: 'F' | 'D' | 'G'
+}
+
+export async function submitSeriesBatchAction(input: {
+  poolerId: string
+  poolSeasonId: number
+  season: string
+  items: SeriesBatchItem[]
+}): Promise<{ error?: string }> {
+  if (!input.items.length) return {}
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié' }
+  const { data: poolerSelf } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  const isAdmin = poolerSelf?.is_admin ?? false
+  if (!isAdmin && user.id !== input.poolerId) return { error: 'Non autorisé' }
+
+  const db = createAdminClient()
+
+  const { data: saisonRow } = await db
+    .from('pool_seasons')
+    .select('playoff_submission_deadline, playoff_max_changes, playoff_max_elim_changes, pool_cap')
+    .eq('id', input.poolSeasonId)
+    .single()
+  if (!saisonRow) return { error: 'Saison introuvable' }
+
+  const deadline = saisonRow.playoff_submission_deadline ? new Date(saisonRow.playoff_submission_deadline) : null
+  const isLocked = deadline ? new Date() > deadline : false
+  const poolCap: number = Number(saisonRow.pool_cap ?? 0)
+
+  const elimItems = input.items.filter(i => i.type === 'elimination')
+  const voluntaryItems = input.items.filter(i => i.type === 'voluntary')
+
+  if (isLocked && !isAdmin) {
+    const { data: history } = await db
+      .from('playoff_pool_rosters')
+      .select('removal_reason')
+      .eq('pooler_id', input.poolerId)
+      .eq('pool_season_id', input.poolSeasonId)
+      .not('removed_at', 'is', null)
+    const used = history ?? []
+    const voluntaryUsed = used.filter((r: any) => r.removal_reason === 'voluntary').length
+    const elimUsed = used.filter((r: any) => r.removal_reason === 'elimination').length
+    const maxElim = saisonRow.playoff_max_elim_changes ?? 5
+    const maxVoluntary = saisonRow.playoff_max_changes ?? 5
+
+    if (elimUsed + elimItems.length > maxElim) {
+      return { error: `Ce panier dépasserait la limite de ${maxElim} remplacements d'élimination (${elimUsed} déjà utilisés).` }
+    }
+    if (voluntaryUsed + voluntaryItems.length > maxVoluntary) {
+      return { error: `Ce panier dépasserait la limite de ${maxVoluntary} changements volontaires (${voluntaryUsed} déjà utilisés).` }
+    }
+
+    // Verify eliminated players (dual logic: playoff_eliminations OR hors participating)
+    if (elimItems.length > 0) {
+      const [{ data: eliminations }, { data: participating }] = await Promise.all([
+        db.from('playoff_eliminations').select('team_id').eq('pool_season_id', input.poolSeasonId),
+        db.from('playoff_participating_teams').select('team_id').eq('pool_season_id', input.poolSeasonId),
+      ])
+      const elimTeamIds = new Set((eliminations ?? []).map((e: any) => e.team_id))
+      const participatingIds = new Set((participating ?? []).map((e: any) => e.team_id))
+      const isEliminated = (tid: number) =>
+        elimTeamIds.has(tid) || (participatingIds.size > 0 && !participatingIds.has(tid))
+
+      for (const item of elimItems) {
+        if (!item.removePlayerId) continue
+        const { data: pTeam } = await db.from('players').select('teams(id)').eq('id', item.removePlayerId).single()
+        const tid = (pTeam?.teams as any)?.id
+        if (tid && !isEliminated(tid)) {
+          return { error: "Un joueur marqué 'élimination' n'est pas sur une équipe éliminée." }
+        }
+      }
+    }
+  }
+
+  // Validate projected cap
+  if (poolCap > 0) {
+    const { data: currentRoster } = await db
+      .from('playoff_pool_rosters')
+      .select('player_id, players(player_contracts(season, cap_number))')
+      .eq('pooler_id', input.poolerId)
+      .eq('pool_season_id', input.poolSeasonId)
+      .eq('is_active', true)
+
+    const removePlayerIds = new Set(input.items.filter(i => i.removePlayerId).map(i => i.removePlayerId!))
+    let projectedCap = 0
+    for (const r of (currentRoster ?? []) as any[]) {
+      if (removePlayerIds.has(r.player_id)) continue
+      const c = (r.players?.player_contracts ?? []).find((c: any) => c.season === toNhlSeason(input.season))
+      projectedCap += c?.cap_number ?? 0
+    }
+    for (const item of input.items) {
+      const { data: p } = await db.from('players').select('player_contracts(season, cap_number)').eq('id', item.addPlayerId).single()
+      const c = ((p as any)?.player_contracts ?? []).find((c: any) => c.season === toNhlSeason(input.season))
+      projectedCap += c?.cap_number ?? 0
+    }
+    if (projectedCap > poolCap) {
+      const fmt = (n: number) => new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+      return { error: `Ce panier dépasse la masse salariale (${fmt(projectedCap)} / ${fmt(poolCap)}).` }
+    }
+  }
+
+  const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
+  const now = new Date().toISOString()
+
+  for (const item of input.items) {
+    if (item.removeEntryId) {
+      const reason = !isLocked ? null : item.type === 'elimination' ? 'elimination' : 'voluntary'
+      const { error } = await db
+        .from('playoff_pool_rosters')
+        .update({ is_active: false, removed_at: now, removal_reason: reason })
+        .eq('id', item.removeEntryId)
+      if (error) return { error: error.message }
+
+      if (item.removeNhlId && item.removePlayerId) {
+        const stats = (await fetchPlayerStatsById(item.removeNhlId, 3)) ?? EMPTY_STATS
+        await db.from('player_stat_snapshots').insert({
+          player_id: item.removePlayerId, pooler_id: input.poolerId,
+          pool_season_id: input.poolSeasonId, snapshot_type: 'deactivation', taken_at: now, ...stats,
+        })
+      }
+    }
+
+    const existing = await db.from('playoff_pool_rosters')
+      .select('id')
+      .eq('pooler_id', input.poolerId)
+      .eq('player_id', item.addPlayerId)
+      .eq('pool_season_id', input.poolSeasonId)
+      .maybeSingle()
+
+    if (existing.data) {
+      const { error } = await db.from('playoff_pool_rosters')
+        .update({ is_active: true, added_at: now, removed_at: null, removal_reason: null, position_slot: item.addPositionSlot })
+        .eq('id', existing.data.id)
+      if (error) return { error: error.message }
+    } else {
+      const { error } = await db.from('playoff_pool_rosters').insert({
+        pooler_id: input.poolerId, player_id: item.addPlayerId,
+        pool_season_id: input.poolSeasonId, position_slot: item.addPositionSlot,
+        is_active: true, added_at: now,
+      })
+      if (error) return { error: error.message }
+    }
+
+    if (item.addNhlId && item.addPlayerId) {
+      const stats = (await fetchPlayerStatsById(item.addNhlId, 3)) ?? EMPTY_STATS
+      await db.from('player_stat_snapshots').insert({
+        player_id: item.addPlayerId, pooler_id: input.poolerId,
+        pool_season_id: input.poolSeasonId, snapshot_type: 'activation', taken_at: now, ...stats,
+      })
+    }
+  }
+
+  if (!isAdmin && isLocked) {
+    const { data: poolerRow } = await db.from('poolers').select('name').eq('id', input.poolerId).single()
+    const { sendPushToAdmins } = await import('@/lib/push')
+    const n = input.items.length
+    sendPushToAdmins({
+      title: 'Pool des séries — Changement d\'alignement',
+      body: n === 1
+        ? `${poolerRow?.name ?? 'Un pooler'} a modifié son alignement.`
+        : `${poolerRow?.name ?? 'Un pooler'} a soumis ${n} changements.`,
+      url: '/admin/series',
+    }, user.id).catch(() => {})
+  }
+
+  revalidatePath('/gestion-series')
+  revalidatePath('/admin/series')
+  revalidatePath('/classement-series')
+  return {}
+}
+
 // ─── Confirm alignment ────────────────────────────────────────────────────────
 
 export async function confirmPlayoffAlignmentAction(
