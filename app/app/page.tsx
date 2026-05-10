@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { buildStandings } from '@/lib/standings'
 import { fmtPts } from '@/lib/nhl-stats'
 import SummaryTable from '@/components/SummaryTable'
+import { getPlayoffPoolStandingsAction } from '@/app/gestion-series/playoff-pool-actions'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -258,54 +259,19 @@ export default async function Home() {
     }
   }).sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
 
-  // Compact playoff standings for the banner (top 4)
+  // Classement séries en direct via la même action que /classement-series
   let playoffStandings: { poolerId: string; poolerName: string; totalPoints: number }[] = []
   if (seriesSaison) {
-    const [{ data: snapshots }, { data: rosters }, { data: scoringRows }, { data: poolers }] = await Promise.all([
-      supabase.from('player_stat_snapshots').select('pooler_id, player_id, snapshot_type, goals, assists, goalie_wins, goalie_otl, goalie_shutouts').eq('pool_season_id', seriesSaison.id),
-      supabase.from('playoff_pool_rosters').select('pooler_id, player_id, is_active').eq('pool_season_id', seriesSaison.id),
-      supabase.from('scoring_config').select('stat_key, points, points_playoffs'),
-      supabase.from('poolers').select('id, name').order('name'),
-    ])
-    const cfg: Record<string, number> = {}
-    for (const row of scoringRows ?? []) cfg[row.stat_key] = row.points_playoffs != null ? row.points_playoffs : row.points
-
-    type SnapMap = Map<string, Map<number, { activation?: Record<string, number>; deactivation?: Record<string, number> }>>
-    const snapMap: SnapMap = new Map()
-    for (const s of snapshots ?? []) {
-      if (!snapMap.has(s.pooler_id)) snapMap.set(s.pooler_id, new Map())
-      const pm = snapMap.get(s.pooler_id)!
-      if (!pm.has(s.player_id)) pm.set(s.player_id, {})
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      pm.get(s.player_id)![s.snapshot_type as 'activation' | 'deactivation'] = s as any
+    try {
+      const full = await getPlayoffPoolStandingsAction(seriesSaison.id, true)
+      playoffStandings = full.map(s => ({
+        poolerId: s.poolerId,
+        poolerName: s.poolerName,
+        totalPoints: s.totalPoints,
+      }))
+    } catch {
+      // NHL API indisponible — on affiche rien plutôt que des points incorrects
     }
-    const rosterMap = new Map<string, number[]>()
-    for (const r of rosters ?? []) {
-      if (!rosterMap.has(r.pooler_id)) rosterMap.set(r.pooler_id, [])
-      rosterMap.get(r.pooler_id)!.push(r.player_id)
-    }
-    const poolerNames = new Map((poolers ?? []).map(p => [p.id, p.name]))
-
-    playoffStandings = Array.from(rosterMap.entries()).map(([poolerId, playerIds]) => {
-      const pm = snapMap.get(poolerId) ?? new Map()
-      let total = 0
-      const seen = new Set<number>()
-      for (const pid of playerIds) {
-        if (seen.has(pid)) continue
-        seen.add(pid)
-        const snaps = pm.get(pid) ?? {}
-        const activation = snaps.activation
-        const deactivation = snaps.deactivation
-        if (!activation) continue
-        const end = deactivation ?? activation
-        total +=
-          Math.max(0, (end.goals ?? 0) - (activation.goals ?? 0)) * (cfg.goal ?? 1) +
-          Math.max(0, (end.assists ?? 0) - (activation.assists ?? 0)) * (cfg.assist ?? 1) +
-          Math.max(0, (end.goalie_wins ?? 0) - (activation.goalie_wins ?? 0)) * (cfg.goalie_win ?? 2) +
-          Math.max(0, (end.goalie_otl ?? 0) - (activation.goalie_otl ?? 0)) * (cfg.goalie_otl ?? 1)
-      }
-      return { poolerId, poolerName: poolerNames.get(poolerId) ?? poolerId, totalPoints: total }
-    }).sort((a, b) => b.totalPoints - a.totalPoints || a.poolerName.localeCompare(b.poolerName))
   }
 
   return (
@@ -354,20 +320,22 @@ export default async function Home() {
             </div>
           )}
 
-          {/* Classement Pool Saison */}
-          {standings.length > 0 ? (
-            <>
-              <SummaryTable standings={standings} />
-              <div className="text-right">
-                <Link href="/classement" className="text-sm text-blue-600 hover:underline">
-                  Classement détaillé →
-                </Link>
+          {/* Classement Pool Saison — masqué quand les séries sont actives */}
+          {!seriesSaison && (
+            standings.length > 0 ? (
+              <>
+                <SummaryTable standings={standings} />
+                <div className="text-right">
+                  <Link href="/classement" className="text-sm text-blue-600 hover:underline">
+                    Classement détaillé →
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <div className="bg-white rounded-lg shadow p-6 text-gray-400 text-sm">
+                Aucune donnée de classement disponible.
               </div>
-            </>
-          ) : (
-            <div className="bg-white rounded-lg shadow p-6 text-gray-400 text-sm">
-              Aucune donnée de classement disponible.
-            </div>
+            )
           )}
         </div>
 
