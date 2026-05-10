@@ -56,6 +56,11 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite 5)
+
+**[Feat] — Bouton Modifier sur les items du panier** (`app/app/gestion-series/GestionSeriesManager.tsx`) :
+Chaque item du panier a maintenant un bouton "Modifier" en plus de "Retirer". Cliquer "Modifier" retire l'item du panier et réinjecte son contenu dans le formulaire de sélection : joueur sortant pré-rempli, slot correct, type élim./volontaire conservé, et joueur entrant actuel pré-sélectionné. L'utilisateur n'a qu'à choisir un autre joueur et re-ajouter au panier. Commit : `f4a6ca6`.
+
 ### 2026-05-11 (suite 4)
 
 **[Feat] — Panier de changements multi-slots (batch cart) pour le pool des séries** (`app/app/gestion-series/GestionSeriesManager.tsx`, `app/app/gestion-series/playoff-pool-actions.ts`) :
