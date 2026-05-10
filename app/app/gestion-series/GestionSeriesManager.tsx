@@ -477,6 +477,36 @@ export default function GestionSeriesManager({
     setCart(c => c.filter(i => i.localId !== localId))
   }
 
+  function handleEditCartItem(item: SeriesCartItem) {
+    setCart(c => c.filter(i => i.localId !== item.localId))
+    // Réinjecter le joueur sortant dans le formulaire
+    if (item.removeEntryId) {
+      const entry = entries.find(e => e.id === item.removeEntryId)
+      if (entry) {
+        setRemovingEntry(entry)
+        setIsElimReplacement(item.type === 'elimination')
+      }
+    } else {
+      setRemovingEntry(null)
+      setIsElimReplacement(false)
+    }
+    setActiveSlot(item.addPositionSlot)
+    // Pré-sélectionner le joueur entrant actuel
+    setAddPlayer({
+      id: item.addPlayerId,
+      firstName: item.addName.split(', ')[1] ?? item.addName,
+      lastName: item.addName.split(', ')[0] ?? '',
+      position: null,
+      teamCode: item.addTeamCode,
+      teamId: null,
+      nhlId: item.addNhlId,
+      capNumber: item.addCapNumber,
+      teamEliminated: false,
+    })
+    setSearchKey(k => k + 1)
+    setError(null)
+  }
+
   function handleConfirmBatch() {
     if (!cart.length) return
     setError(null)
@@ -773,12 +803,20 @@ export default function GestionSeriesManager({
                       </span>
                       <span className="text-gray-700 truncate">{item.label}</span>
                     </div>
-                    <button
-                      onClick={() => handleRemoveFromCart(item.localId)}
-                      className="text-gray-400 hover:text-red-500 ml-3 shrink-0 text-xs"
-                    >
-                      Retirer
-                    </button>
+                    <div className="flex gap-2 ml-3 shrink-0">
+                      <button
+                        onClick={() => handleEditCartItem(item)}
+                        className="text-xs text-blue-500 hover:text-blue-700"
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        onClick={() => handleRemoveFromCart(item.localId)}
+                        className="text-xs text-gray-400 hover:text-red-500"
+                      >
+                        Retirer
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
