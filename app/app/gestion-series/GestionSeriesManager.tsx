@@ -221,7 +221,7 @@ function PlayerPicker({
 // ─── Compact slot row ─────────────────────────────────────────────────────────
 
 function SlotRow({
-  slot, index, entry, isLocked, isAdmin, isActive, onSelect,
+  slot, index, entry, isLocked, isAdmin, isActive, onSelect, canVoluntaryEdit, canElimEdit,
 }: {
   slot: 'F' | 'D' | 'G'
   index: number
@@ -230,8 +230,11 @@ function SlotRow({
   isAdmin: boolean
   isActive: boolean
   onSelect: (entry: PlayoffPoolEntry | null, slot: 'F' | 'D' | 'G') => void
+  canVoluntaryEdit: boolean
+  canElimEdit: boolean
 }) {
-  const canEdit = !isLocked || isAdmin || (isLocked && !!entry?.teamEliminated)
+  const isElimSlot = isLocked && !!entry?.teamEliminated
+  const canEdit = !isLocked || isAdmin || (isElimSlot ? canElimEdit : canVoluntaryEdit)
 
   return (
     <div
@@ -311,7 +314,9 @@ export default function GestionSeriesManager({
   const isLocked = saison.submissionDeadline ? new Date() > new Date(saison.submissionDeadline) : false
   const poolerName = poolers?.find(p => p.id === poolerId)?.name ?? selfPoolerName
   const hasEliminatedPlayers = entries.some(e => e.teamEliminated)
-  const canEdit = !isLocked || isAdmin || hasEliminatedPlayers
+  const canVoluntaryEdit = !isLocked || counts.voluntary < saison.maxChanges
+  const canElimEdit = hasEliminatedPlayers && counts.elimination < saison.maxElimChanges
+  const canEdit = !isLocked || isAdmin || canVoluntaryEdit || canElimEdit
 
   useEffect(() => {
     setLoading(true)
@@ -503,6 +508,8 @@ export default function GestionSeriesManager({
                       isAdmin={isAdmin}
                       isActive={!!(removingEntry && removingEntry === entriesBySlot(slot)[i])}
                       onSelect={handleSlotSelect}
+                      canVoluntaryEdit={canVoluntaryEdit}
+                      canElimEdit={canElimEdit}
                     />
                   ))}
                 </div>
