@@ -64,6 +64,9 @@ Projet Supabase `DB_Hockey_Manager_staging` créé. Script `setup_staging.py` co
 **Fix — affichage mobile "Détail par pooler"** (`classement/ClassementTable.tsx`, `classement-series/ClassementSeriesTable.tsx`) :
 La section "Détail par pooler" était cachée sur mobile (`hidden sm:block`). Retiré sur les deux pages de classement. Règle : ne jamais mettre `hidden sm:block` sur du contenu principal dans les pages de consultation publique. Commit : `44e4b9e`.
 
+**[Fix] — Page d'accueil : classement séries en direct + masquer saison régulière** (`app/app/page.tsx`) :
+Deux bugs : (1) le calcul des points séries sur la page d'accueil était une version simplifiée incorrecte — les joueurs encore actifs (sans snapshot `deactivation`) donnaient 0 pt. Remplacé par `getPlayoffPoolStandingsAction(id, true)`, la même logique que `/classement-series` qui appelle l'API NHL en temps réel. (2) quand les séries sont actives, le tableau `SummaryTable` de la saison régulière s'affiche toujours — masqué avec `!seriesSaison`. Il reviendra automatiquement lors de la prochaine saison régulière. Commit : `253d099`.
+
 **[Refactor] — Renommage badge "En froid" → "En panne"** (`app/lib/streaks.ts`, `app/components/StreakLegend.tsx`, `app/app/statistiques/StatsTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`, `app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/admin/config/ConfigForm.tsx`) :
 "En froid" n'est pas une expression valide en français hockey. Remplacé par "En panne" partout : type `BadgeType`, logique `computeIndicator`, labels d'affichage, vérifications `hasCount`, et commentaire admin. Commit : `e3ecda9`.
 
