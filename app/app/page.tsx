@@ -296,6 +296,47 @@ async function fetchTodayPlayoffPts(
   return poolerPts
 }
 
+// ---------- joueurs en action séries ----------
+
+async function fetchTodaySeriesActivity(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  poolSeasonId: number,
+  playingTeams: Set<string>,
+  myId: string | null,
+): Promise<PoolerActivity[]> {
+  const [{ data: rosters }, { data: poolerRows }] = await Promise.all([
+    supabase
+      .from('playoff_pool_rosters')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .select('pooler_id, players(position, teams(code))' as any)
+      .eq('pool_season_id', poolSeasonId)
+      .eq('is_active', true),
+    supabase.from('poolers').select('id, name'),
+  ])
+
+  const poolerNames = new Map((poolerRows ?? []).map((p: any) => [p.id, p.name]))
+  const activityMap = new Map<string, { count: number; players: { position: string }[] }>()
+
+  for (const r of (rosters ?? []) as any[]) {
+    if (!activityMap.has(r.pooler_id)) activityMap.set(r.pooler_id, { count: 0, players: [] })
+    const teamCode: string | null = r.players?.teams?.code ?? null
+    if (!teamCode || !playingTeams.has(teamCode)) continue
+    const entry = activityMap.get(r.pooler_id)!
+    entry.count++
+    entry.players.push({ position: r.players?.position ?? '' })
+  }
+
+  return [...activityMap.entries()]
+    .map(([poolerId, { count, players }]) => ({
+      poolerId,
+      poolerName: poolerNames.get(poolerId) ?? poolerId,
+      count,
+      detail: fmtDetail(players),
+      isMe: poolerId === myId,
+    }))
+    .sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
+}
+
 // ---------- page ----------
 
 export default async function Home() {
@@ -316,25 +357,15 @@ export default async function Home() {
 
   const standings = saison ? await buildStandings(supabase, saison.id) : []
 
-  const activity: PoolerActivity[] = standings.map(pooler => {
-    const playing = pooler.players.filter(
-      p => p.playerType === 'actif' && playingTeams.has(p.teamAbbrev)
-    )
-    return {
-      poolerId: pooler.poolerId,
-      poolerName: pooler.poolerName,
-      count: playing.length,
-      detail: fmtDetail(playing),
-      isMe: me?.id === pooler.poolerId,
-    }
-  }).sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
-
-  // Classement séries depuis le cache BD + points du soir via game log
+  // Classement séries depuis le cache BD + points du soir + joueurs en action séries
   let playoffStandings: { poolerId: string; poolerName: string; totalPoints: number; todayPts: number }[] = []
+  let activity: PoolerActivity[]
+
   if (seriesSaison) {
-    const [cached, todayMap] = await Promise.all([
+    const [cached, todayMap, seriesActivity] = await Promise.all([
       getPlayoffStandingsCached(seriesSaison.id),
       fetchTodayPlayoffPts(supabase, seriesSaison.id, todayDate, playingTeams),
+      fetchTodaySeriesActivity(supabase, seriesSaison.id, playingTeams, me?.id ?? null),
     ])
     playoffStandings = cached.map(s => ({
       poolerId:    s.poolerId,
@@ -342,6 +373,20 @@ export default async function Home() {
       totalPoints: s.totalPoints,
       todayPts:    todayMap.get(s.poolerId) ?? 0,
     }))
+    activity = seriesActivity
+  } else {
+    activity = standings.map(pooler => {
+      const playing = pooler.players.filter(
+        p => p.playerType === 'actif' && playingTeams.has(p.teamAbbrev)
+      )
+      return {
+        poolerId: pooler.poolerId,
+        poolerName: pooler.poolerName,
+        count: playing.length,
+        detail: fmtDetail(playing),
+        isMe: me?.id === pooler.poolerId,
+      }
+    }).sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
   }
 
   return (
