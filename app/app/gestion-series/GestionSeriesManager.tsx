@@ -317,6 +317,8 @@ export default function GestionSeriesManager({
   const canVoluntaryEdit = !isLocked || counts.voluntary < saison.maxChanges
   const canElimEdit = hasEliminatedPlayers && counts.elimination < saison.maxElimChanges
   const canEdit = !isLocked || isAdmin || canVoluntaryEdit || canElimEdit
+  // Vraiment verrouillé = deadline passée + aucun changement restant (voluntary ou élim)
+  const isTrulyLocked = isLocked && !isAdmin && counts.voluntary >= saison.maxChanges && counts.elimination >= saison.maxElimChanges
 
   useEffect(() => {
     setLoading(true)
@@ -413,11 +415,11 @@ export default function GestionSeriesManager({
       )}
 
       {/* Bannière statut */}
-      <div className={`rounded-lg p-3 text-sm ${isLocked ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
+      <div className={`rounded-lg p-3 text-sm ${!isLocked ? 'bg-green-50 border border-green-200' : isTrulyLocked ? 'bg-red-50 border border-red-200' : 'bg-orange-50 border border-orange-200'}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <span className={`font-semibold ${isLocked ? 'text-orange-700' : 'text-green-700'}`}>
-              {isLocked ? '🔒 Alignement verrouillé' : '✏️ Soumission libre'}
+            <span className={`font-semibold ${!isLocked ? 'text-green-700' : isTrulyLocked ? 'text-red-700' : 'text-orange-700'}`}>
+              {!isLocked ? '✏️ Soumission libre' : isTrulyLocked ? '🔒 Alignement verrouillé' : '📅 Comptabilisation en cours'}
             </span>
             <span className="text-gray-400 text-xs ml-2">{deadlineLabel(saison.submissionDeadline)}</span>
           </div>
