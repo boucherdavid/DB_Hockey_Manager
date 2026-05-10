@@ -56,6 +56,20 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-10
+
+**[Feat] — Colonne "Ce soir" dans le classement séries page d'accueil** (`app/app/page.tsx`) :
+Nouvelle colonne orange "CE SOIR" dans le tableau du classement séries — affiche les points accumulés par chaque pooler pour la journée en cours via le game log NHL (gameType=3, filtre sur la date du jour ET). Visible uniquement les jours avec des matchs. Distinct du classement cumulatif (PTS). Commit : `cc33ebc`.
+
+**[Fix] — Points négatifs classement séries** (`app/lib/nhl-snapshot.ts`, `app/lib/snapshot.ts`, `app/app/gestion-series/playoff-pool-actions.ts`, `app/app/gestion-series/actions.ts`) :
+`fetchPlayerStatsById` retournait `EMPTY_STATS` (zéros) autant sur échec HTTP que sur stats légitimes à 0 — indiscernable, causait des deltas négatifs (0 − baseline). Fix : retourne `null` sur échec réseau/exception, `EMPTY_STATS` seulement si joueur sans stats. `getPlayoffPoolStandingsAction` ignore les `null` dans `liveMap` au lieu d'y mettre des zéros. `EMPTY_STATS` maintenant exporté. Commits : `0963c1a`.
+
+**[Feat] — Cache classement séries en BD + pipeline live_cache** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/page.tsx`, `python_script/import_playoff_stats.py`, `.github/workflows/playoff_stats.yml`, `supabase_migrations/`) :
+Architecture uniformisée avec la saison régulière. Nouveau type snapshot `live_cache` dans `player_stat_snapshots` (contrainte CHECK mise à jour). Pipeline Python `import_playoff_stats.py` : fetch stats NHL playoffs pour tous les joueurs actifs du pool, delete+insert des snapshots `live_cache`. GitHub Action `playoff_stats.yml` planifié quotidiennement à 6h UTC (2h ET). `getPlayoffPoolStandingsAction` utilise `live_cache` en priorité (DB) avant l'appel NHL live. Nouvelle table `playoff_pool_standings_cache` : upsert après chaque calcul live, page d'accueil lit depuis le cache via `getPlayoffStandingsCached`. Zéro appel NHL API sur page load. Migrations appliquées staging + prod. Commits : `2bb14a6`, `fb0a2a2`, `0ad821c`, `eee8bea`.
+
+**[Chore] — Retirer bouton Pool Séries redondant** (`app/app/page.tsx`) :
+Le bouton "Pool Séries 2026-PO →" dans le header était redondant avec "Classement détaillé →" en bas du tableau. Supprimé. Commit : `2d3b6e3`.
+
 ### 2026-05-09
 
 **Staging — mise en place complète** (`python_script/setup_staging.py`, `supabase_migrations/staging_setup.sql`, `start_staging.ps1`, `app/.env.staging.local`) :
