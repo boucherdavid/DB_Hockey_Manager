@@ -359,7 +359,7 @@ export async function submitPlayoffPoolChangeAction(input: {
     }
   }
 
-  const { fetchPlayerStatsById } = await import('@/lib/nhl-snapshot')
+  const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
   const now = new Date().toISOString()
 
   // Remove player
@@ -375,7 +375,7 @@ export async function submitPlayoffPoolChangeAction(input: {
 
     // Deactivation snapshot
     if (input.removeNhlId) {
-      const stats = await fetchPlayerStatsById(input.removeNhlId, 3)
+      const stats = (await fetchPlayerStatsById(input.removeNhlId, 3)) ?? EMPTY_STATS
       await db.from('player_stat_snapshots').insert({
         player_id: input.removePlayerId,
         pooler_id: input.poolerId,
@@ -415,7 +415,7 @@ export async function submitPlayoffPoolChangeAction(input: {
 
     // Activation snapshot
     if (input.addNhlId) {
-      const stats = await fetchPlayerStatsById(input.addNhlId, 3)
+      const stats = (await fetchPlayerStatsById(input.addNhlId, 3)) ?? EMPTY_STATS
       await db.from('player_stat_snapshots').insert({
         player_id: input.addPlayerId,
         pooler_id: input.poolerId,
@@ -560,7 +560,10 @@ export async function getPlayoffPoolStandingsAction(
     const { fetchPlayerStatsById } = await import('@/lib/nhl-snapshot')
     await Promise.all(
       [...uniqueActive.entries()].map(([playerId, nhlId]) =>
-        fetchPlayerStatsById(nhlId, 3).then(stats => liveMap.set(playerId, stats))
+        fetchPlayerStatsById(nhlId, 3).then(stats => {
+          // null = échec API — ne pas ajouter à liveMap pour éviter un delta négatif
+          if (stats !== null) liveMap.set(playerId, stats)
+        })
       )
     )
   }

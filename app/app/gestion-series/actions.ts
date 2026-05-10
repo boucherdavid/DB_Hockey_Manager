@@ -721,14 +721,14 @@ export async function takeRoundSnapshotAction(
 
     if (!entries || entries.length === 0) return { error: 'Aucun alignement dans cette ronde.' }
 
-    const { fetchPlayerStatsById } = await import('@/lib/nhl-snapshot')
+    const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
     const now = new Date().toISOString()
 
     const toUpsert = await Promise.all(entries.map(async (e: any) => {
       const nhlId = e.players?.nhl_id ?? null
       const stats = useZeros || !nhlId
-        ? { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0 }
-        : await fetchPlayerStatsById(nhlId, 3)
+        ? EMPTY_STATS
+        : (await fetchPlayerStatsById(nhlId, 3)) ?? EMPTY_STATS
       return {
         round_id: roundId,
         pooler_id: e.pooler_id,

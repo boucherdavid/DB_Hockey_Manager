@@ -16,7 +16,7 @@ export type SnapshotStats = {
   goalie_shutouts: number
 }
 
-const EMPTY_STATS: SnapshotStats = {
+export const EMPTY_STATS: SnapshotStats = {
   goals: 0,
   assists: 0,
   goalie_wins: 0,
@@ -68,12 +68,13 @@ export async function fetchPlayerStatsAsOfDate(
 export async function fetchPlayerStatsById(
   nhlId: number,
   gameType = 2,
-): Promise<SnapshotStats> {
+): Promise<SnapshotStats | null> {
   try {
     const res = await fetch(`${NHL_WEB}/v1/player/${nhlId}/landing`, {
       cache: 'no-store',
     })
-    if (!res.ok) return EMPTY_STATS
+    // null = échec réseau/API — ne pas confondre avec "0 stats légitimes"
+    if (!res.ok) return null
 
     const data = await res.json()
     const seasonTotals: Record<string, unknown>[] = data.seasonTotals ?? []
@@ -82,16 +83,18 @@ export async function fetchPlayerStatsById(
       s => Number(s.season) === NHL_SEASON_ID && Number(s.gameTypeId) === gameType,
     )
 
+    // Joueur sans stats pour ce gameType (ex: pas encore joué en playoffs) → 0 légitimes
     if (!current) return EMPTY_STATS
 
     return {
-      goals:          Number(current.goals    ?? 0),
-      assists:        Number(current.assists   ?? 0),
-      goalie_wins:    Number(current.wins      ?? 0),
-      goalie_otl:     Number(current.otLosses  ?? 0),
-      goalie_shutouts: Number(current.shutouts ?? 0),
+      goals:           Number(current.goals    ?? 0),
+      assists:         Number(current.assists   ?? 0),
+      goalie_wins:     Number(current.wins      ?? 0),
+      goalie_otl:      Number(current.otLosses  ?? 0),
+      goalie_shutouts: Number(current.shutouts  ?? 0),
     }
   } catch {
-    return EMPTY_STATS
+    // Exception (timeout, parse error) → null, pas des zéros
+    return null
   }
 }
