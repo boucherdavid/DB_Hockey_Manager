@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { buildStandings } from '@/lib/standings'
 import { fmtPts, NHL_SEASON } from '@/lib/nhl-stats'
 import SummaryTable from '@/components/SummaryTable'
-import { getPlayoffPoolStandingsAction } from '@/app/gestion-series/playoff-pool-actions'
+import { getPlayoffStandingsCached } from '@/app/gestion-series/playoff-pool-actions'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -339,23 +339,19 @@ export default async function Home() {
     }
   }).sort((a, b) => b.count - a.count || a.poolerName.localeCompare(b.poolerName))
 
-  // Classement séries en direct + points du soir
+  // Classement séries depuis le cache BD + points du soir via game log
   let playoffStandings: { poolerId: string; poolerName: string; totalPoints: number; todayPts: number }[] = []
   if (seriesSaison) {
-    try {
-      const [full, todayMap] = await Promise.all([
-        getPlayoffPoolStandingsAction(seriesSaison.id, true),
-        fetchTodayPlayoffPts(supabase, seriesSaison.id, todayDate, playingTeams),
-      ])
-      playoffStandings = full.map(s => ({
-        poolerId: s.poolerId,
-        poolerName: s.poolerName,
-        totalPoints: s.totalPoints,
-        todayPts: todayMap.get(s.poolerId) ?? 0,
-      }))
-    } catch {
-      // NHL API indisponible — on affiche rien plutôt que des points incorrects
-    }
+    const [cached, todayMap] = await Promise.all([
+      getPlayoffStandingsCached(seriesSaison.id),
+      fetchTodayPlayoffPts(supabase, seriesSaison.id, todayDate, playingTeams),
+    ])
+    playoffStandings = cached.map(s => ({
+      poolerId:    s.poolerId,
+      poolerName:  s.poolerName,
+      totalPoints: s.totalPoints,
+      todayPts:    todayMap.get(s.poolerId) ?? 0,
+    }))
   }
 
   return (

@@ -660,5 +660,46 @@ export async function getPlayoffPoolStandingsAction(
     })
   }
 
-  return standings.sort((a, b) => b.totalPoints - a.totalPoints)
+  const sorted = standings.sort((a, b) => b.totalPoints - a.totalPoints)
+
+  // Mise à jour du cache BD quand on a des stats live (évite les appels NHL à chaque page load)
+  if (fetchLive && sorted.length > 0) {
+    const db = createAdminClient()
+    await db.from('playoff_pool_standings_cache').upsert(
+      sorted.map(s => ({
+        pool_season_id: poolSeasonId,
+        pooler_id:      s.poolerId,
+        total_pts:      s.totalPoints,
+        updated_at:     new Date().toISOString(),
+      })),
+      { onConflict: 'pool_season_id,pooler_id' },
+    )
+  }
+
+  return sorted
+}
+
+/**
+ * Lit le classement du pool des séries depuis le cache BD.
+ * Rapide (pas d'appel NHL) — mis à jour à chaque visite de /classement-series.
+ */
+export async function getPlayoffStandingsCached(
+  poolSeasonId: number,
+): Promise<{ poolerId: string; poolerName: string; totalPoints: number }[]> {
+  const supabase = await createClient()
+  const [{ data: cache }, { data: poolers }] = await Promise.all([
+    supabase
+      .from('playoff_pool_standings_cache')
+      .select('pooler_id, total_pts')
+      .eq('pool_season_id', poolSeasonId)
+      .order('total_pts', { ascending: false }),
+    supabase.from('poolers').select('id, name'),
+  ])
+  if (!cache || cache.length === 0) return []
+  const nameMap = new Map((poolers ?? []).map(p => [p.id, p.name]))
+  return cache.map(row => ({
+    poolerId:    row.pooler_id,
+    poolerName:  nameMap.get(row.pooler_id) ?? row.pooler_id,
+    totalPoints: row.total_pts,
+  }))
 }
