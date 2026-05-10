@@ -123,10 +123,15 @@ def main():
         time.sleep(0.15)  # Respecter le rate limit NHL API
 
     if upserts:
-        client.table('player_stat_snapshots').upsert(
-            upserts,
-            on_conflict='pooler_id,player_id,pool_season_id,snapshot_type',
-        ).execute()
+        # Supprimer les anciens live_cache pour cette saison, puis insérer les nouveaux.
+        # On évite le ON CONFLICT qui nécessite une contrainte UNIQUE globale incompatible
+        # avec la structure de player_stat_snapshots (plusieurs activation/deactivation possibles).
+        client.table('player_stat_snapshots')\
+            .delete()\
+            .eq('pool_season_id', pool_season_id)\
+            .eq('snapshot_type', 'live_cache')\
+            .execute()
+        client.table('player_stat_snapshots').insert(upserts).execute()
         print(f'\n✓ {len(upserts)} snapshots live_cache mis à jour ({errors} erreur(s)).')
     else:
         print('\nAucun snapshot mis à jour.')
