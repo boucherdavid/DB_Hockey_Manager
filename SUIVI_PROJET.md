@@ -56,6 +56,11 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite 2)
+
+**[Fix] — Validation serveur remplacement élimination alignée avec logique client** (`app/app/gestion-series/playoff-pool-actions.ts`) :
+La validation serveur ne vérifiait l'élimination que via `playoff_eliminations`, alors que le front-end utilise aussi la logique "hors `playoff_participating_teams`". Un joueur de PHI (absent de la liste participante mais pas dans `playoff_eliminations`) était affiché comme éliminé côté client mais le serveur rejetait le remplacement avec "Ce joueur n'est pas sur une équipe éliminée." Fix : la validation serveur utilise maintenant la même logique duale (OR). Commit : `2bd032b`.
+
 ### 2026-05-11 (suite session 2026-05-10)
 
 **[Fix] — Sélecteur pool des séries : changements volontaires après deadline** (`app/app/gestion-series/GestionSeriesManager.tsx`) :
