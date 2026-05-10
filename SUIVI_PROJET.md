@@ -56,6 +56,14 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite session 2026-05-10)
+
+**[Fix] — Sélecteur pool des séries : changements volontaires après deadline** (`app/app/gestion-series/GestionSeriesManager.tsx`) :
+Après la deadline, les poolers avec des changements volontaires restants ne pouvaient pas éditer leurs slots (UI bloquait trop tôt). Root cause : `canEdit` ne tenait pas compte du budget volontaire restant, et `SlotRow` n'autorisait que les slots de joueurs éliminés. Fix : `canVoluntaryEdit` et `canElimEdit` calculés dans le composant principal et passés à `SlotRow` comme props. La logique par slot est maintenant : slot éliminé → `canElimEdit`, slot normal → `canVoluntaryEdit`. Backend déjà correct. Commit : `3b19b83`.
+
+**[Fix] — Équipes hors liste participante traitées comme éliminées + cadenas corrigé** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/gestion-series/GestionSeriesManager.tsx`) :
+Deux bugs : (1) `teamEliminated` basé uniquement sur `playoff_eliminations` — une équipe retirée de `playoff_participating_teams` sans être ajoutée aux éliminations donnait "Remplacement volontaire" au lieu d'"élimination". Fix : `isEliminated()` considère aussi les équipes absentes de `playoff_participating_teams` (quand la liste est configurée). (2) Le cadenas (🔒) s'affichait sur tous les slots verrouillés même si des changements volontaires restaient. Fix : cadenas conditionnel sur `!canEdit` (logique per-slot). Commit : `a0dbd7d`.
+
 ### 2026-05-10
 
 **[Feat] — Colonne "Ce soir" dans le classement séries page d'accueil** (`app/app/page.tsx`) :
