@@ -190,11 +190,10 @@ function ScheduleList({
 // ---------- header ----------
 
 function Header({
-  name, saison, seriesSaison,
+  name, saison,
 }: {
   name: string | null
   saison: { season: string; pool_cap: number } | null
-  seriesSaison: { season: string; totalPoints?: number } | null
 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-end gap-4">
@@ -213,15 +212,6 @@ function Header({
           )}
         </p>
       </div>
-      {seriesSaison && (
-        <Link
-          href="/classement-series"
-          className="shrink-0 flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-4 py-2 text-sm text-orange-700 hover:bg-orange-100 transition-colors"
-        >
-          <span className="font-semibold">Pool Séries {seriesSaison.season}</span>
-          <span className="text-orange-400">→</span>
-        </Link>
-      )}
     </div>
   )
 }
@@ -356,7 +346,7 @@ export default async function Home() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-      <Header name={me?.name ?? null} saison={saison} seriesSaison={seriesSaison ?? null} />
+      <Header name={me?.name ?? null} saison={saison} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-2">
