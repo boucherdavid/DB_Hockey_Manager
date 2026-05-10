@@ -495,13 +495,13 @@ export async function getPlayoffPoolStandingsAction(
   }
 
   // Group snapshots: poolerId → playerId → type → stats
-  type SnapMap = Map<string, Map<number, { activation?: any; deactivation?: any; deadline_baseline?: any }>>
+  type SnapMap = Map<string, Map<number, { activation?: any; deactivation?: any; deadline_baseline?: any; live_cache?: any }>>
   const snapMap: SnapMap = new Map()
   for (const s of snapshots ?? []) {
     if (!snapMap.has(s.pooler_id)) snapMap.set(s.pooler_id, new Map())
     const pm = snapMap.get(s.pooler_id)!
     if (!pm.has(s.player_id)) pm.set(s.player_id, {})
-    pm.get(s.player_id)![s.snapshot_type as 'activation' | 'deactivation' | 'deadline_baseline'] = s
+    pm.get(s.player_id)![s.snapshot_type as 'activation' | 'deactivation' | 'deadline_baseline' | 'live_cache'] = s
   }
 
   // Auto-création de la baseline deadline si la deadline est passée et aucune baseline n'existe
@@ -610,10 +610,14 @@ export async function getPlayoffPoolStandingsAction(
       const deactivation = snaps.deactivation
       if (!reference) continue // Jamais eu de snapshot — ignorer
 
-      // Active players: use live NHL stats if available, otherwise 0
-      // Removed players: use deactivation snapshot
-      const end = r.is_active && liveMap.has(r.player_id)
-        ? liveMap.get(r.player_id)
+      // Priorité pour les stats courantes :
+      // 1. live_cache (snapshot mis à jour par le pipeline GitHub Action)
+      // 2. liveMap (appel NHL direct si fetchLive=true et pas de live_cache)
+      // 3. deactivation snapshot (joueur retiré)
+      // 4. reference (fallback → 0 pts depuis baseline)
+      const liveCache = snaps.live_cache
+      const end = r.is_active
+        ? (liveCache ?? (liveMap.has(r.player_id) ? liveMap.get(r.player_id) : null) ?? deactivation ?? reference)
         : (deactivation ?? reference)
       const isActive = r.is_active
 

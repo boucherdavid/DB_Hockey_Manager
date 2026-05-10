@@ -1,0 +1,37 @@
+name: Mise à jour stats pool des séries
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  # Déclenchement manuel depuis l'onglet Actions sur GitHub
+  workflow_dispatch:
+
+  # Toutes les 3h — couvre la fin des matchs du soir (games se terminent ~23h-1h ET = 4h-6h UTC)
+  schedule:
+    - cron: '0 */3 * * *'
+
+jobs:
+  update-playoff-stats:
+    name: Snapshot live_cache — joueurs actifs pool séries
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: python_script/requirements.txt
+
+      - name: Installer les dépendances
+        run: pip install -r python_script/requirements.txt
+
+      - name: Mettre à jour les stats playoffs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python python_script/import_playoff_stats.py
