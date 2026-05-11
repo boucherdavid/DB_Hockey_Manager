@@ -50,7 +50,7 @@ export default function LoginPage() {
       setLoading(false)
     } else {
       saveAccount(email)
-      router.push('/dashboard')
+      router.push('/')
       router.refresh()
     }
   }

@@ -387,30 +387,32 @@ export async function submitPlayoffPoolChangeAction(input: {
     // Deactivation snapshot — stats courantes du joueur sortant
     if (input.removeNhlId) {
       const stats = (await fetchPlayerStatsById(input.removeNhlId, 3)) ?? EMPTY_STATS
-      await db.from('player_stat_snapshots').insert({
+      await db.from('player_stat_snapshots').upsert({
         player_id: input.removePlayerId,
         pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId,
         snapshot_type: 'deactivation',
         taken_at: now,
         ...stats,
-      })
+      }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
     }
   }
 
   // Add player
   if (input.addPlayerId && input.addPositionSlot) {
-    const existing = await db.from('playoff_pool_rosters')
-      .select('id, is_active')
+    const { data: existingRows } = await db.from('playoff_pool_rosters')
+      .select('id')
       .eq('pooler_id', input.poolerId)
       .eq('player_id', input.addPlayerId)
       .eq('pool_season_id', input.poolSeasonId)
-      .maybeSingle()
+      .order('added_at', { ascending: false })
+      .limit(1)
+    const existingRow = existingRows?.[0] ?? null
 
-    if (existing.data) {
+    if (existingRow) {
       const { error } = await db.from('playoff_pool_rosters')
         .update({ is_active: true, added_at: now, removed_at: null, removal_reason: null, position_slot: input.addPositionSlot })
-        .eq('id', existing.data.id)
+        .eq('id', existingRow.id)
       if (error) return { error: error.message }
     } else {
       const { error } = await db.from('playoff_pool_rosters').insert({
@@ -425,17 +427,17 @@ export async function submitPlayoffPoolChangeAction(input: {
     }
 
     // Activation snapshot — game-log jusqu'à minuit demain → matchs du jour inclus dans la baseline
-    // Garantit que le changement est effectif à partir de demain seulement
+    // upsert pour gérer les réactivations d'un joueur déjà présent cette saison
     if (input.addNhlId) {
       const stats = await fetchPlayerStatsAsOfDate(input.addNhlId, 3, tomorrowMidnight)
-      await db.from('player_stat_snapshots').insert({
+      await db.from('player_stat_snapshots').upsert({
         player_id: input.addPlayerId,
         pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId,
         snapshot_type: 'activation',
         taken_at: now,
         ...stats,
-      })
+      }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
     }
   }
 
@@ -587,26 +589,29 @@ export async function submitSeriesBatchAction(input: {
 
     if (r.nhlId) {
       const stats = (await fetchPlayerStatsById(r.nhlId, 3)) ?? EMPTY_STATS
-      await db.from('player_stat_snapshots').insert({
+      await db.from('player_stat_snapshots').upsert({
         player_id: r.playerId, pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId, snapshot_type: 'deactivation', taken_at: now, ...stats,
-      })
+      }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
     }
   }
 
   // Appliquer les ajouts
   for (const a of input.additions) {
-    const existing = await db.from('playoff_pool_rosters')
+    // .limit(1) évite PGRST116 si plusieurs lignes historiques existent pour ce joueur
+    const { data: existingRows } = await db.from('playoff_pool_rosters')
       .select('id')
       .eq('pooler_id', input.poolerId)
       .eq('player_id', a.playerId)
       .eq('pool_season_id', input.poolSeasonId)
-      .maybeSingle()
+      .order('added_at', { ascending: false })
+      .limit(1)
+    const existingRow = existingRows?.[0] ?? null
 
-    if (existing.data) {
+    if (existingRow) {
       const { error } = await db.from('playoff_pool_rosters')
         .update({ is_active: true, added_at: now, removed_at: null, removal_reason: null, position_slot: a.positionSlot })
-        .eq('id', existing.data.id)
+        .eq('id', existingRow.id)
       if (error) return { error: error.message }
     } else {
       const { error } = await db.from('playoff_pool_rosters').insert({
@@ -618,12 +623,13 @@ export async function submitSeriesBatchAction(input: {
     }
 
     // Activation snapshot — effectif demain (game-log jusqu'à minuit demain)
+    // upsert pour gérer les réactivations d'un joueur déjà présent cette saison
     if (a.nhlId) {
       const stats = await fetchPlayerStatsAsOfDate(a.nhlId, 3, tomorrowMidnight)
-      await db.from('player_stat_snapshots').insert({
+      await db.from('player_stat_snapshots').upsert({
         player_id: a.playerId, pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId, snapshot_type: 'activation', taken_at: now, ...stats,
-      })
+      }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
     }
   }
 

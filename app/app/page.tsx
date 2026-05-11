@@ -3,6 +3,7 @@ import { buildStandings } from '@/lib/standings'
 import { fmtPts, NHL_SEASON } from '@/lib/nhl-stats'
 import SummaryTable from '@/components/SummaryTable'
 import { getPlayoffStandingsCached } from '@/app/gestion-series/playoff-pool-actions'
+import DailyRecapWidget, { type RecapPlayer, type RecapPooler } from '@/components/DailyRecapWidget'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -296,6 +297,138 @@ async function fetchTodayPlayoffPts(
   return poolerPts
 }
 
+// ---------- récap de la soirée précédente ----------
+
+async function fetchYesterdayPlayoffRecap(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  poolSeasonId: number,
+): Promise<{ date: string; poolers: RecapPooler[] }> {
+  try {
+    const now = new Date()
+    const yesterdayET = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Toronto',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(now.getTime() - 24 * 60 * 60 * 1000))
+
+    const schedRes = await fetch(
+      `https://api-web.nhle.com/v1/schedule/${yesterdayET}`,
+      { next: { revalidate: 3600 } },
+    )
+    if (!schedRes.ok) return { date: yesterdayET, poolers: [] }
+    const schedData = await schedRes.json()
+    const dayEntry = (schedData.gameWeek ?? []).find((d: { date: string }) => d.date === yesterdayET)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const yesterdayTeams = new Set<string>((dayEntry?.games ?? []).flatMap((g: any) => [g.awayTeam?.abbrev, g.homeTeam?.abbrev]).filter(Boolean))
+    if (yesterdayTeams.size === 0) return { date: yesterdayET, poolers: [] }
+
+    const [{ data: rosters }, { data: poolerRows }, { data: scoringRows }] = await Promise.all([
+      supabase
+        .from('playoff_pool_rosters')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .select('pooler_id, position_slot, players(nhl_id, position, first_name, last_name, teams(code))' as any)
+        .eq('pool_season_id', poolSeasonId)
+        .eq('is_active', true),
+      supabase.from('poolers').select('id, name'),
+      supabase.from('scoring_config').select('stat_key, points, points_playoffs'),
+    ])
+
+    const cfg: Record<string, number> = {}
+    for (const row of scoringRows ?? []) cfg[row.stat_key] = row.points_playoffs ?? row.points
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const poolerNames = new Map((poolerRows ?? []).map((p: any) => [p.id, p.name]))
+
+    type PlayerInfo = {
+      firstName: string; lastName: string; teamCode: string
+      isGoalie: boolean
+      entries: { poolerId: string; positionSlot: string }[]
+    }
+    const playerMap = new Map<number, PlayerInfo>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const r of (rosters ?? []) as any[]) {
+      const nhlId: number | null = r.players?.nhl_id
+      const teamCode: string | null = r.players?.teams?.code
+      if (!nhlId || !teamCode || !yesterdayTeams.has(teamCode)) continue
+      if (!playerMap.has(nhlId)) {
+        playerMap.set(nhlId, {
+          firstName: r.players?.first_name ?? '',
+          lastName: r.players?.last_name ?? '',
+          teamCode,
+          isGoalie: (r.players?.position ?? '').toUpperCase() === 'G',
+          entries: [],
+        })
+      }
+      playerMap.get(nhlId)!.entries.push({ poolerId: r.pooler_id, positionSlot: r.position_slot })
+    }
+    if (playerMap.size === 0) return { date: yesterdayET, poolers: [] }
+
+    const playerStats = await Promise.all(
+      [...playerMap.entries()].map(async ([nhlId, info]) => {
+        try {
+          const res = await fetch(
+            `https://api-web.nhle.com/v1/player/${nhlId}/game-log/${NHL_SEASON}/3`,
+            { next: { revalidate: 3600 } },
+          )
+          if (!res.ok) return { nhlId, info, goals: 0, assists: 0, wins: 0, otl: 0, so: 0, pts: 0 }
+          const data = await res.json()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const games = ((data.gameLog ?? []) as any[]).filter(g => g.gameDate === yesterdayET)
+          let goals = 0, assists = 0, wins = 0, otl = 0, so = 0
+          for (const g of games) {
+            if (info.isGoalie) {
+              wins += g.decision === 'W' ? 1 : 0
+              otl += g.decision === 'O' ? 1 : 0
+              so += typeof g.shutouts === 'number' ? g.shutouts : 0
+            } else {
+              goals += typeof g.goals === 'number' ? g.goals : 0
+              assists += typeof g.assists === 'number' ? g.assists : 0
+            }
+          }
+          const pts = goals * (cfg.goal ?? 1) + assists * (cfg.assist ?? 1)
+            + wins * (cfg.goalie_win ?? 2) + otl * (cfg.goalie_otl ?? 1) + so * (cfg.goalie_shutout ?? 0)
+          return { nhlId, info, goals, assists, wins, otl, so, pts }
+        } catch {
+          return { nhlId, info, goals: 0, assists: 0, wins: 0, otl: 0, so: 0, pts: 0 }
+        }
+      }),
+    )
+
+    const poolerData = new Map<string, { pts: number; players: RecapPlayer[] }>()
+    for (const { info, goals, assists, wins, otl, so, pts } of playerStats) {
+      if (pts === 0) continue
+      for (const { poolerId, positionSlot } of info.entries) {
+        if (!poolerData.has(poolerId)) poolerData.set(poolerId, { pts: 0, players: [] })
+        const entry = poolerData.get(poolerId)!
+        entry.pts += pts
+        entry.players.push({
+          firstName: info.firstName,
+          lastName: info.lastName,
+          teamCode: info.teamCode,
+          positionSlot,
+          goals, assists,
+          goalieWins: wins,
+          goalieOtl: otl,
+          goalieShutouts: so,
+          pts,
+        })
+      }
+    }
+    if (poolerData.size === 0) return { date: yesterdayET, poolers: [] }
+
+    const poolers = [...poolerData.entries()]
+      .map(([poolerId, { pts, players }]) => ({
+        poolerId,
+        poolerName: poolerNames.get(poolerId) ?? poolerId,
+        pts,
+        players: players.sort((a, b) => b.pts - a.pts),
+      }))
+      .sort((a, b) => b.pts - a.pts)
+
+    return { date: yesterdayET, poolers }
+  } catch {
+    return { date: '', poolers: [] }
+  }
+}
+
 // ---------- joueurs en action séries ----------
 
 async function fetchTodaySeriesActivity(
@@ -357,15 +490,17 @@ export default async function Home() {
 
   const standings = saison ? await buildStandings(supabase, saison.id) : []
 
-  // Classement séries depuis le cache BD + points du soir + joueurs en action séries
+  // Classement séries depuis le cache BD + points du soir + joueurs en action séries + récap d'hier
   let playoffStandings: { poolerId: string; poolerName: string; totalPoints: number; todayPts: number }[] = []
   let activity: PoolerActivity[]
+  let dailyRecap: { date: string; poolers: RecapPooler[] } = { date: '', poolers: [] }
 
   if (seriesSaison) {
-    const [cached, todayMap, seriesActivity] = await Promise.all([
+    const [cached, todayMap, seriesActivity, recap] = await Promise.all([
       getPlayoffStandingsCached(seriesSaison.id),
       fetchTodayPlayoffPts(supabase, seriesSaison.id, todayDate, playingTeams),
       fetchTodaySeriesActivity(supabase, seriesSaison.id, playingTeams, me?.id ?? null),
+      fetchYesterdayPlayoffRecap(supabase, seriesSaison.id),
     ])
     playoffStandings = cached.map(s => ({
       poolerId:    s.poolerId,
@@ -374,6 +509,7 @@ export default async function Home() {
       todayPts:    todayMap.get(s.poolerId) ?? 0,
     }))
     activity = seriesActivity
+    dailyRecap = recap
   } else {
     activity = standings.map(pooler => {
       const playing = pooler.players.filter(
@@ -463,6 +599,7 @@ export default async function Home() {
         <div className="space-y-4">
           <ScheduleList todayDate={todayDate} games={todayGames} />
           <ActivityTable activity={activity} todayDate={todayDate} hasGames={hasGames} />
+          <DailyRecapWidget date={dailyRecap.date} poolers={dailyRecap.poolers} />
         </div>
       </div>
     </div>

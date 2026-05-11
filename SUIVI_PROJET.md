@@ -56,6 +56,26 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite 7)
+
+**[Fix] — Robustesse batch séries : attaquant manquant après remplacement double** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/gestion-series/GestionSeriesManager.tsx`) :
+- **Cause probable** : `.maybeSingle()` retourne `{data: null, error: PGRST116}` quand plusieurs lignes historiques existent pour un même joueur dans `playoff_pool_rosters`. Le code tombait dans la branche INSERT au lieu de UPDATE, puis l'insert du snapshot d'activation échouait silencieusement si un snapshot existait déjà, interrompant parfois le batch sans afficher d'erreur.
+- **Fix `submitSeriesBatchAction` et `submitPlayoffPoolChangeAction`** : remplacé `.maybeSingle()` par `.limit(1).order('added_at', desc)` pour toujours obtenir la ligne la plus récente même en cas de doublons.
+- **Fix snapshots** : remplacé `insert` par `upsert` (avec `onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type'`) pour les snapshots d'activation et de désactivation, évitant les échecs silencieux sur contrainte unique.
+- **Fix client** : ajout d'un `try-catch` autour du `submitSeriesBatchAction` dans `handleConfirmBatch` pour afficher les exceptions non capturées au lieu de les avaler silencieusement.
+- Commit : `TBD`
+
+**[Fix] — Redirection post-login vers `/`** (`app/app/login/page.tsx`) :
+- `router.push('/dashboard')` remplacé par `router.push('/')`.
+- Commit : `TBD`
+
+**[Feat] — Récap soirée sur page d'accueil** (`app/app/page.tsx`, `app/components/DailyRecapWidget.tsx`) :
+- Nouvelle fonction `fetchYesterdayPlayoffRecap` : récupère la liste des équipes ayant joué la veille (API NHL schedule), puis les game-logs de tous les joueurs actifs du pool sur ces équipes, filtrés à la date d'hier. Calcul des points par pooler.
+- Cache Next.js `revalidate: 3600` sur chaque appel NHL → pas d'appel API à chaque page load.
+- Nouveau composant client `DailyRecapWidget` : liste des poolers avec points d'hier, clic pour voir le détail des joueurs (buts, aides, victoires gardien).
+- Affiché dans la colonne de droite de la page d'accueil, seulement quand des données sont disponibles (`poolers.length > 0`).
+- Commit : `TBD`
+
 ### 2026-05-11 (suite 6)
 
 **[Feat] — Panier découplé retraits/ajouts + fix snapshots activation + log admin** (`app/app/gestion-series/GestionSeriesManager.tsx`, `app/app/gestion-series/playoff-pool-actions.ts`, `app/app/admin/series/ChangeLogPanel.tsx`, `app/app/admin/series/page.tsx`) :

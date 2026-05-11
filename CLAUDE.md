@@ -1,146 +1,255 @@
-﻿# Hockey Pool App - Reference Projet
+﻿# Hockey Pool App — Référence Projet
 
-Ce fichier sert de reference stable pour le projet.
-Le suivi des changements, des decisions recentes et de l'etat courant doit aller dans `SUIVI_PROJET.md`.
+Ce fichier sert de référence stable pour Claude Code.
+Le suivi des changements, des décisions récentes et de l'état courant va dans `SUIVI_PROJET.md`.
 
-## Objectif
+---
 
-Application web pour gerer un pool de hockey long terme a la place d'un fichier Excel.
+## 1. Contexte du projet
 
-Regles metier de base:
+Application web pour gérer un pool de hockey long terme, en remplacement d'un fichier Excel.
+
+**Règles métier de base :**
 - 8 poolers
-- un alignement par pooler et par saison: 12 attaquants, 6 defenseurs, 2 gardiens (actifs); minimum 2 reservistes
-- cap du pool = cap NHL x facteur (configurable, typiquement 1.24-1.25), arrondi au million superieur
-- la banque de recrues et les joueurs LTIR ne comptent pas dans la masse salariale
-- transactions gerees cote admin
-- historique conserve dans `transactions` et `transaction_items`
-- protection recrue: 5 saisons pour les repechages, duree ELC pour les agents libres
+- Alignement par pooler et par saison : 12 attaquants, 6 défenseurs, 2 gardiens (actifs) + minimum 2 réservistes
+- Cap du pool = cap NHL × facteur (configurable, typiquement 1.24–1.25), arrondi au million supérieur
+- La banque de recrues et les joueurs LTIR ne comptent pas dans la masse salariale
+- Transactions gérées côté admin
+- Historique conservé dans `transactions` et `transaction_items`
+- Protection recrue : 5 saisons pour les repêchages, durée ELC pour les agents libres
 
-## Stack
+**Stack :**
+- Frontend : Next.js 16, React 19, TypeScript, Tailwind CSS 4
+- Backend : Supabase (PostgreSQL, Auth, RLS)
+- Hébergement : Vercel (`https://db-hockeypool-manager.vercel.app/`)
 
-- Frontend: Next.js 16, React, TypeScript, Tailwind CSS
-- Backend: Supabase (PostgreSQL, Auth, RLS)
-- Hebergement cible: Vercel
+---
 
-## Contraintes techniques
+## 2. Commandes essentielles
 
-### Next.js 16
+```powershell
+# Démarrer l'application (depuis la racine)
+./start_app.ps1
 
-- utiliser `proxy.ts`, pas `middleware.ts`
-- rester compatible avec les conventions Next.js 16
+# Ou manuellement
+cd app && npm run dev
 
-### Supabase
+# Arrêter l'application
+./stop_app.ps1
+```
 
-- la legacy anon key a deja ete identifiee comme plus fiable ici que `sb_publishable_`
-- la logique RLS autour de `is_admin()` est sensible et doit etre modifiee avec prudence
+```bash
+# Pipeline Python complet
+cd python_script
+python run_pipeline.py
 
-## Structure du projet
+# Sans scraping (import seul)
+python run_pipeline.py --no-scrape
+
+# Étapes individuelles
+python scrape_puckpedia.py     # 1. Scraping PuckPedia → CSV
+python import_supabase.py      # 2. Import joueurs/contrats → Supabase
+python import_drafts.py        # 3. Import repêchages NHL (5 dernières saisons)
+```
+
+---
+
+## 3. Structure du projet
 
 ```text
 Hockey_Pool_App/
-|-- app/
-|   |-- app/
-|   |-- components/
-|   `-- lib/
-|-- python_script/
-|   |-- scrape_puckpedia.py
-|   |-- import_supabase.py
-|   |-- source/
-|   |-- teams_offline/
-|   |-- diagnostics/
-|   `-- archive/
-`-- schema.sql
+├── CLAUDE.md                  ← Ce fichier (référence stable)
+├── SUIVI_PROJET.md            ← Journal de bord actif (à mettre à jour chaque session)
+├── schema.sql                 ← Schéma de référence de la base de données
+├── start_app.ps1              ← Démarrer l'app localement
+├── stop_app.ps1               ← Arrêter l'app localement
+├── .mcp.json                  ← Configuration MCP pour Claude Code
+├── .gitignore
+├── .claude/
+│   ├── settings.json
+│   └── settings.local.json
+├── .github/
+│   └── workflows/
+│       └── import.yml         ← Pipeline auto (lundi 6h UTC + manuel)
+├── app/                       ← Application Next.js
+│   ├── CLAUDE.md              ← Règles spécifiques Next.js/TypeScript
+│   ├── AGENTS.md
+│   ├── proxy.ts               ← Auth middleware (PAS middleware.ts)
+│   ├── next.config.ts
+│   ├── app/                   ← Pages et composants
+│   │   ├── components/
+│   │   └── lib/
+│   └── ...
+├── python_script/             ← Pipeline de données
+│   ├── run_pipeline.py        ← Point d'entrée principal
+│   ├── scrape_puckpedia.py
+│   ├── import_supabase.py
+│   ├── import_drafts.py
+│   ├── source/                ← CSV générés par le scraping
+│   ├── teams_offline/
+│   ├── diagnostics/
+│   └── archive/
+└── supabase_migrations/       ← Migrations SQL historiques
 ```
 
-## Base de donnees
+---
 
-Tables principales:
-- `teams`
-- `players`
-- `player_contracts`
-- `pool_seasons`
-- `poolers`
-- `pooler_rosters`
-- `roster_changes`
-- `pool_draft_picks`
-- `transactions`
-- `transaction_items`
+## 4. Base de données
+
+**Tables principales :**
+- `teams`, `players`, `player_contracts`
+- `pool_seasons`, `poolers`, `pooler_rosters`
+- `roster_changes`, `pool_draft_picks`
+- `transactions`, `transaction_items`
 - `scoring_config`
+- `push_subscriptions` (notifications push)
+- `player_stat_snapshots` (snapshots pour classements)
+- `series_round_rosters` (pool des séries)
 
-Conventions utiles:
-- statuts joueurs: `ELC`, `RFA`, `UFA`
-- types de roster: `actif`, `reserviste`, `recrue`, `ltir`
-- types de recrue (`rookie_type`): `repeche`, `agent_libre`
+**Conventions :**
+- Statuts joueurs : `ELC`, `RFA`, `UFA`
+- Types de roster : `actif`, `reserviste`, `recrue`, `ltir`
+- Types de recrue (`rookie_type`) : `repeche`, `agent_libre`
+- `pool_seasons.is_playoff = true` → saison des séries active
 
-## Routes applicatives
+---
 
-Routes utilisateur:
-- `/`
-- `/login`
-- `/joueurs`
-- `/statistiques`
-- `/repechage`
-- `/calendrier`
-- `/poolers`
-- `/poolers/[id]`
-- `/transactions`
-- `/classement`
+## 5. Routes applicatives
 
-Routes admin:
-- `/admin`
-- `/admin/joueurs`
-- `/admin/poolers`
-- `/admin/rosters`
-- `/admin/recrues`
-- `/admin/transactions`
-- `/admin/presaison`
-- `/admin/config`
+**Utilisateur :**
+`/` `/login` `/joueurs` `/statistiques` `/repechage` `/calendrier`
+`/poolers` `/poolers/[id]` `/transactions` `/classement`
+`/series` `/series/picks` `/compte` `/aide`
 
-## Pipeline Python
+**Admin :**
+`/admin` `/admin/joueurs` `/admin/poolers` `/admin/rosters`
+`/admin/recrues` `/admin/transactions` `/admin/presaison`
+`/admin/config` `/admin/series`
 
-Ordre d'execution:
-1. `python_script/scrape_puckpedia.py`: recupere les donnees PuckPedia et produit les CSV
-2. `python_script/import_supabase.py`: importe joueurs et contrats dans Supabase
-3. `python_script/import_drafts.py`: importe les repechages des 5 dernieres annees (NHL API)
+---
 
-Raccourci: `python_script/run_pipeline.py` enchaîne les 3 etapes. Option `--no-scrape` pour sauter le scraping.
+## 6. Contraintes techniques
 
-Automatisation: `.github/workflows/import.yml` — chaque lundi 6h UTC + declenchement manuel.
+**Next.js 16 :**
+- Utiliser `proxy.ts`, PAS `middleware.ts`
+- Rester compatible avec les conventions Next.js 16
 
-Repertoires associes:
-- `python_script/source/`
-- `python_script/teams_offline/`
-- `python_script/diagnostics/`
+**Supabase :**
+- La legacy anon key est plus fiable que `sb_publishable_`
+- La logique RLS autour de `is_admin()` est sensible — modifier avec prudence
 
-## Responsive (mobile)
+**Python :**
+- `csv_path` doit être relatif à `BASE_DIR` (requis pour GitHub Actions)
+- L'environnement virtuel est dans `python_script/venv/` (ne pas committer)
 
-Les pages admin (RosterManager, PresaisonManager, TransactionBuilder) sont desktop-only — pas de responsive requis.
+---
 
-Les pages de consultation publique doivent etre utilisables sur mobile. Regle: quand on touche une page de consultation, on la rend responsive en meme temps.
-- Utiliser `overflow-x-auto` sur tous les conteneurs de `<table>`.
-- Masquer les colonnes secondaires sur mobile avec `hidden sm:table-cell` (et l'en-tete correspondant).
-- Ne pas utiliser de layout en colonnes cote a cote sur mobile (preferer `flex-wrap` ou `grid-cols-1`).
+## 7. Standards de code
 
-Pages de consultation: `/`, `/joueurs`, `/statistiques`, `/repechage`, `/poolers`, `/poolers/[id]`, `/transactions`, `/aide`.
+- TypeScript strict — pas de `any` sans justification
+- Tailwind CSS uniquement pour le style (pas de CSS inline)
+- Composants Server par défaut; `"use client"` seulement si nécessaire
+- `async/await` — pas de `.then()` chaîné
+- Nommage : composants en PascalCase, fonctions/variables en camelCase, fichiers en kebab-case
 
-## Page Aide (`/aide`)
+---
 
-`app/app/aide/page.tsx` contient trois sections:
-- **Installation** : instructions PWA pour ordinateur, iPhone et Android.
-- **Guide d'utilisation** : instructions par fonctionnalité (section en construction, à compléter au fur et à mesure).
-- **Règlements** : règles métier du pool visibles par les poolers.
+## 8. Responsive (mobile)
 
-Règle : lors de l'ajout ou de la modification d'une fonctionnalité accessible aux poolers, évaluer si la section "Guide d'utilisation" ou "Règlements" de `/aide` doit être mise à jour.
+Les pages **admin** sont desktop-only — pas de responsive requis.
 
-## Regle de maintenance
+Les pages de **consultation publique** doivent être utilisables sur mobile.
+Règle : quand on touche une page de consultation, on la rend responsive en même temps.
 
-Modifier `CLAUDE.md` seulement si une information de reference change vraiment:
-- architecture
-- stack
-- conventions stables
-- regles metier
+- `overflow-x-auto` sur tous les conteneurs de `<table>`
+- Masquer les colonnes secondaires sur mobile : `hidden sm:table-cell`
+- Pas de layout en colonnes côte à côte sur mobile (`flex-wrap` ou `grid-cols-1`)
 
-Pour tout le reste, utiliser `SUIVI_PROJET.md`.
+Pages de consultation : `/`, `/joueurs`, `/statistiques`, `/repechage`,
+`/poolers`, `/poolers/[id]`, `/transactions`, `/series`, `/series/picks`, `/aide`
+
+---
+
+## 9. Page Aide (`/aide`)
+
+`app/app/aide/page.tsx` contient trois sections :
+- **Installation** : instructions PWA (ordinateur, iPhone, Android)
+- **Guide d'utilisation** : instructions par fonctionnalité (à compléter au fil des livraisons)
+- **Règlements** : règles métier du pool visibles par les poolers
+
+**Règle :** lors de l'ajout ou modification d'une fonctionnalité accessible aux poolers,
+évaluer si `/aide` (Guide ou Règlements) doit être mis à jour.
+
+---
+
+## 10. Workflow Git (automatique)
+
+Après chaque tâche complétée, exécuter **sans demander confirmation** :
+
+```bash
+# 1. Mettre à jour SUIVI_PROJET.md (voir section 11)
+# 2. Stager tous les changements
+git add -A
+# 3. Committer avec message conventionnel
+git commit -m "type(scope): description en français"
+# 4. Pousser
+git push
+```
+
+**Format des commits :**
+```
+type(scope): description courte en français
+
+Types : feat | fix | docs | refactor | style | chore | test
+Exemples :
+  feat(rosters): ajout filtre par saison
+  fix(admin): correction calcul du cap
+  docs(aide): mise à jour guide notifications
+  refactor(standings): extraction buildStandings vers lib/standings.ts
+```
+
+**Exceptions** (demander confirmation avant de committer) :
+- Conflit Git détecté
+- Changements dans `schema.sql` ou migrations Supabase
+- Modifications de `.env.local` ou variables d'environnement
+
+---
+
+## 11. Documentation automatique
+
+À chaque fin de tâche, mettre à jour `SUIVI_PROJET.md` avec :
+
+```markdown
+### AAAA-MM-JJ
+
+**[Type] — description courte** (`fichier/modifie.tsx`, `autre/fichier.ts`) :
+- Ce qui a été fait et pourquoi
+- Décisions importantes ou compromis
+- Commit : `[hash]`
+```
+
+**Règles :**
+- Ne jamais laisser une session se terminer sans mettre à jour `SUIVI_PROJET.md`
+- Si une route, composant ou règle métier change → évaluer si `CLAUDE.md` doit aussi être mis à jour
+- `CLAUDE.md` ne change que si une information de **référence stable** change (architecture, stack, conventions, règles métier)
+
+---
+
+## 12. Fichiers importants à connaître
+
+| Fichier | Rôle |
+|---|---|
+| `app/app/layout.tsx` | Layout global + Navbar |
+| `app/app/page.tsx` | Page d'accueil (classement + matchs du jour) |
+| `app/components/Navbar.tsx` | Navigation principale (dropdowns) |
+| `app/lib/supabase/server.ts` | Client Supabase côté serveur |
+| `app/lib/supabase/client.ts` | Client Supabase côté client |
+| `app/lib/standings.ts` | Logique classement (`buildStandings`) |
+| `app/lib/streaks.ts` | Indicateurs de séquence (badges 🔥✅🧊) |
+| `app/proxy.ts` | Auth + redirections (remplace middleware.ts) |
+| `python_script/run_pipeline.py` | Point d'entrée pipeline de données |
+| `schema.sql` | Schéma de référence BD |
+| `supabase_migrations/` | Migrations SQL historiques |
 
 <!-- cce-block-version: 3 -->
 ## Context Engine (CCE)

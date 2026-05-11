@@ -442,32 +442,36 @@ export default function GestionSeriesManager({
     if (!hasCart) return
     setError(null)
     startTransition(async () => {
-      const removals: SeriesBatchRemoval[] = cartRemovals.map(r => ({
-        entryId: r.entryId,
-        playerId: r.playerId,
-        nhlId: r.nhlId,
-        removalType: !isLocked ? 'free' : r.isElimination ? 'elimination' : 'voluntary',
-      }))
-      const additions: SeriesBatchAddition[] = cartAdditions.map(a => ({
-        playerId: a.playerId,
-        nhlId: a.nhlId,
-        positionSlot: a.positionSlot,
-      }))
-      const result = await submitSeriesBatchAction({ poolerId, poolSeasonId: saison.id, season: saison.season, removals, additions })
-      if (result.error) {
-        setError(result.error)
-      } else {
-        setSuccess(true)
-        setCartRemovals([])
-        setCartAdditions([])
-        setAddPlayer(null)
-        const [r, c] = await Promise.all([
-          getPlayoffPoolRosterAction(poolerId, saison.id, saison.season),
-          getPlayoffChangeCountsAction(poolerId, saison.id),
-        ])
-        setEntries(r)
-        setCounts(c)
-        setTimeout(() => setSuccess(false), 3000)
+      try {
+        const removals: SeriesBatchRemoval[] = cartRemovals.map(r => ({
+          entryId: r.entryId,
+          playerId: r.playerId,
+          nhlId: r.nhlId,
+          removalType: !isLocked ? 'free' : r.isElimination ? 'elimination' : 'voluntary',
+        }))
+        const additions: SeriesBatchAddition[] = cartAdditions.map(a => ({
+          playerId: a.playerId,
+          nhlId: a.nhlId,
+          positionSlot: a.positionSlot,
+        }))
+        const result = await submitSeriesBatchAction({ poolerId, poolSeasonId: saison.id, season: saison.season, removals, additions })
+        if (result.error) {
+          setError(result.error)
+        } else {
+          setSuccess(true)
+          setCartRemovals([])
+          setCartAdditions([])
+          setAddPlayer(null)
+          const [r, c] = await Promise.all([
+            getPlayoffPoolRosterAction(poolerId, saison.id, saison.season),
+            getPlayoffChangeCountsAction(poolerId, saison.id),
+          ])
+          setEntries(r)
+          setCounts(c)
+          setTimeout(() => setSuccess(false), 3000)
+        }
+      } catch (e: any) {
+        setError(e?.message ?? 'Erreur lors de la soumission. Veuillez réessayer.')
       }
     })
   }
