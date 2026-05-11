@@ -56,6 +56,29 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite 11)
+
+**[Feat] — Colonne "HIER" dans classement séries (page d'accueil)** (`app/app/page.tsx`) :
+- Remplace la colonne "CE SOIR" (live, peu fiable) par les points gagnés la **veille** par chaque pooler.
+- L'en-tête affiche la date courte (ex. "10 MAI") et la colonne disparaît si aucun résultat n'est disponible.
+- Suppression de `fetchTodayPlayoffPts` et du widget `DailyRecapWidget` (widget séparé supprimé, données intégrées dans le tableau).
+- **À dupliquer pour la saison régulière** (note mémoire enregistrée).
+- Commit : `17f8e7d`
+
+**[Fix] — Dobes invisible dans classement : investigation et leçons** :
+- Diagnostic final : Dobes n'avait jamais d'entrée dans `playoff_pool_rosters` pour Jérôme (setup initial hors application).
+- Le `removal_reason = null` observé venait d'un bug où `isLocked` pouvait être `false` côté client si `saison.submissionDeadline` non chargée. Corrigé par enforcement serveur (commit `d67bc37`).
+- Bouton "↺ Corriger données" dans admin/series : corrige les `removal_reason = null` post-deadline ET crée les baselines manquantes en une passe.
+- Leçons enregistrées en mémoire pour la saison régulière.
+
+### 2026-05-11 (suite 10)
+
+**[Fix] — Baseline manquante pour joueurs retirés post-deadline** (`playoff-pool-actions.ts`, `ChangeLogPanel.tsx`) :
+- Auto-baseline dans standings : check par joueur incluant `removal_reason = voluntary/elimination`. Commit `d30bd67`.
+- `recalcMissingBaselinesAction` : corrige aussi les `removal_reason = null` post-deadline puis crée les baselines.
+- Bouton "↺ Corriger données" dans `ChangeLogPanel` (remplace les anciens boutons Recalculer snapshots + Baselines manquantes).
+- Nettoyage : suppression bouton "Recréer baselines" destructeur dans `SeriesAdminManager`. Commit `d67bc37`.
+
 ### 2026-05-11 (suite 9)
 
 **[Chore] — Nettoyage boutons de recalcul admin séries** (`ChangeLogPanel.tsx`, `SeriesAdminManager.tsx`) :
