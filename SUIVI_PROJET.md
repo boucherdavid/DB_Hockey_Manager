@@ -56,6 +56,16 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite 8)
+
+**[Fix] — Dobes absent du classement : baseline manquante pour joueurs retirés avant la première visite** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/admin/series/ChangeLogPanel.tsx`) :
+- **Cause** : l'auto-création des `deadline_baseline` filtrait `is_active = true`. Un joueur retiré post-deadline (ex: Dobes, remplacé par Andersen) avant que quiconque visite `/classement-series` n'avait jamais de baseline → delta impossible à calculer → joueur invisible.
+- **Fix standings** : remplacé la logique "tout ou rien" (`!hasBaselines`) par un check **par joueur**. Inclut désormais les joueurs avec `removal_reason = 'voluntary' | 'elimination'` en plus des actifs.
+- **Nouvelle action admin** `recalcMissingBaselinesAction` : crée les baselines manquantes pour tous les joueurs actifs et retraits post-deadline.
+- **Bouton "↺ Baselines manquantes"** dans `ChangeLogPanel` (panel admin séries) : déclenche la correction sans recharger la page.
+- **À faire après déploiement** : cliquer "↺ Baselines manquantes" dans admin/series pour corriger Dobes immédiatement.
+- Commit : `TBD`
+
 ### 2026-05-11 (suite 7)
 
 **[Fix] — Robustesse batch séries : attaquant manquant après remplacement double** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/gestion-series/GestionSeriesManager.tsx`) :

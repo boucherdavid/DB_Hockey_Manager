@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { recalcPostDeadlineSnapshotsAction } from '@/app/gestion-series/playoff-pool-actions'
+import { recalcPostDeadlineSnapshotsAction, recalcMissingBaselinesAction } from '@/app/gestion-series/playoff-pool-actions'
 import type { PlayoffChangeLogEntry } from '@/app/gestion-series/playoff-pool-actions'
 
 const fmtDate = (iso: string) =>
@@ -17,7 +17,9 @@ export default function ChangeLogPanel({
   log: PlayoffChangeLogEntry[]
 }) {
   const [recalcResult, setRecalcResult] = useState<string | null>(null)
+  const [baselineResult, setBaselineResult] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [isBaselinePending, startBaselineTransition] = useTransition()
 
   function handleRecalc() {
     startTransition(async () => {
@@ -27,18 +29,37 @@ export default function ChangeLogPanel({
     })
   }
 
+  function handleRecalcBaselines() {
+    startBaselineTransition(async () => {
+      const result = await recalcMissingBaselinesAction(poolSeasonId)
+      if (result.error) setBaselineResult(`Erreur : ${result.error}`)
+      else setBaselineResult(result.fixed > 0
+        ? `✓ ${result.fixed} baseline${result.fixed > 1 ? 's' : ''} ajoutée${result.fixed > 1 ? 's' : ''}.`
+        : '✓ Aucune baseline manquante.')
+      setTimeout(() => setBaselineResult(null), 5000)
+    })
+  }
+
   return (
     <div className="bg-white rounded-lg shadow p-5 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
           Changements post-deadline
         </h2>
-        <div className="flex items-center gap-3">
-          {recalcResult && (
-            <span className={`text-xs ${recalcResult.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>
-              {recalcResult}
+        <div className="flex items-center gap-3 flex-wrap">
+          {(recalcResult || baselineResult) && (
+            <span className={`text-xs ${(recalcResult ?? baselineResult)!.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>
+              {recalcResult ?? baselineResult}
             </span>
           )}
+          <button
+            onClick={handleRecalcBaselines}
+            disabled={isBaselinePending}
+            className="text-xs bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-300 rounded px-3 py-1.5 font-medium disabled:opacity-50 transition-colors"
+            title="Crée les baselines deadline manquantes pour les joueurs retirés avant la première visite du classement"
+          >
+            {isBaselinePending ? 'Calcul...' : '↺ Baselines manquantes'}
+          </button>
           <button
             onClick={handleRecalc}
             disabled={isPending}

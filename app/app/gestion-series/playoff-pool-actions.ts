@@ -717,6 +717,77 @@ export async function recalcPostDeadlineSnapshotsAction(
   return { fixed }
 }
 
+// ─── Admin : recalcul des baselines deadline manquantes ───────────────────────
+// Crée les deadline_baseline pour tous les joueurs (actifs ou retirés post-deadline)
+// qui n'en ont pas encore. Corrige le cas d'un joueur retiré avant la première
+// visite de /classement-series (ex: Dobes retiré avant que les baselines soient créées).
+
+export async function recalcMissingBaselinesAction(
+  poolSeasonId: number,
+): Promise<{ fixed: number; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { fixed: 0, error: 'Non authentifié' }
+  const { data: poolerSelf } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!poolerSelf?.is_admin) return { fixed: 0, error: 'Non autorisé' }
+
+  const db = createAdminClient()
+  const { data: saisonRow } = await db
+    .from('pool_seasons')
+    .select('playoff_submission_deadline')
+    .eq('id', poolSeasonId)
+    .single()
+  if (!saisonRow?.playoff_submission_deadline) return { fixed: 0, error: 'Deadline introuvable' }
+
+  const deadline = new Date(saisonRow.playoff_submission_deadline)
+
+  // Tous les joueurs actifs + retraits post-deadline
+  const [{ data: allEntries }, { data: existingRows }] = await Promise.all([
+    db.from('playoff_pool_rosters')
+      .select('player_id, pooler_id, removal_reason, is_active, players(nhl_id)')
+      .eq('pool_season_id', poolSeasonId)
+      .or('is_active.eq.true,removal_reason.eq.voluntary,removal_reason.eq.elimination'),
+    db.from('player_stat_snapshots')
+      .select('pooler_id, player_id')
+      .eq('pool_season_id', poolSeasonId)
+      .eq('snapshot_type', 'deadline_baseline'),
+  ])
+
+  const existingSet = new Set(
+    (existingRows ?? []).map((e: any) => `${e.pooler_id}:${e.player_id}`),
+  )
+  const needingBaseline = (allEntries ?? []).filter((e: any) =>
+    !existingSet.has(`${e.pooler_id}:${e.player_id}`),
+  )
+
+  if (needingBaseline.length === 0) return { fixed: 0 }
+
+  const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
+  const statsCache = new Map<number, any>()
+  let fixed = 0
+
+  for (const entry of needingBaseline as any[]) {
+    const nhlId = entry.players?.nhl_id
+    if (!nhlId) continue
+    if (!statsCache.has(nhlId)) {
+      statsCache.set(nhlId, await fetchPlayerStatsAsOfDate(nhlId, 3, deadline))
+    }
+    const { error } = await db.from('player_stat_snapshots').upsert({
+      player_id: entry.player_id,
+      pooler_id: entry.pooler_id,
+      pool_season_id: poolSeasonId,
+      snapshot_type: 'deadline_baseline',
+      taken_at: deadline.toISOString(),
+      ...statsCache.get(nhlId),
+    }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
+    if (!error) fixed++
+  }
+
+  revalidatePath('/classement-series')
+  revalidatePath('/admin/series')
+  return { fixed }
+}
+
 // ─── Confirm alignment ────────────────────────────────────────────────────────
 
 export async function confirmPlayoffAlignmentAction(
@@ -854,46 +925,58 @@ export async function getPlayoffPoolStandingsAction(
     pm.get(s.player_id)![s.snapshot_type as 'activation' | 'deactivation' | 'deadline_baseline' | 'live_cache'] = s
   }
 
-  // Auto-création de la baseline deadline si la deadline est passée et aucune baseline n'existe
+  // Auto-création des baselines deadline manquantes — par joueur, pas "tout ou rien".
+  // Inclut les joueurs retirés post-deadline (voluntary/elimination) qui n'ont pas de baseline :
+  // cas typique d'un joueur retiré avant la première visite de /classement-series.
   const deadlinePassed = saisonRow?.playoff_submission_deadline
     ? new Date() > new Date(saisonRow.playoff_submission_deadline)
     : false
-  const hasBaselines = (snapshots ?? []).some((s: any) => s.snapshot_type === 'deadline_baseline')
 
-  if (deadlinePassed && !hasBaselines) {
-    const db = createAdminClient()
-    const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
-    const deadline = new Date(saisonRow!.playoff_submission_deadline)
-    const statsCache = new Map<number, any>()
-    const activeRosters = (rosters ?? []).filter((r: any) => r.is_active)
-    const newBaselines: any[] = []
+  if (deadlinePassed) {
+    const existingBaselines = new Set(
+      (snapshots ?? [])
+        .filter((s: any) => s.snapshot_type === 'deadline_baseline')
+        .map((s: any) => `${s.pooler_id}:${s.player_id}`),
+    )
+    // Joueurs actifs + retraits post-deadline sans baseline
+    const needingBaseline = (rosters ?? []).filter((r: any) =>
+      (r.is_active || r.removal_reason === 'voluntary' || r.removal_reason === 'elimination')
+      && !existingBaselines.has(`${r.pooler_id}:${r.player_id}`),
+    )
 
-    for (const r of activeRosters) {
-      const nhlId = (r.players as any)?.nhl_id
-      if (!nhlId) continue
-      if (!statsCache.has(nhlId)) {
-        statsCache.set(nhlId, await fetchPlayerStatsAsOfDate(nhlId, 3, deadline))
+    if (needingBaseline.length > 0) {
+      const db = createAdminClient()
+      const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
+      const deadline = new Date(saisonRow!.playoff_submission_deadline)
+      const statsCache = new Map<number, any>()
+      const newBaselines: any[] = []
+
+      for (const r of needingBaseline as any[]) {
+        const nhlId = (r.players as any)?.nhl_id
+        if (!nhlId) continue
+        if (!statsCache.has(nhlId)) {
+          statsCache.set(nhlId, await fetchPlayerStatsAsOfDate(nhlId, 3, deadline))
+        }
+        newBaselines.push({
+          player_id: r.player_id,
+          pooler_id: r.pooler_id,
+          pool_season_id: poolSeasonId,
+          snapshot_type: 'deadline_baseline',
+          taken_at: deadline.toISOString(),
+          ...statsCache.get(nhlId),
+        })
       }
-      newBaselines.push({
-        player_id: r.player_id,
-        pooler_id: r.pooler_id,
-        pool_season_id: poolSeasonId,
-        snapshot_type: 'deadline_baseline',
-        taken_at: deadline.toISOString(),
-        ...statsCache.get(nhlId),
-      })
-    }
 
-    if (newBaselines.length > 0) {
-      await db.from('player_stat_snapshots').upsert(newBaselines, {
-        onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type',
-      })
-      // Injecter dans le snapMap pour que ce calcul utilise déjà les bonnes baselines
-      for (const b of newBaselines) {
-        if (!snapMap.has(b.pooler_id)) snapMap.set(b.pooler_id, new Map())
-        const pm = snapMap.get(b.pooler_id)!
-        if (!pm.has(b.player_id)) pm.set(b.player_id, {})
-        pm.get(b.player_id)!.deadline_baseline = b
+      if (newBaselines.length > 0) {
+        await db.from('player_stat_snapshots').upsert(newBaselines, {
+          onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type',
+        })
+        for (const b of newBaselines) {
+          if (!snapMap.has(b.pooler_id)) snapMap.set(b.pooler_id, new Map())
+          const pm = snapMap.get(b.pooler_id)!
+          if (!pm.has(b.player_id)) pm.set(b.player_id, {})
+          pm.get(b.player_id)!.deadline_baseline = b
+        }
       }
     }
   }
