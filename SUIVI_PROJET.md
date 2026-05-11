@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite 9)
+
+**[Chore] — Nettoyage boutons de recalcul admin séries** (`ChangeLogPanel.tsx`, `SeriesAdminManager.tsx`) :
+- Suppression des boutons "↺ Recalculer snapshots" et "↺ Baselines manquantes" — devenus inutiles avec les corrections automatiques.
+- Suppression du bouton "🔄 Recréer baselines" (opération destructrice, non nécessaire).
+- Seul bouton restant : "🔔 Rappel deadline" (visible avant la deadline uniquement).
+- Les fonctions d'action sous-jacentes restent dans le code comme outils d'urgence.
+- Commit : `TBD`
+
 ### 2026-05-11 (suite 8)
 
 **[Fix] — Dobes absent du classement : baseline manquante pour joueurs retirés avant la première visite** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/admin/series/ChangeLogPanel.tsx`) :

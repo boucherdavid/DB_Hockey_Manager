@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { recalcPostDeadlineSnapshotsAction, recalcMissingBaselinesAction } from '@/app/gestion-series/playoff-pool-actions'
+import { recalcMissingBaselinesAction } from '@/app/gestion-series/playoff-pool-actions'
 import type { PlayoffChangeLogEntry } from '@/app/gestion-series/playoff-pool-actions'
 
 const fmtDate = (iso: string) =>
@@ -16,27 +16,17 @@ export default function ChangeLogPanel({
   poolSeasonId: number
   log: PlayoffChangeLogEntry[]
 }) {
-  const [recalcResult, setRecalcResult] = useState<string | null>(null)
-  const [baselineResult, setBaselineResult] = useState<string | null>(null)
+  const [result, setResult] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [isBaselinePending, startBaselineTransition] = useTransition()
 
-  function handleRecalc() {
+  function handleFixBaselines() {
     startTransition(async () => {
-      const result = await recalcPostDeadlineSnapshotsAction(poolSeasonId)
-      if (result.error) setRecalcResult(`Erreur : ${result.error}`)
-      else setRecalcResult(`✓ ${result.fixed} snapshot${result.fixed > 1 ? 's' : ''} recalculé${result.fixed > 1 ? 's' : ''}.`)
-    })
-  }
-
-  function handleRecalcBaselines() {
-    startBaselineTransition(async () => {
-      const result = await recalcMissingBaselinesAction(poolSeasonId)
-      if (result.error) setBaselineResult(`Erreur : ${result.error}`)
-      else setBaselineResult(result.fixed > 0
-        ? `✓ ${result.fixed} baseline${result.fixed > 1 ? 's' : ''} ajoutée${result.fixed > 1 ? 's' : ''}.`
-        : '✓ Aucune baseline manquante.')
-      setTimeout(() => setBaselineResult(null), 5000)
+      const r = await recalcMissingBaselinesAction(poolSeasonId)
+      if (r.error) setResult(`Erreur : ${r.error}`)
+      else setResult(r.fixed > 0
+        ? `✓ ${r.fixed} entrée${r.fixed > 1 ? 's' : ''} corrigée${r.fixed > 1 ? 's' : ''}.`
+        : '✓ Aucune correction nécessaire.')
+      setTimeout(() => setResult(null), 6000)
     })
   }
 
@@ -46,26 +36,19 @@ export default function ChangeLogPanel({
         <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
           Changements post-deadline
         </h2>
-        <div className="flex items-center gap-3 flex-wrap">
-          {(recalcResult || baselineResult) && (
-            <span className={`text-xs ${(recalcResult ?? baselineResult)!.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>
-              {recalcResult ?? baselineResult}
+        <div className="flex items-center gap-3">
+          {result && (
+            <span className={`text-xs ${result.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>
+              {result}
             </span>
           )}
           <button
-            onClick={handleRecalcBaselines}
-            disabled={isBaselinePending}
-            className="text-xs bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-300 rounded px-3 py-1.5 font-medium disabled:opacity-50 transition-colors"
-            title="Crée les baselines deadline manquantes pour les joueurs retirés avant la première visite du classement"
-          >
-            {isBaselinePending ? 'Calcul...' : '↺ Baselines manquantes'}
-          </button>
-          <button
-            onClick={handleRecalc}
+            onClick={handleFixBaselines}
             disabled={isPending}
-            className="text-xs bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300 rounded px-3 py-1.5 font-medium disabled:opacity-50 transition-colors"
+            className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded px-3 py-1.5 font-medium disabled:opacity-50 transition-colors"
+            title="Corrige les retraits post-deadline mal enregistrés et crée les baselines manquantes"
           >
-            {isPending ? 'Recalcul...' : '↺ Recalculer snapshots'}
+            {isPending ? 'Correction...' : '↺ Corriger données'}
           </button>
         </div>
       </div>

@@ -580,7 +580,9 @@ export async function submitSeriesBatchAction(input: {
 
   // Appliquer les retraits
   for (const r of input.removals) {
-    const reason = r.removalType === 'free' ? null : r.removalType
+    // Enforcement côté serveur : si la deadline est passée, le reason ne peut pas être null
+    // (protège contre un client qui enverrait 'free' si saison.submissionDeadline n'était pas chargée)
+    const reason = !isLocked ? null : r.removalType === 'elimination' ? 'elimination' : 'voluntary'
     const { error } = await db
       .from('playoff_pool_rosters')
       .update({ is_active: false, removed_at: now, removal_reason: reason })
@@ -719,8 +721,8 @@ export async function recalcPostDeadlineSnapshotsAction(
 
 // ─── Admin : recalcul des baselines deadline manquantes ───────────────────────
 // Crée les deadline_baseline pour tous les joueurs (actifs ou retirés post-deadline)
-// qui n'en ont pas encore. Corrige le cas d'un joueur retiré avant la première
-// visite de /classement-series (ex: Dobes retiré avant que les baselines soient créées).
+// qui n'en ont pas encore. Corrige aussi les removal_reason = null pour des retraits
+// survenus après la deadline (bug: client envoyait 'free' si deadline pas chargée).
 
 export async function recalcMissingBaselinesAction(
   poolSeasonId: number,
@@ -741,7 +743,21 @@ export async function recalcMissingBaselinesAction(
 
   const deadline = new Date(saisonRow.playoff_submission_deadline)
 
-  // Tous les joueurs actifs + retraits post-deadline
+  // Corriger les retraits post-deadline dont removal_reason est null (bug client)
+  const { data: wrongReasonEntries } = await db
+    .from('playoff_pool_rosters')
+    .select('id')
+    .eq('pool_season_id', poolSeasonId)
+    .is('removal_reason', null)
+    .not('removed_at', 'is', null)
+    .gt('removed_at', deadline.toISOString())
+  for (const entry of wrongReasonEntries ?? []) {
+    await db.from('playoff_pool_rosters')
+      .update({ removal_reason: 'voluntary' })
+      .eq('id', entry.id)
+  }
+
+  // Tous les joueurs actifs + retraits post-deadline (y compris ceux qu'on vient de corriger)
   const [{ data: allEntries }, { data: existingRows }] = await Promise.all([
     db.from('playoff_pool_rosters')
       .select('player_id, pooler_id, removal_reason, is_active, players(nhl_id)')
