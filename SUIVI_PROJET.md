@@ -56,6 +56,17 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite 12)
+
+**[Feat] — Page /resultats : récap journalier par pooler avec détail joueurs** (`lib/daily-recap.ts`, `app/resultats/page.tsx`, `app/resultats/ResultatsManager.tsx`, `app/page.tsx`, `components/Navbar.tsx`, `components/DailyRecapWidget.tsx`) :
+- Nouvelle lib `lib/daily-recap.ts` : logique partagée séries + saison régulière. Types `RecapPlayer`, `RecapPooler`, `DailyRecap` centralisés. Fonctions `fetchPlayoffRecapForDate` (gameType=3, `playoff_pool_rosters`) et `fetchRegularRecapForDate` (gameType=2, `pooler_rosters`). Cache NHL `revalidate: 3600`.
+- Page `/resultats?date=YYYY-MM-DD` : navigation ← Veille / Lendemain →, défaut = hier en ET. Affiche les deux pools (séries + saison) si actifs. Clic sur un pooler pour voir le détail de ses joueurs (stat line B/A ou V/P/JB + pts).
+- Page d'accueil : lien "Résultats détaillés →" sous le classement séries, à côté de "Classement détaillé →".
+- Navbar : lien "Résultats" dans le dropdown "Pool Séries" (desktop + mobile), visible quand un pool séries est actif.
+- `DailyRecapWidget.tsx` : re-exporte les types depuis `lib/daily-recap` (plus de duplication).
+- **Architecture saison régulière** : `fetchRegularRecapForDate` est prêt — se branchera automatiquement quand `regularSaison` sera actif.
+- Commit : `TBD`
+
 ### 2026-05-11 (suite 11)
 
 **[Feat] — Colonne "HIER" dans classement séries (page d'accueil)** (`app/app/page.tsx`) :

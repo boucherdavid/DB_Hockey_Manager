@@ -250,6 +250,7 @@ export default function Navbar({
                   <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
                     {userName && <Link href="/gestion-series" className={dropdownLinkClass('/gestion-series')}>Choix des joueurs</Link>}
                     {newPlayoffActive && <Link href="/classement-series" className={dropdownLinkClass('/classement-series')}>Classement</Link>}
+                    {newPlayoffActive && <Link href="/resultats" className={dropdownLinkClass('/resultats')}>Résultats</Link>}
                     {effectiveIsAdmin &&<div className="border-t my-1" />}
                     {effectiveIsAdmin &&<Link href="/admin/series" className={dropdownLinkClass('/admin/series')}>Gestion/Création Pool des séries</Link>}
                   </div>
@@ -390,6 +391,7 @@ export default function Navbar({
             <MobileSection label={'Pool S\u00e9ries'} />
             {userName && <Link href="/gestion-series" className={mobileLinkClass('/gestion-series')}>Choix des joueurs</Link>}
             {newPlayoffActive && <Link href="/classement-series" className={mobileLinkClass('/classement-series')}>Classement</Link>}
+            {newPlayoffActive && <Link href="/resultats" className={mobileLinkClass('/resultats')}>Résultats</Link>}
             {effectiveIsAdmin &&<Link href="/admin/series" className={mobileLinkClass('/admin/series')}>{'Gestion/Cr\u00e9ation Pool des s\u00e9ries'}</Link>}
 
             {userName && (

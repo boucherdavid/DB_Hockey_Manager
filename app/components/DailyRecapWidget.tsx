@@ -1,26 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-
-export type RecapPlayer = {
-  firstName: string
-  lastName: string
-  teamCode: string
-  positionSlot: string
-  goals: number
-  assists: number
-  goalieWins: number
-  goalieOtl: number
-  goalieShutouts: number
-  pts: number
-}
-
-export type RecapPooler = {
-  poolerId: string
-  poolerName: string
-  pts: number
-  players: RecapPlayer[]
-}
+export type { RecapPlayer, RecapPooler } from '@/lib/daily-recap'
+import type { RecapPlayer, RecapPooler } from '@/lib/daily-recap'
 
 function fmtRecapDate(dateStr: string): string {
   if (!dateStr) return ''
