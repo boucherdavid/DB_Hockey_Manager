@@ -56,6 +56,20 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-11 (suite 6)
+
+**[Feat] — Panier découplé retraits/ajouts + fix snapshots activation + log admin** (`app/app/gestion-series/GestionSeriesManager.tsx`, `app/app/gestion-series/playoff-pool-actions.ts`, `app/app/admin/series/ChangeLogPanel.tsx`, `app/app/admin/series/page.tsx`) :
+
+Plusieurs correctifs et améliorations en un commit :
+
+1. **Panier découplé** : Retraits et ajouts sont maintenant deux listes indépendantes. Clic ↺ → joueur marqué "En sortie" immédiatement sans avoir à choisir un remplaçant en même temps. Le panneau d'ajout est libre (slot + joueur indépendants). Cap projetée = tous les retraits + tous les ajouts validés ensemble à la soumission. Élimine le problème du "1-pour-1 forcé" qui empêchait de croiser les salaires entre positions différentes. Commit : `e0d9f17`.
+
+2. **Fix snapshots d'activation** : `fetchPlayerStatsById` (endpoint `/landing`) remplacé par `fetchPlayerStatsAsOfDate(demain)` (game-log) pour les snapshots d'activation. Plus fiable pour les gardiens, et implémente la règle "effectif demain" — les matchs du jour sont inclus dans la baseline donc ne comptent pas comme nouveaux points.
+
+3. **Action admin `recalcPostDeadlineSnapshotsAction`** : Recalcule les snapshots d'activation pour tous les joueurs ajoutés après la deadline (ex: Andersen de Jérôme dont le snapshot était à zéro). Bouton "↺ Recalculer snapshots" dans l'interface admin séries.
+
+4. **Log des changements admin** : Nouvelle section dans `/admin/series` montrant tous les retraits et ajouts post-deadline par pooler (qui, quoi, quand, type élim/volontaire). Composant `ChangeLogPanel.tsx`.
+
 ### 2026-05-11 (suite 5)
 
 **[Feat] — Bouton Modifier sur les items du panier** (`app/app/gestion-series/GestionSeriesManager.tsx`) :
