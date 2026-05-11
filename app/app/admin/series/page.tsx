@@ -6,7 +6,11 @@ import {
   getAllPlayoffPoolRostersAction,
   getParticipatingTeamsAction,
 } from './series-admin-actions'
+import {
+  getPlayoffChangeLogAction,
+} from '@/app/gestion-series/playoff-pool-actions'
 import SeriesAdminManager from './SeriesAdminManager'
+import ChangeLogPanel from './ChangeLogPanel'
 
 export const metadata = { title: 'Pool des séries — Admin' }
 export const dynamic = 'force-dynamic'
@@ -33,16 +37,18 @@ export default async function AdminSeriesPage() {
     )
   }
 
-  const [eliminations, allRosters, { data: allTeams }, participatingTeamIds] = await Promise.all([
+  const [eliminations, allRosters, { data: allTeams }, participatingTeamIds, changeLog] = await Promise.all([
     getEliminatedTeamsForPoolAction(saison.id),
     getAllPlayoffPoolRostersAction(saison.id, saison.season),
     supabase.from('teams').select('id, code, name').order('code'),
     getParticipatingTeamsAction(saison.id),
+    getPlayoffChangeLogAction(saison.id),
   ])
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-800">Pool des séries — {saison.season}</h1>
+      <ChangeLogPanel poolSeasonId={saison.id} log={changeLog} />
       <SeriesAdminManager
         saison={saison}
         participatingTeamIds={participatingTeamIds}

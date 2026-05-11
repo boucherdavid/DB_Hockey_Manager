@@ -368,8 +368,10 @@ export async function submitPlayoffPoolChangeAction(input: {
     }
   }
 
-  const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
+  const { fetchPlayerStatsById, fetchPlayerStatsAsOfDate, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
   const now = new Date().toISOString()
+  // Baseline d'activation : inclure les matchs du jour → effectif demain
+  const tomorrowMidnight = new Date(); tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1); tomorrowMidnight.setHours(0, 0, 0, 0)
 
   // Remove player
   if (input.removeEntryId) {
@@ -382,7 +384,7 @@ export async function submitPlayoffPoolChangeAction(input: {
       .eq('id', input.removeEntryId)
     if (error) return { error: error.message }
 
-    // Deactivation snapshot
+    // Deactivation snapshot — stats courantes du joueur sortant
     if (input.removeNhlId) {
       const stats = (await fetchPlayerStatsById(input.removeNhlId, 3)) ?? EMPTY_STATS
       await db.from('player_stat_snapshots').insert({
@@ -422,9 +424,10 @@ export async function submitPlayoffPoolChangeAction(input: {
       if (error) return { error: error.message }
     }
 
-    // Activation snapshot
+    // Activation snapshot — game-log jusqu'à minuit demain → matchs du jour inclus dans la baseline
+    // Garantit que le changement est effectif à partir de demain seulement
     if (input.addNhlId) {
-      const stats = (await fetchPlayerStatsById(input.addNhlId, 3)) ?? EMPTY_STATS
+      const stats = await fetchPlayerStatsAsOfDate(input.addNhlId, 3, tomorrowMidnight)
       await db.from('player_stat_snapshots').insert({
         player_id: input.addPlayerId,
         pooler_id: input.poolerId,
@@ -454,25 +457,29 @@ export async function submitPlayoffPoolChangeAction(input: {
   return {}
 }
 
-// ─── Batch change action ──────────────────────────────────────────────────────
+// ─── Batch change action (retraits + ajouts découplés) ───────────────────────
 
-export type SeriesBatchItem = {
-  type: 'elimination' | 'voluntary' | 'add'
-  removeEntryId: number | null
-  removePlayerId: number | null
-  removeNhlId: number | null
-  addPlayerId: number
-  addNhlId: number | null
-  addPositionSlot: 'F' | 'D' | 'G'
+export type SeriesBatchRemoval = {
+  entryId: number
+  playerId: number
+  nhlId: number | null
+  removalType: 'elimination' | 'voluntary' | 'free' // 'free' = avant deadline
+}
+
+export type SeriesBatchAddition = {
+  playerId: number
+  nhlId: number | null
+  positionSlot: 'F' | 'D' | 'G'
 }
 
 export async function submitSeriesBatchAction(input: {
   poolerId: string
   poolSeasonId: number
   season: string
-  items: SeriesBatchItem[]
+  removals: SeriesBatchRemoval[]
+  additions: SeriesBatchAddition[]
 }): Promise<{ error?: string }> {
-  if (!input.items.length) return {}
+  if (!input.removals.length && !input.additions.length) return {}
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -494,8 +501,8 @@ export async function submitSeriesBatchAction(input: {
   const isLocked = deadline ? new Date() > deadline : false
   const poolCap: number = Number(saisonRow.pool_cap ?? 0)
 
-  const elimItems = input.items.filter(i => i.type === 'elimination')
-  const voluntaryItems = input.items.filter(i => i.type === 'voluntary')
+  const elimRemovals = input.removals.filter(r => r.removalType === 'elimination')
+  const voluntaryRemovals = input.removals.filter(r => r.removalType === 'voluntary')
 
   if (isLocked && !isAdmin) {
     const { data: history } = await db
@@ -510,15 +517,15 @@ export async function submitSeriesBatchAction(input: {
     const maxElim = saisonRow.playoff_max_elim_changes ?? 5
     const maxVoluntary = saisonRow.playoff_max_changes ?? 5
 
-    if (elimUsed + elimItems.length > maxElim) {
+    if (elimUsed + elimRemovals.length > maxElim) {
       return { error: `Ce panier dépasserait la limite de ${maxElim} remplacements d'élimination (${elimUsed} déjà utilisés).` }
     }
-    if (voluntaryUsed + voluntaryItems.length > maxVoluntary) {
+    if (voluntaryUsed + voluntaryRemovals.length > maxVoluntary) {
       return { error: `Ce panier dépasserait la limite de ${maxVoluntary} changements volontaires (${voluntaryUsed} déjà utilisés).` }
     }
 
-    // Verify eliminated players (dual logic: playoff_eliminations OR hors participating)
-    if (elimItems.length > 0) {
+    // Vérifier que les retraits 'élimination' sont bien sur des équipes éliminées
+    if (elimRemovals.length > 0) {
       const [{ data: eliminations }, { data: participating }] = await Promise.all([
         db.from('playoff_eliminations').select('team_id').eq('pool_season_id', input.poolSeasonId),
         db.from('playoff_participating_teams').select('team_id').eq('pool_season_id', input.poolSeasonId),
@@ -528,9 +535,8 @@ export async function submitSeriesBatchAction(input: {
       const isEliminated = (tid: number) =>
         elimTeamIds.has(tid) || (participatingIds.size > 0 && !participatingIds.has(tid))
 
-      for (const item of elimItems) {
-        if (!item.removePlayerId) continue
-        const { data: pTeam } = await db.from('players').select('teams(id)').eq('id', item.removePlayerId).single()
+      for (const r of elimRemovals) {
+        const { data: pTeam } = await db.from('players').select('teams(id)').eq('id', r.playerId).single()
         const tid = (pTeam?.teams as any)?.id
         if (tid && !isEliminated(tid)) {
           return { error: "Un joueur marqué 'élimination' n'est pas sur une équipe éliminée." }
@@ -539,7 +545,7 @@ export async function submitSeriesBatchAction(input: {
     }
   }
 
-  // Validate projected cap
+  // Validation cap globale sur l'ensemble retraits + ajouts
   if (poolCap > 0) {
     const { data: currentRoster } = await db
       .from('playoff_pool_rosters')
@@ -548,15 +554,15 @@ export async function submitSeriesBatchAction(input: {
       .eq('pool_season_id', input.poolSeasonId)
       .eq('is_active', true)
 
-    const removePlayerIds = new Set(input.items.filter(i => i.removePlayerId).map(i => i.removePlayerId!))
+    const removePlayerIds = new Set(input.removals.map(r => r.playerId))
     let projectedCap = 0
     for (const r of (currentRoster ?? []) as any[]) {
       if (removePlayerIds.has(r.player_id)) continue
       const c = (r.players?.player_contracts ?? []).find((c: any) => c.season === toNhlSeason(input.season))
       projectedCap += c?.cap_number ?? 0
     }
-    for (const item of input.items) {
-      const { data: p } = await db.from('players').select('player_contracts(season, cap_number)').eq('id', item.addPlayerId).single()
+    for (const a of input.additions) {
+      const { data: p } = await db.from('players').select('player_contracts(season, cap_number)').eq('id', a.playerId).single()
       const c = ((p as any)?.player_contracts ?? []).find((c: any) => c.season === toNhlSeason(input.season))
       projectedCap += c?.cap_number ?? 0
     }
@@ -566,52 +572,56 @@ export async function submitSeriesBatchAction(input: {
     }
   }
 
-  const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
+  const { fetchPlayerStatsById, fetchPlayerStatsAsOfDate, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
   const now = new Date().toISOString()
+  const tomorrowMidnight = new Date(); tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1); tomorrowMidnight.setHours(0, 0, 0, 0)
 
-  for (const item of input.items) {
-    if (item.removeEntryId) {
-      const reason = !isLocked ? null : item.type === 'elimination' ? 'elimination' : 'voluntary'
-      const { error } = await db
-        .from('playoff_pool_rosters')
-        .update({ is_active: false, removed_at: now, removal_reason: reason })
-        .eq('id', item.removeEntryId)
-      if (error) return { error: error.message }
+  // Appliquer les retraits
+  for (const r of input.removals) {
+    const reason = r.removalType === 'free' ? null : r.removalType
+    const { error } = await db
+      .from('playoff_pool_rosters')
+      .update({ is_active: false, removed_at: now, removal_reason: reason })
+      .eq('id', r.entryId)
+    if (error) return { error: error.message }
 
-      if (item.removeNhlId && item.removePlayerId) {
-        const stats = (await fetchPlayerStatsById(item.removeNhlId, 3)) ?? EMPTY_STATS
-        await db.from('player_stat_snapshots').insert({
-          player_id: item.removePlayerId, pooler_id: input.poolerId,
-          pool_season_id: input.poolSeasonId, snapshot_type: 'deactivation', taken_at: now, ...stats,
-        })
-      }
+    if (r.nhlId) {
+      const stats = (await fetchPlayerStatsById(r.nhlId, 3)) ?? EMPTY_STATS
+      await db.from('player_stat_snapshots').insert({
+        player_id: r.playerId, pooler_id: input.poolerId,
+        pool_season_id: input.poolSeasonId, snapshot_type: 'deactivation', taken_at: now, ...stats,
+      })
     }
+  }
 
+  // Appliquer les ajouts
+  for (const a of input.additions) {
     const existing = await db.from('playoff_pool_rosters')
       .select('id')
       .eq('pooler_id', input.poolerId)
-      .eq('player_id', item.addPlayerId)
+      .eq('player_id', a.playerId)
       .eq('pool_season_id', input.poolSeasonId)
       .maybeSingle()
 
     if (existing.data) {
       const { error } = await db.from('playoff_pool_rosters')
-        .update({ is_active: true, added_at: now, removed_at: null, removal_reason: null, position_slot: item.addPositionSlot })
+        .update({ is_active: true, added_at: now, removed_at: null, removal_reason: null, position_slot: a.positionSlot })
         .eq('id', existing.data.id)
       if (error) return { error: error.message }
     } else {
       const { error } = await db.from('playoff_pool_rosters').insert({
-        pooler_id: input.poolerId, player_id: item.addPlayerId,
-        pool_season_id: input.poolSeasonId, position_slot: item.addPositionSlot,
+        pooler_id: input.poolerId, player_id: a.playerId,
+        pool_season_id: input.poolSeasonId, position_slot: a.positionSlot,
         is_active: true, added_at: now,
       })
       if (error) return { error: error.message }
     }
 
-    if (item.addNhlId && item.addPlayerId) {
-      const stats = (await fetchPlayerStatsById(item.addNhlId, 3)) ?? EMPTY_STATS
+    // Activation snapshot — effectif demain (game-log jusqu'à minuit demain)
+    if (a.nhlId) {
+      const stats = await fetchPlayerStatsAsOfDate(a.nhlId, 3, tomorrowMidnight)
       await db.from('player_stat_snapshots').insert({
-        player_id: item.addPlayerId, pooler_id: input.poolerId,
+        player_id: a.playerId, pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId, snapshot_type: 'activation', taken_at: now, ...stats,
       })
     }
@@ -620,12 +630,12 @@ export async function submitSeriesBatchAction(input: {
   if (!isAdmin && isLocked) {
     const { data: poolerRow } = await db.from('poolers').select('name').eq('id', input.poolerId).single()
     const { sendPushToAdmins } = await import('@/lib/push')
-    const n = input.items.length
+    const n = input.removals.length + input.additions.length
     sendPushToAdmins({
       title: 'Pool des séries — Changement d\'alignement',
-      body: n === 1
+      body: n <= 2
         ? `${poolerRow?.name ?? 'Un pooler'} a modifié son alignement.`
-        : `${poolerRow?.name ?? 'Un pooler'} a soumis ${n} changements.`,
+        : `${poolerRow?.name ?? 'Un pooler'} a soumis ${Math.max(input.removals.length, input.additions.length)} changements.`,
       url: '/admin/series',
     }, user.id).catch(() => {})
   }
@@ -634,6 +644,71 @@ export async function submitSeriesBatchAction(input: {
   revalidatePath('/admin/series')
   revalidatePath('/classement-series')
   return {}
+}
+
+// ─── Admin : recalcul snapshots post-deadline ─────────────────────────────────
+// Corrige les snapshots d'activation pour les joueurs ajoutés après la deadline
+// dont le snapshot était à zéro (ex: bug fetchPlayerStatsById gardiens).
+
+export async function recalcPostDeadlineSnapshotsAction(
+  poolSeasonId: number,
+): Promise<{ fixed: number; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { fixed: 0, error: 'Non authentifié' }
+  const { data: poolerSelf } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!poolerSelf?.is_admin) return { fixed: 0, error: 'Non autorisé' }
+
+  const db = createAdminClient()
+  const { data: saisonRow } = await db
+    .from('pool_seasons')
+    .select('playoff_submission_deadline, season')
+    .eq('id', poolSeasonId)
+    .single()
+  if (!saisonRow?.playoff_submission_deadline) return { fixed: 0, error: 'Deadline introuvable' }
+
+  const deadline = new Date(saisonRow.playoff_submission_deadline)
+
+  // Entrées actives ou retirées ajoutées APRÈS la deadline
+  const { data: postDeadlineEntries } = await db
+    .from('playoff_pool_rosters')
+    .select('id, player_id, pooler_id, added_at, players(nhl_id)')
+    .eq('pool_season_id', poolSeasonId)
+    .gt('added_at', deadline.toISOString())
+
+  if (!postDeadlineEntries?.length) return { fixed: 0 }
+
+  const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
+
+  // Pour chaque entrée post-deadline : recalculer le snapshot d'activation
+  // en utilisant les stats as-of minuit du lendemain de l'ajout (règle "effectif demain")
+  let fixed = 0
+  for (const entry of postDeadlineEntries) {
+    const nhlId = (entry.players as any)?.nhl_id
+    if (!nhlId) continue
+
+    const addedAt = new Date(entry.added_at)
+    const effectiveMidnight = new Date(addedAt)
+    effectiveMidnight.setDate(effectiveMidnight.getDate() + 1)
+    effectiveMidnight.setHours(0, 0, 0, 0)
+
+    const stats = await fetchPlayerStatsAsOfDate(nhlId, 3, effectiveMidnight)
+
+    const { error } = await db.from('player_stat_snapshots').upsert({
+      player_id: entry.player_id,
+      pooler_id: entry.pooler_id,
+      pool_season_id: poolSeasonId,
+      snapshot_type: 'activation',
+      taken_at: entry.added_at,
+      ...stats,
+    }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
+
+    if (!error) fixed++
+  }
+
+  revalidatePath('/classement-series')
+  revalidatePath('/admin/series')
+  return { fixed }
 }
 
 // ─── Confirm alignment ────────────────────────────────────────────────────────
@@ -652,6 +727,84 @@ export async function confirmPlayoffAlignmentAction(
     url: '/admin/series',
   }, user.id).catch(() => {})
   return {}
+}
+
+// ─── Change log (admin) ───────────────────────────────────────────────────────
+
+export type PlayoffChangeLogEntry = {
+  poolerName: string
+  action: 'ajout' | 'retrait'
+  playerName: string
+  teamCode: string | null
+  positionSlot: 'F' | 'D' | 'G' | null
+  removalReason: 'elimination' | 'voluntary' | null
+  changedAt: string
+}
+
+export async function getPlayoffChangeLogAction(
+  poolSeasonId: number,
+  limit = 50,
+): Promise<PlayoffChangeLogEntry[]> {
+  const db = createAdminClient()
+
+  const { data } = await db
+    .from('playoff_pool_rosters')
+    .select('pooler_id, player_id, position_slot, is_active, added_at, removed_at, removal_reason, poolers(name), players(first_name, last_name, teams(code))')
+    .eq('pool_season_id', poolSeasonId)
+    .not('removal_reason', 'is', null)  // seulement les changements post-deadline
+    .order('removed_at', { ascending: false })
+    .limit(limit)
+
+  const log: PlayoffChangeLogEntry[] = []
+  for (const r of (data ?? []) as any[]) {
+    const playerName = `${r.players?.last_name ?? ''}, ${r.players?.first_name ?? ''}`
+    const poolerName: string = r.poolers?.name ?? r.pooler_id
+    const teamCode: string | null = r.players?.teams?.code ?? null
+
+    // Retrait (joueur sorti)
+    log.push({
+      poolerName,
+      action: 'retrait',
+      playerName,
+      teamCode,
+      positionSlot: r.position_slot as 'F' | 'D' | 'G',
+      removalReason: r.removal_reason,
+      changedAt: r.removed_at,
+    })
+  }
+
+  // Ajouts post-deadline : entrées dont added_at > deadline (pas de deadline_baseline)
+  const { data: saisonRow } = await db
+    .from('pool_seasons')
+    .select('playoff_submission_deadline')
+    .eq('id', poolSeasonId)
+    .single()
+  const deadline = saisonRow?.playoff_submission_deadline
+
+  if (deadline) {
+    const { data: additions } = await db
+      .from('playoff_pool_rosters')
+      .select('pooler_id, player_id, position_slot, added_at, poolers(name), players(first_name, last_name, teams(code))')
+      .eq('pool_season_id', poolSeasonId)
+      .gt('added_at', deadline)
+      .order('added_at', { ascending: false })
+      .limit(limit)
+
+    for (const r of (additions ?? []) as any[]) {
+      const playerName = `${r.players?.last_name ?? ''}, ${r.players?.first_name ?? ''}`
+      log.push({
+        poolerName: r.poolers?.name ?? r.pooler_id,
+        action: 'ajout',
+        playerName,
+        teamCode: r.players?.teams?.code ?? null,
+        positionSlot: r.position_slot as 'F' | 'D' | 'G',
+        removalReason: null,
+        changedAt: r.added_at,
+      })
+    }
+  }
+
+  return log.sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime()).slice(0, limit)
 }
 
 // ─── Standings ────────────────────────────────────────────────────────────────
