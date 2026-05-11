@@ -65,7 +65,7 @@ Je l'utiliserai pour:
 - Navbar : lien "Résultats" dans le dropdown "Pool Séries" (desktop + mobile), visible quand un pool séries est actif.
 - `DailyRecapWidget.tsx` : re-exporte les types depuis `lib/daily-recap` (plus de duplication).
 - **Architecture saison régulière** : `fetchRegularRecapForDate` est prêt — se branchera automatiquement quand `regularSaison` sera actif.
-- Commit : `TBD`
+- Commit : `d12b35a`
 
 ### 2026-05-11 (suite 11)
 
