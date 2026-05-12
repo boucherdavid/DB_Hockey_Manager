@@ -436,10 +436,12 @@ def upload_vers_supabase(csv_path=None):
             if first_val in ['UFA', 'RFA']:
                 status = first_val
 
-        # Heuristique ELC : si le scraper n'a rien détecté, inférer à partir
-        # du salaire (≤ 975 000$) + âge (≤ 25) + contrat se terminant en RFA.
-        # Couvre les cas où PuckPedia change son HTML entre deux scrapes.
-        if not status and age and age <= 25:
+        # Heuristique ELC : uniquement si la colonne ELC_Saisons est ABSENTE du CSV
+        # (scraper incomplet ou changement de HTML PuckPedia).
+        # Si ELC_Saisons existe mais est vide pour ce joueur, PuckPedia ne le marque
+        # pas ELC — on respecte ça et on n'applique pas l'heuristique.
+        elc_detection_ran = 'ELC_Saisons' in df.columns
+        if not status and not elc_detection_ran and age and age <= 25:
             cap_vals = [row.get(s, '') for s in season_cols]
             numeric_vals = []
             terminal_status = None
