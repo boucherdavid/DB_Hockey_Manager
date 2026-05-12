@@ -3,7 +3,6 @@ import {
   fetchPlayoffRecapForDate,
   fetchRegularRecapForDate,
   getYesterdayET,
-  addDaysToDate,
 } from '@/lib/daily-recap'
 import ResultatsManager from './ResultatsManager'
 
@@ -32,12 +31,9 @@ export default async function ResultatsPage({
       .maybeSingle(),
   ])
 
-  // Premier jour de comptabilisation = lendemain de la deadline (date ISO AAAA-MM-JJ)
+  // Premier jour de comptabilisation = date de la deadline (même journée)
   const playoffMinDate: string | null = playoffSaison?.playoff_submission_deadline
-    ? addDaysToDate(
-        (playoffSaison.playoff_submission_deadline as string).substring(0, 10),
-        1,
-      )
+    ? (playoffSaison.playoff_submission_deadline as string).substring(0, 10)
     : null
 
   // Borner la date demandée au minimum autorisé
