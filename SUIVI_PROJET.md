@@ -60,9 +60,20 @@ Je l'utiliserai pour:
 
 **[Fix] — Page d'accueil + /resultats : liens repositionnés, date min, pool unique** (`app/page.tsx`, `app/resultats/page.tsx`, `app/resultats/ResultatsManager.tsx`) :
 - Accueil : liens "Classement détaillé" et "Résultats détaillés" déplacés dans un `<tfoot>` du tableau séries, alignés sous les colonnes PTS (bleu) et HIER (vert) respectivement.
-- `/resultats` : navigation bloquée avant le premier jour du pool (= `playoff_submission_deadline + 1 jour`). Date trop ancienne dans l'URL bornée automatiquement. Bouton "← Veille" masqué quand on est sur la première journée.
-- `/resultats` : saison régulière masquée quand un pool séries est actif (évite la confusion entre les deux pools affichés simultanément).
-- Commit : `[à venir]`
+- `/resultats` : navigation bloquée avant le premier jour du pool (= date de la `playoff_submission_deadline`). Date trop ancienne dans l'URL bornée automatiquement. Bouton "← Veille" masqué quand on est sur la première journée.
+- `/resultats` : saison régulière masquée quand un pool séries est actif.
+- Commits : `0c7bac9`, `2ae210c`
+
+**[Feat] — `/admin/rosters` : Mode init sans contraintes** (`app/admin/rosters/actions.ts`, `page.tsx`, `RosterManager.tsx`) :
+- Nouveau toggle "⚙ Mode init" dans la barre du haut (admin seulement).
+- En mode init : liste tous les joueurs y compris ceux appartenant à d'autres poolers (badge orange avec le nom du propriétaire). Aucune validation (limites de positions, min réservistes, is_rookie). `adminInitRosterAction` retire automatiquement le joueur de son roster actuel avant de l'assigner. Pas de snapshots NHL ni de notifications push.
+- Suppression de toutes les notifications push de `/admin/rosters` (l'admin ne devrait pas spammer les poolers pour des ajustements techniques).
+- Commits : `b2747b7`, `2d66dd6`
+
+**[Fix] — Pipeline Python : heuristique ELC faux positif (ex. Jet Greaves)** (`python_script/import_supabase.py`) :
+- L'heuristique ELC (âge ≤ 25 + salaire ≤ 975 K$ + fin RFA) est désormais désactivée si la colonne `ELC_Saisons` est présente dans le CSV — ce qui signifie que le scraper a tourné et n'a pas détecté d'ELC pour ce joueur. L'heuristique reste active en fallback si `ELC_Saisons` est absente (scraper incomplet).
+- Correction immédiate : `UPDATE players SET is_rookie = false WHERE first_name = 'Jet' AND last_name = 'Greaves'` exécuté en SQL.
+- Commit : `0455fa0`
 
 ### 2026-05-11 (suite 12)
 
