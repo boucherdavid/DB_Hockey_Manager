@@ -414,6 +414,19 @@ def upload_vers_supabase(csv_path=None):
         offset += 1000
     print(f'[INFO] {len(existing_map)} joueurs deja en base')
 
+    # Noms qui apparaissent plusieurs fois dans le CSV avec des équipes différentes
+    # (ex: les deux Sebastian Aho). Le fallback existing_by_name (len==1) est bloqué
+    # pour ces noms afin d'éviter qu'un homonyme écrase le joueur déjà en base.
+    name_counts: dict[str, set[str]] = {}
+    for _, row in df.iterrows():
+        fn_tmp, ln_tmp = parse_nom(row.get('Joueur', ''))
+        tc_tmp = str(row.get('Equipe', '')).strip().upper()
+        k = f'{normaliser_nom(fn_tmp)}|{normaliser_nom(ln_tmp)}'
+        name_counts.setdefault(k, set()).add(tc_tmp)
+    ambiguous_names = {k for k, teams in name_counts.items() if len(teams) > 1}
+    if ambiguous_names:
+        print(f'[INFO] Noms ambigus (homonymes dans le CSV) : {ambiguous_names}')
+
     players_to_insert = []
     players_to_update = []
 
@@ -481,8 +494,12 @@ def upload_vers_supabase(csv_path=None):
         elif f'{fn}|{ln}|' in existing_map:
             # Joueur en base sans équipe assignée (team_id null)
             player_info = existing_map[f'{fn}|{ln}|']
-        elif key_name in existing_by_name and len(existing_by_name[key_name]) == 1:
-            # Joueur unique par nom avec une équipe différente (changement d'équipe)
+        elif (key_name in existing_by_name
+              and len(existing_by_name[key_name]) == 1
+              and key_name not in ambiguous_names):
+            # Joueur unique par nom avec une équipe différente (changement d'équipe).
+            # Bloqué si le nom est ambigu (homonymes dans le CSV) pour éviter
+            # qu'un nouvel homonyme écrase le joueur existant.
             player_info = existing_by_name[key_name][0]
             # Mettre à jour le cache avec la nouvelle clé équipe pour les passes suivantes (ex: contrats)
             existing_map[key_team] = {'id': player_info['id'], 'draft_year': player_info.get('draft_year')}
