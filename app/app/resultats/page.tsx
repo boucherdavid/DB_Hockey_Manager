@@ -3,6 +3,7 @@ import {
   fetchPlayoffRecapForDate,
   fetchRegularRecapForDate,
   getYesterdayET,
+  addDaysToDate,
 } from '@/lib/daily-recap'
 import ResultatsManager from './ResultatsManager'
 
@@ -14,14 +15,12 @@ export default async function ResultatsPage({
   searchParams: Promise<{ date?: string }>
 }) {
   const params = await searchParams
-  const date = params.date ?? getYesterdayET()
-
   const supabase = await createClient()
 
   const [{ data: playoffSaison }, { data: regularSaison }] = await Promise.all([
     supabase
       .from('pool_seasons')
-      .select('id, season')
+      .select('id, season, playoff_submission_deadline')
       .eq('is_active', true)
       .eq('is_playoff', true)
       .maybeSingle(),
@@ -33,9 +32,22 @@ export default async function ResultatsPage({
       .maybeSingle(),
   ])
 
+  // Premier jour de comptabilisation = lendemain de la deadline (date ISO AAAA-MM-JJ)
+  const playoffMinDate: string | null = playoffSaison?.playoff_submission_deadline
+    ? addDaysToDate(
+        (playoffSaison.playoff_submission_deadline as string).substring(0, 10),
+        1,
+      )
+    : null
+
+  // Borner la date demandée au minimum autorisé
+  const rawDate = params.date ?? getYesterdayET()
+  const date = playoffMinDate && rawDate < playoffMinDate ? playoffMinDate : rawDate
+
   const [playoffRecap, regularRecap] = await Promise.all([
     playoffSaison ? fetchPlayoffRecapForDate(supabase, playoffSaison.id, date) : null,
-    regularSaison ? fetchRegularRecapForDate(supabase, regularSaison.id, date) : null,
+    // Masquer la saison régulière quand les séries sont actives
+    !playoffSaison && regularSaison ? fetchRegularRecapForDate(supabase, regularSaison.id, date) : null,
   ])
 
   return (
@@ -45,6 +57,7 @@ export default async function ResultatsPage({
       regularRecap={regularRecap}
       playoffSaisonName={playoffSaison?.season}
       regularSaisonName={regularSaison?.season}
+      minDate={playoffMinDate ?? undefined}
     />
   )
 }

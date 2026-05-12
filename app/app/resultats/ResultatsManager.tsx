@@ -114,12 +114,14 @@ export default function ResultatsManager({
   regularRecap,
   playoffSaisonName,
   regularSaisonName,
+  minDate,
 }: {
   date: string
   playoffRecap: DailyRecap | null
   regularRecap: DailyRecap | null
   playoffSaisonName?: string
   regularSaisonName?: string
+  minDate?: string
 }) {
   const router = useRouter()
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -128,6 +130,7 @@ export default function ResultatsManager({
   const nextDate = addDaysToDate(date, 1)
   const todayET  = getTodayET()
   const isToday  = date >= todayET
+  const isFirst  = !!minDate && prevDate < minDate
 
   function navigate(d: string) {
     router.push(`/resultats?date=${d}`)
@@ -148,12 +151,14 @@ export default function ResultatsManager({
           <p className="text-gray-500 mt-0.5 capitalize">{fmtDateLong(date)}</p>
         </div>
         <div className="flex items-center gap-2 pt-1 shrink-0">
-          <button
-            onClick={() => navigate(prevDate)}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-          >
-            ← Veille
-          </button>
+          {!isFirst && (
+            <button
+              onClick={() => navigate(prevDate)}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+            >
+              ← Veille
+            </button>
+          )}
           {!isToday && (
             <button
               onClick={() => navigate(nextDate)}

@@ -56,6 +56,14 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-12
+
+**[Fix] — Page d'accueil + /resultats : liens repositionnés, date min, pool unique** (`app/page.tsx`, `app/resultats/page.tsx`, `app/resultats/ResultatsManager.tsx`) :
+- Accueil : liens "Classement détaillé" et "Résultats détaillés" déplacés dans un `<tfoot>` du tableau séries, alignés sous les colonnes PTS (bleu) et HIER (vert) respectivement.
+- `/resultats` : navigation bloquée avant le premier jour du pool (= `playoff_submission_deadline + 1 jour`). Date trop ancienne dans l'URL bornée automatiquement. Bouton "← Veille" masqué quand on est sur la première journée.
+- `/resultats` : saison régulière masquée quand un pool séries est actif (évite la confusion entre les deux pools affichés simultanément).
+- Commit : `[à venir]`
+
 ### 2026-05-11 (suite 12)
 
 **[Feat] — Page /resultats : récap journalier par pooler avec détail joueurs** (`lib/daily-recap.ts`, `app/resultats/page.tsx`, `app/resultats/ResultatsManager.tsx`, `app/page.tsx`, `components/Navbar.tsx`, `components/DailyRecapWidget.tsx`) :

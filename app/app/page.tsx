@@ -368,17 +368,24 @@ export default async function Home() {
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t border-gray-100">
+                        <td colSpan={2}></td>
+                        <td className="px-2 py-2 text-center">
+                          <Link href="/classement-series" className="text-xs text-blue-600 hover:underline whitespace-nowrap">
+                            Classement détaillé →
+                          </Link>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <Link href={`/resultats?date=${dailyRecap.date || getYesterdayET()}`} className="text-xs text-green-600 hover:underline whitespace-nowrap">
+                            Résultats détaillés →
+                          </Link>
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               )}
-              <div className="px-5 py-2 border-t border-gray-100 flex justify-between items-center">
-                <Link href={`/resultats?date=${dailyRecap.date || getYesterdayET()}`} className="text-sm text-green-600 hover:underline">
-                  Résultats détaillés →
-                </Link>
-                <Link href="/classement-series" className="text-sm text-blue-600 hover:underline">
-                  Classement détaillé →
-                </Link>
-              </div>
             </div>
           )}
 
