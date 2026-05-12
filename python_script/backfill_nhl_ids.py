@@ -106,7 +106,7 @@ def main():
         offset_c += 1000
 
     # Joueurs actuellement dans un roster pool actif (saison active)
-    saison_active = supabase.table('pool_seasons').select('id').eq('is_active', True).maybe_single().execute()
+    saison_active = supabase.table('pool_seasons').select('id').eq('is_active', True).eq('is_playoff', False).maybe_single().execute()
     ids_en_pool: set = set()
     if saison_active.data:
         pool_season_id = saison_active.data['id']
