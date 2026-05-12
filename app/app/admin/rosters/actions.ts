@@ -341,6 +341,79 @@ type ChangeTypeEntry = {
   newType: PlayerType
 }
 
+// ─── Mode init : sans validations, sans snapshots, sans notifications ─────────
+
+export async function adminInitRosterAction(
+  poolerId: string,
+  saisonId: number,
+  toAdd: AddEntry[],
+  toRemove: number[],
+  toChangeType: ChangeTypeEntry[],
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  // Retraits
+  if (toRemove.length > 0) {
+    const { error } = await supabase
+      .from('pooler_rosters')
+      .update({ is_active: false, removed_at: new Date().toISOString() })
+      .in('id', toRemove)
+    if (error) return { error: error.message }
+  }
+
+  // Changements de type
+  for (const { entryId, newType } of toChangeType) {
+    const { error } = await supabase
+      .from('pooler_rosters')
+      .update({ player_type: newType })
+      .eq('id', entryId)
+    if (error) return { error: error.message }
+  }
+
+  // Ajouts — retire d'abord le joueur de tout autre roster actif pour cette saison
+  for (const entry of toAdd) {
+    await supabase
+      .from('pooler_rosters')
+      .update({ is_active: false, removed_at: new Date().toISOString() })
+      .eq('player_id', entry.player_id)
+      .eq('pool_season_id', saisonId)
+      .eq('is_active', true)
+      .neq('pooler_id', poolerId)
+
+    const rookieFields = entry.rookie_type
+      ? { rookie_type: entry.rookie_type, pool_draft_year: entry.rookie_type === 'repeche' ? (entry.pool_draft_year ?? null) : null }
+      : {}
+
+    const { data: existing } = await supabase
+      .from('pooler_rosters')
+      .select('id')
+      .eq('pooler_id', poolerId)
+      .eq('player_id', entry.player_id)
+      .eq('pool_season_id', saisonId)
+      .maybeSingle()
+
+    if (existing) {
+      const { error } = await supabase
+        .from('pooler_rosters')
+        .update({ is_active: true, player_type: entry.player_type, removed_at: null, ...rookieFields })
+        .eq('id', existing.id)
+      if (error) return { error: error.message }
+    } else {
+      const { error } = await supabase.from('pooler_rosters').insert({
+        pooler_id:      poolerId,
+        player_id:      entry.player_id,
+        pool_season_id: saisonId,
+        player_type:    entry.player_type,
+        is_active:      true,
+        ...rookieFields,
+      })
+      if (error) return { error: error.message }
+    }
+  }
+
+  return {}
+}
+
 export async function submitRosterAction(
   poolerId: string,
   saisonId: number,

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { submitRosterAction, updateRookieTypeAction } from './actions'
+import { submitRosterAction, adminInitRosterAction, updateRookieTypeAction } from './actions'
 import TeamBadge from '@/components/TeamBadge'
 
 type Pooler = { id: string; name: string }
@@ -92,11 +92,12 @@ const getCurrentCap = (player: Player | undefined, season: string | undefined) =
   return player.player_contracts?.find((contract) => contract.season === season)?.cap_number ?? 0
 }
 
-export default function RosterManager({ poolers, players, saison, allTakenPlayerIds }: {
+export default function RosterManager({ poolers, players, saison, allTakenPlayerIds, playerOwnerMap }: {
   poolers: Pooler[]
   players: Player[]
   saison: Saison | null
   allTakenPlayerIds: number[]
+  playerOwnerMap: Record<number, string>
 }) {
   const supabase = createClient()
   const tempIdCounter = useRef(-1)
@@ -109,6 +110,7 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
+  const [initMode, setInitMode] = useState(false)
 
   const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
     setMessage(text)
@@ -162,7 +164,8 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
     return players
       .filter((player) => {
         if (rosterPlayerIds.has(player.id)) return false
-        if (otherPoolersTakenIds.has(player.id)) return false
+        // En mode init : montrer aussi les joueurs appartenant aux autres poolers
+        if (!initMode && otherPoolersTakenIds.has(player.id)) return false
         const teamCode = player.teams?.code ?? ''
         if (selectedTeam !== '' && teamCode !== selectedTeam) return false
         if (normalizedSearch === '') return selectedTeam !== ''
@@ -172,7 +175,7 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
         return fullName.includes(normalizedSearch) || reverseName.includes(normalizedSearch) || position.includes(normalizedSearch)
       })
       .sort(sortPlayersByTeamAndName)
-  }, [players, rosterPlayerIds, search, selectedTeam])
+  }, [players, rosterPlayerIds, otherPoolersTakenIds, search, selectedTeam, initMode])
 
   const actifs = useMemo(() => roster.filter((r) => r.player_type === 'actif'), [roster])
   const reservistes = useMemo(() => roster.filter((r) => r.player_type === 'reserviste'), [roster])
@@ -213,7 +216,7 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
 
   const addPlayer = (player: Player, playerType: 'actif' | 'recrue' | 'reserviste') => {
     if (rosterPlayerIds.has(player.id)) return
-    if (playerType === 'recrue' && !player.is_rookie) {
+    if (playerType === 'recrue' && !player.is_rookie && !initMode) {
       showMessage('Seuls les joueurs recrues peuvent aller dans la banque de recrues.', 'error')
       return
     }
@@ -291,7 +294,8 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
         return orig && orig.player_type !== r.player_type ? [{ entryId: r.id, newType: r.player_type }] : []
       })
 
-    const result = await submitRosterAction(selectedPooler, saison.id, toAdd, toRemove, toChangeType)
+    const action = initMode ? adminInitRosterAction : submitRosterAction
+    const result = await action(selectedPooler, saison.id, toAdd, toRemove, toChangeType)
 
     if (result.error) {
       showMessage(result.error, 'error')
@@ -342,7 +346,17 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
           </span>
         )}
 
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setInitMode(m => !m)}
+            className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+              initMode
+                ? 'bg-orange-100 border-orange-400 text-orange-700 hover:bg-orange-200'
+                : 'bg-gray-50 border-gray-300 text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            {initMode ? '⚙ Mode init ON' : '⚙ Mode init'}
+          </button>
           {isDirty && (
             <button
               onClick={handleCancel}
@@ -361,6 +375,13 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
           </button>
         </div>
       </div>
+
+      {/* Bannière mode init */}
+      {initMode && (
+        <div className="bg-orange-50 border border-orange-300 rounded-lg px-4 py-3 text-sm text-orange-800">
+          <span className="font-semibold">Mode init actif</span> — Aucune validation (limites de positions, réservistes, recrues). Les joueurs appartenant à un autre pooler sont affichés et seront automatiquement retirés de leur roster actuel lors de la soumission. Pas de snapshots NHL ni de notifications.
+        </div>
+      )}
 
       {/* Cap et conformité */}
       {saison && (
@@ -536,7 +557,9 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
 
         {/* Joueurs disponibles */}
         <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="font-semibold text-gray-700 mb-4">Joueurs disponibles</h2>
+          <h2 className="font-semibold text-gray-700 mb-4">
+            {initMode ? 'Tous les joueurs' : 'Joueurs disponibles'}
+          </h2>
           <div className="flex gap-2 mb-4">
             <select
               value={selectedTeam}
@@ -559,9 +582,10 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
           <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
             {filteredPlayers.map((player) => {
               const contract = getCurrentCap(player, saison?.season)
-              const rookieBankDisabled = !player.is_rookie
+              const rookieBankDisabled = !player.is_rookie && !initMode
+              const ownerName = initMode ? (playerOwnerMap[player.id] ?? null) : null
               return (
-                <div key={player.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 group">
+                <div key={player.id} className={`flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 group ${ownerName ? 'bg-orange-50/50' : ''}`}>
                   <div className="flex items-center gap-2 text-sm min-w-0">
                     <TeamBadge code={player.teams?.code} size="sm" />
                     <span className="font-medium text-gray-800 truncate">
@@ -570,6 +594,9 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
                     </span>
                     <span className="text-gray-400 text-xs whitespace-nowrap">{player.position ?? DASH}</span>
                     {player.status && <span className="text-xs text-gray-400 whitespace-nowrap">{player.status}</span>}
+                    {ownerName && (
+                      <span className="text-xs text-orange-600 whitespace-nowrap font-medium">({ownerName})</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <span className="text-xs text-gray-500 mr-1">{formatCap(contract)}</span>

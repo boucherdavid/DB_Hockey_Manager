@@ -31,12 +31,21 @@ export default async function AdminRostersPage() {
         .range(from, to),
     ),
     saison
-      ? supabase.from('pooler_rosters').select('player_id').eq('pool_season_id', saison.id).eq('is_active', true)
-      : Promise.resolve({ data: [] as { player_id: number }[] }),
+      ? supabase.from('pooler_rosters')
+          .select('player_id, pooler_id, poolers(name)')
+          .eq('pool_season_id', saison.id)
+          .eq('is_active', true)
+      : Promise.resolve({ data: [] as { player_id: number; pooler_id: string; poolers: { name: string } | null }[] }),
   ])
 
   const poolers = poolersResult.data ?? []
-  const allTakenPlayerIds = (takenResult.data ?? []).map((r) => r.player_id)
+  const takenRows = (takenResult.data ?? []) as { player_id: number; pooler_id: string; poolers: { name: string } | null }[]
+  const allTakenPlayerIds = takenRows.map((r) => r.player_id)
+  // Map player_id \u2192 nom du pooler propri\u00e9taire (pour Mode init)
+  const playerOwnerMap: Record<number, string> = {}
+  for (const r of takenRows) {
+    playerOwnerMap[r.player_id] = (r.poolers as any)?.name ?? r.pooler_id
+  }
 
   return (
     <div>
@@ -50,6 +59,7 @@ export default async function AdminRostersPage() {
           players={players as any}
           saison={saison}
           allTakenPlayerIds={allTakenPlayerIds}
+          playerOwnerMap={playerOwnerMap}
         />
       </ErrorBoundary>
     </div>
