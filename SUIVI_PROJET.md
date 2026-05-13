@@ -75,6 +75,20 @@ Je l'utiliserai pour:
 - Correction immédiate : `UPDATE players SET is_rookie = false WHERE first_name = 'Jet' AND last_name = 'Greaves'` exécuté en SQL.
 - Commit : `0455fa0`
 
+**[Fix] — Pipeline Python : homonymes NHL (2x Sebastian Aho)** (`python_script/import_supabase.py`) :
+- Bug 1 (`upload_vers_supabase`) : le fallback `existing_by_name` (len==1) assignait le 2e homonyme au même enregistrement BD que le 1er. Fix : pré-calcul des noms ambigus dans le CSV (même nom, équipes différentes) → fallback bloqué pour ces noms. Commit : `9b54618`
+- Bug 2 (`deduplicate_players` Cas 3) : après insertion du nouveau CAR Aho, la dédup le supprimait (un a nhl_id, l'autre non → "changement d'équipe"). Fix : `charger_rosters_nhl` retourne maintenant un set `roster_ambiguous` (noms sur plusieurs équipes NHL) ; `deduplicate_players` reçoit ce set et saute Cas 3 pour ces noms. Commit : `f3c5384`
+- Fix immédiat CAR Aho : `INSERT INTO players` dans Supabase SQL Editor (+ `SELECT setval('players_id_seq', ...)` si séquence désync en staging).
+
+**[Fix] — Pipeline Python : backfill_nhl_ids crash 406** (`python_script/backfill_nhl_ids.py`) :
+- `maybe_single()` plantait avec 2 saisons actives (saison régulière + séries). Ajout de `.eq('is_playoff', False)` sur la query. Commit : `0e6c4a8`
+
+**[Fix] — Pool séries : snapshots d'activation incorrects (ex. Dobes → 0 victoires)** (`app/gestion-series/playoff-pool-actions.ts`, `app/admin/series/ChangeLogPanel.tsx`) :
+- Cause : `fetchPlayerStatsAsOfDate` (game-log endpoint, lent) retournait `EMPTY_STATS` si l'API n'était pas à jour au moment de l'activation → snapshot à 0 → points faussés.
+- Fix : activation snapshots utilisent maintenant `fetchPlayerStatsById` (`/landing` seasonTotals, plus fiable). Déactivation et deadline_baselines conservent `fetchPlayerStatsAsOfDate` (filtrage par date intentionnel). Commit : `229ce5e`
+- Bouton "Corriger données" appelle maintenant aussi `recalcPostDeadlineSnapshotsAction` en plus de `recalcMissingBaselinesAction`. Commit : `dd47e7a`
+- Fix immédiat Dobes : `UPDATE player_stat_snapshots SET goalie_wins = 2 WHERE snapshot_type = 'activation' AND player_id = ... AND pooler_id = ...` à exécuter en SQL.
+
 ### 2026-05-11 (suite 12)
 
 **[Feat] — Page /resultats : récap journalier par pooler avec détail joueurs** (`lib/daily-recap.ts`, `app/resultats/page.tsx`, `app/resultats/ResultatsManager.tsx`, `app/page.tsx`, `components/Navbar.tsx`, `components/DailyRecapWidget.tsx`) :
