@@ -89,7 +89,10 @@ def get_player_link(row):
 def charger_rosters_nhl():
     print('[INFO] Chargement des rosters NHL...')
     roster_map = {}
-    name_to_teams: dict[tuple, set] = {}  # (fn, ln) → ensemble d'équipes
+    # (fn, ln, team_code) → True  — permet de vérifier si un joueur précis est
+    # dans le roster NHL actuel pour son équipe, même sans nhl_id.
+    roster_by_team: set[tuple] = set()
+    name_to_teams: dict[tuple, set] = {}
     saison = NHL_SEASON
 
     for team in NHL_TEAM_CODES:
@@ -106,6 +109,7 @@ def charger_rosters_nhl():
                     prenom = normaliser_nom(p['firstName']['default'])
                     nom = normaliser_nom(p['lastName']['default'])
                     roster_map[(prenom, nom)] = team
+                    roster_by_team.add((prenom, nom, team))
                     name_to_teams.setdefault((prenom, nom), set()).add(team)
                     nb += 1
             print(f'  {team}: {nb} joueurs')
@@ -113,13 +117,12 @@ def charger_rosters_nhl():
         except Exception as e:
             print(f'  [ERREUR] {team}: {e}')
 
-    # Noms qui apparaissent sur plusieurs équipes dans le roster NHL actuel
     roster_ambiguous = {k for k, teams in name_to_teams.items() if len(teams) > 1}
     if roster_ambiguous:
         print(f'[INFO] Homonymes NHL (même nom, équipes différentes) : {roster_ambiguous}')
 
     print(f'[INFO] {len(roster_map)} joueurs dans les rosters NHL')
-    return roster_map, roster_ambiguous
+    return roster_map, roster_ambiguous, roster_by_team
 
 
 def get_cap_value(row, season):
@@ -283,13 +286,15 @@ def _merge(supabase, keep_id, dup_id):
     supabase.table('players').delete().eq('id', dup_id).execute()
 
 
-def deduplicate_players(supabase, roster_ambiguous: set | None = None):
+def deduplicate_players(supabase, roster_ambiguous: set | None = None, roster_by_team: set | None = None, teams_id_to_code: dict | None = None):
     """Détecte et fusionne les doublons joueurs. Trois cas couverts :
     1. Même nom + même équipe → doublons directs.
     2. Même nom + un sans équipe + un seul avec équipe → fusionner.
     3. Même nom + équipes différentes, un seul a un nhl_id → le sans nhl_id est un doublon
        (joueur qui a changé d'équipe entre deux imports).
-       Exception : si le nom est dans roster_ambiguous (homonymes réels en NHL), on ne fusionne pas.
+       Exceptions Cas 3 :
+       - Si le nom est dans roster_ambiguous (même nom sur plusieurs équipes NHL) → homonymes.
+       - Si le joueur sans nhl_id est dans roster_by_team pour son équipe → joueur réel en NHL.
     Conserve l'enregistrement avec le plus petit ID, sauf cas 3 où on garde celui avec nhl_id."""
     print('\n[DEDUP] Recherche de doublons joueurs...')
 
@@ -353,19 +358,26 @@ def deduplicate_players(supabase, roster_ambiguous: set | None = None):
                             [list(real_teams.values())[0][0]]
 
         # Cas 3 : plusieurs entrées avec équipes différentes, un seul a un nhl_id
-        # → joueur qui a changé d'équipe, le nouveau record sans nhl_id est le doublon
-        # Exception : si le nom est dans roster_ambiguous, ce sont deux joueurs différents
+        # → joueur qui a changé d'équipe, le nouveau record sans nhl_id est un doublon
         real_remaining = [p for p in remaining if p['team_id'] is not None]
         if len(real_remaining) >= 2:
             fn_ln = tuple(name_key.split('|', 1))
+            # Exception A : nom ambigu (même nom sur plusieurs équipes NHL en même temps)
             if roster_ambiguous and fn_ln in roster_ambiguous:
-                print(f'[DEDUP] Homonyme NHL ignoré ({name_key}) — deux joueurs distincts sur équipes différentes')
+                print(f'[DEDUP] Homonyme NHL ignoré ({name_key}) — nom sur plusieurs équipes NHL')
             else:
                 with_nhl_id = [p for p in real_remaining if p.get('nhl_id')]
                 without_nhl_id = [p for p in real_remaining if not p.get('nhl_id')]
                 if len(with_nhl_id) == 1 and len(without_nhl_id) >= 1:
                     keep = with_nhl_id[0]
                     for dup in without_nhl_id:
+                        # Exception B : le joueur sans nhl_id est dans le roster NHL
+                        # actuel pour son équipe → c'est un joueur réel, pas un doublon
+                        if roster_by_team and teams_id_to_code:
+                            dup_team = teams_id_to_code.get(dup['team_id'], '')
+                            if (fn_ln[0], fn_ln[1], dup_team) in roster_by_team:
+                                print(f'[DEDUP] Cas 3 ignoré ({name_key}|{dup_team}): joueur sans nhl_id présent dans le roster NHL → homonyme probable')
+                                continue
                         print(f'[DEDUP] Doublon changement équipe ({name_key}): conserver {keep["id"]} (nhl_id={keep["nhl_id"]}), supprimer {dup["id"]}')
                         _merge(supabase, keep['id'], dup['id'])
                         nb_fusions += 1
@@ -397,13 +409,14 @@ def upload_vers_supabase(csv_path=None):
     print(f'[INFO] Saisons : {season_cols}')
 
     build_player_link_cache()
-    roster_map, roster_ambiguous = charger_rosters_nhl()
+    roster_map, roster_ambiguous, roster_by_team = charger_rosters_nhl()
     df = fusionner_doublons(df, roster_map)
     print(f'[INFO] {len(df)} joueurs apres fusion')
 
     teams_map = {t['code']: t['id'] for t in supabase.table('teams').select('id, code').execute().data}
+    teams_id_to_code = {v: k for k, v in teams_map.items()}
 
-    deduplicate_players(supabase, roster_ambiguous)
+    deduplicate_players(supabase, roster_ambiguous, roster_by_team, teams_id_to_code)
 
     # Clé primaire : nom|equipe  (distingue les homonymes comme les deux Sebastian Aho)
     # Clé secondaire : nom seul → liste, utilisée comme fallback si non-ambigu
@@ -597,7 +610,7 @@ def upload_vers_supabase(csv_path=None):
             print(f'[ERREUR CONTRAT] Batch {i//BATCH_SIZE + 1}: {e}')
 
     # Second passage de dédup : nettoie les doublons créés par les inserts ci-dessus
-    deduplicate_players(supabase, roster_ambiguous)
+    deduplicate_players(supabase, roster_ambiguous, roster_by_team, teams_id_to_code)
 
     # Marquer is_available = False pour les joueurs absents du run courant
     # (rachetés, retraités, salaires retenus, etc.)
