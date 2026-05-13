@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { recalcMissingBaselinesAction } from '@/app/gestion-series/playoff-pool-actions'
+import { recalcMissingBaselinesAction, recalcPostDeadlineSnapshotsAction } from '@/app/gestion-series/playoff-pool-actions'
 import type { PlayoffChangeLogEntry } from '@/app/gestion-series/playoff-pool-actions'
 
 const fmtDate = (iso: string) =>
@@ -21,10 +21,15 @@ export default function ChangeLogPanel({
 
   function handleFixBaselines() {
     startTransition(async () => {
-      const r = await recalcMissingBaselinesAction(poolSeasonId)
-      if (r.error) setResult(`Erreur : ${r.error}`)
-      else setResult(r.fixed > 0
-        ? `✓ ${r.fixed} entrée${r.fixed > 1 ? 's' : ''} corrigée${r.fixed > 1 ? 's' : ''}.`
+      const [r1, r2] = await Promise.all([
+        recalcMissingBaselinesAction(poolSeasonId),
+        recalcPostDeadlineSnapshotsAction(poolSeasonId),
+      ])
+      const error = r1.error ?? r2.error
+      if (error) { setResult(`Erreur : ${error}`); return }
+      const total = (r1.fixed ?? 0) + (r2.fixed ?? 0)
+      setResult(total > 0
+        ? `✓ ${total} correction${total > 1 ? 's' : ''} effectuée${total > 1 ? 's' : ''}.`
         : '✓ Aucune correction nécessaire.')
       setTimeout(() => setResult(null), 6000)
     })
