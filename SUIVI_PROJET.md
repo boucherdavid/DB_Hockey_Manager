@@ -77,8 +77,9 @@ Je l'utiliserai pour:
 
 **[Fix] — Pipeline Python : homonymes NHL (2x Sebastian Aho)** (`python_script/import_supabase.py`) :
 - Bug 1 (`upload_vers_supabase`) : le fallback `existing_by_name` (len==1) assignait le 2e homonyme au même enregistrement BD que le 1er. Fix : pré-calcul des noms ambigus dans le CSV (même nom, équipes différentes) → fallback bloqué pour ces noms. Commit : `9b54618`
-- Bug 2 (`deduplicate_players` Cas 3) : après insertion du nouveau CAR Aho, la dédup le supprimait (un a nhl_id, l'autre non → "changement d'équipe"). Fix : `charger_rosters_nhl` retourne maintenant un set `roster_ambiguous` (noms sur plusieurs équipes NHL) ; `deduplicate_players` reçoit ce set et saute Cas 3 pour ces noms. Commit : `f3c5384`
-- Fix immédiat CAR Aho : `INSERT INTO players` dans Supabase SQL Editor (+ `SELECT setval('players_id_seq', ...)` si séquence désync en staging).
+- Bug 2 (`deduplicate_players` Cas 3) : après insertion du nouveau CAR Aho, la dédup le supprimait (un a nhl_id, l'autre non → "changement d'équipe"). Fix initial : `roster_ambiguous` (noms sur plusieurs équipes NHL). Commit : `f3c5384`
+- Bug 2 (suite) : fix insuffisant si PIT Aho n'est pas dans le roster NHL API → `roster_ambiguous` vide → dedup supprime quand même CAR Aho. Fix robuste : `charger_rosters_nhl` retourne aussi `roster_by_team` (set de tuples `fn|ln|team`). En Cas 3, si le joueur sans `nhl_id` est présent dans `roster_by_team` pour son équipe → ignoré, c'est un vrai joueur. Commit : `fd915ab`
+- Fix immédiat CAR Aho (SQL) : le pipeline avait écrasé `team_id` à PIT en gardant `nhl_id=8478427` (qui appartient à CAR Aho). Correction : `UPDATE players SET team_id=(CAR), position='C' WHERE id=2474` + `INSERT` pour PIT Aho séparé + `setval` pour réinitialiser la séquence.
 
 **[Fix] — Pipeline Python : backfill_nhl_ids crash 406** (`python_script/backfill_nhl_ids.py`) :
 - `maybe_single()` plantait avec 2 saisons actives (saison régulière + séries). Ajout de `.eq('is_playoff', False)` sur la query. Commit : `0e6c4a8`
