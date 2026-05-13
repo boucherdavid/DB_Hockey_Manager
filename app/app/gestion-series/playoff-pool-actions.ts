@@ -368,10 +368,8 @@ export async function submitPlayoffPoolChangeAction(input: {
     }
   }
 
-  const { fetchPlayerStatsById, fetchPlayerStatsAsOfDate, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
+  const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
   const now = new Date().toISOString()
-  // Baseline d'activation : inclure les matchs du jour → effectif demain
-  const tomorrowMidnight = new Date(); tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1); tomorrowMidnight.setHours(0, 0, 0, 0)
 
   // Remove player
   if (input.removeEntryId) {
@@ -429,7 +427,7 @@ export async function submitPlayoffPoolChangeAction(input: {
     // Activation snapshot — game-log jusqu'à minuit demain → matchs du jour inclus dans la baseline
     // upsert pour gérer les réactivations d'un joueur déjà présent cette saison
     if (input.addNhlId) {
-      const stats = await fetchPlayerStatsAsOfDate(input.addNhlId, 3, tomorrowMidnight)
+      const stats = (await fetchPlayerStatsById(input.addNhlId, 3)) ?? EMPTY_STATS
       await db.from('player_stat_snapshots').upsert({
         player_id: input.addPlayerId,
         pooler_id: input.poolerId,
@@ -574,9 +572,8 @@ export async function submitSeriesBatchAction(input: {
     }
   }
 
-  const { fetchPlayerStatsById, fetchPlayerStatsAsOfDate, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
+  const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
   const now = new Date().toISOString()
-  const tomorrowMidnight = new Date(); tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1); tomorrowMidnight.setHours(0, 0, 0, 0)
 
   // Appliquer les retraits
   for (const r of input.removals) {
@@ -627,7 +624,7 @@ export async function submitSeriesBatchAction(input: {
     // Activation snapshot — effectif demain (game-log jusqu'à minuit demain)
     // upsert pour gérer les réactivations d'un joueur déjà présent cette saison
     if (a.nhlId) {
-      const stats = await fetchPlayerStatsAsOfDate(a.nhlId, 3, tomorrowMidnight)
+      const stats = (await fetchPlayerStatsById(a.nhlId, 3)) ?? EMPTY_STATS
       await db.from('player_stat_snapshots').upsert({
         player_id: a.playerId, pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId, snapshot_type: 'activation', taken_at: now, ...stats,
@@ -686,21 +683,16 @@ export async function recalcPostDeadlineSnapshotsAction(
 
   if (!postDeadlineEntries?.length) return { fixed: 0 }
 
-  const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
+  const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
 
   // Pour chaque entrée post-deadline : recalculer le snapshot d'activation
-  // en utilisant les stats as-of minuit du lendemain de l'ajout (règle "effectif demain")
+  // via fetchPlayerStatsById (seasonTotals — plus fiable que le game-log)
   let fixed = 0
   for (const entry of postDeadlineEntries) {
     const nhlId = (entry.players as any)?.nhl_id
     if (!nhlId) continue
 
-    const addedAt = new Date(entry.added_at)
-    const effectiveMidnight = new Date(addedAt)
-    effectiveMidnight.setDate(effectiveMidnight.getDate() + 1)
-    effectiveMidnight.setHours(0, 0, 0, 0)
-
-    const stats = await fetchPlayerStatsAsOfDate(nhlId, 3, effectiveMidnight)
+    const stats = (await fetchPlayerStatsById(nhlId, 3)) ?? EMPTY_STATS
 
     const { error } = await db.from('player_stat_snapshots').upsert({
       player_id: entry.player_id,
