@@ -1074,8 +1074,10 @@ export async function getPlayoffPoolStandingsAction(
     for (const r of rosters ?? []) {
       if (!r.added_at || new Date(r.added_at) <= deadline) continue
       const pm = snapMap.get(r.pooler_id)
-      const snaps = pm?.get(r.player_id)
-      if (!snaps?.activation || !snaps?.live_cache) continue
+      if (!pm) continue
+      if (!pm.has(r.player_id)) pm.set(r.player_id, {})
+      const snaps = pm.get(r.player_id)!
+      if (!snaps.live_cache) continue  // Pas de live_cache → rien à corriger
       const actZero = !snaps.activation || (!snaps.activation.goals && !snaps.activation.assists && !snaps.activation.goalie_wins && !snaps.activation.goalie_otl && !snaps.activation.goalie_shutouts)
       const lcNonZero = !!(snaps.live_cache.goals || snaps.live_cache.assists || snaps.live_cache.goalie_wins || snaps.live_cache.goalie_otl || snaps.live_cache.goalie_shutouts)
       if (!actZero || !lcNonZero) continue
@@ -1083,8 +1085,13 @@ export async function getPlayoffPoolStandingsAction(
       snaps.activation = { ...(snaps.activation ?? {}), ...corrected }
       brokenActivations.push({ player_id: r.player_id, pooler_id: r.pooler_id, pool_season_id: poolSeasonId, snapshot_type: 'activation', taken_at: r.added_at, ...corrected })
     }
-    if (brokenActivations.length > 0) {
-      await db.from('player_stat_snapshots').upsert(brokenActivations, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
+    // DELETE + INSERT pour éviter la dépendance à la contrainte UNIQUE
+    for (const b of brokenActivations) {
+      await db.from('player_stat_snapshots')
+        .delete()
+        .eq('pooler_id', b.pooler_id).eq('player_id', b.player_id)
+        .eq('pool_season_id', b.pool_season_id).eq('snapshot_type', 'activation')
+      await db.from('player_stat_snapshots').insert(b)
     }
   }
 
