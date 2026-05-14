@@ -683,16 +683,18 @@ export async function recalcPostDeadlineSnapshotsAction(
 
   if (!postDeadlineEntries?.length) return { fixed: 0 }
 
-  const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
+  const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
 
   // Pour chaque entrée post-deadline : recalculer le snapshot d'activation
-  // via fetchPlayerStatsById (seasonTotals — plus fiable que le game-log)
+  // via fetchPlayerStatsAsOfDate(addedAt) — stats strictement avant la date d'ajout.
+  // Plus correct que fetchPlayerStatsById (stats actuelles) pour un recalcul rétroactif :
+  // le joueur peut avoir accumulé des stats après son retrait du pool.
   let fixed = 0
   for (const entry of postDeadlineEntries) {
     const nhlId = (entry.players as any)?.nhl_id
     if (!nhlId) continue
 
-    const stats = (await fetchPlayerStatsById(nhlId, 3)) ?? EMPTY_STATS
+    const stats = await fetchPlayerStatsAsOfDate(nhlId, 3, new Date(entry.added_at))
 
     const { error } = await db.from('player_stat_snapshots').upsert({
       player_id: entry.player_id,

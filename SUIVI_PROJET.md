@@ -84,6 +84,13 @@ Je l'utiliserai pour:
 **[Fix] — Pipeline Python : backfill_nhl_ids crash 406** (`python_script/backfill_nhl_ids.py`) :
 - `maybe_single()` plantait avec 2 saisons actives (saison régulière + séries). Ajout de `.eq('is_playoff', False)` sur la query. Commit : `0e6c4a8`
 
+### 2026-05-14
+
+**[Fix] — Pool séries : recalcul activation snapshot utilise fetchPlayerStatsAsOfDate** (`app/app/gestion-series/playoff-pool-actions.ts`) :
+- **Cause** : `recalcPostDeadlineSnapshotsAction` utilisait `fetchPlayerStatsById` (stats actuelles totales) pour recalculer les snapshots d'activation. Pour un joueur ajouté le 11 mai puis retiré, les stats actuelles sont plus élevées que les stats au moment de l'ajout → delta = deactivation - current = erroné (ex. Dobes, ajouté le 11 mai, avait des points en trop depuis le 8 mai).
+- **Fix** : remplacé par `fetchPlayerStatsAsOfDate(nhlId, 3, addedAt)` — stats strictement avant la date d'ajout. Correct pour un recalcul rétroactif car l'API NHL est stable quelques jours plus tard.
+- **À faire** : cliquer "↺ Corriger données" dans `/admin/series` pour recalculer l'activation de Dobes. Commit : `TBD`
+
 **[Fix] — Pool séries : snapshots d'activation incorrects (ex. Dobes → 0 victoires)** (`app/gestion-series/playoff-pool-actions.ts`, `app/admin/series/ChangeLogPanel.tsx`) :
 - Cause : `fetchPlayerStatsAsOfDate` (game-log endpoint, lent) retournait `EMPTY_STATS` si l'API n'était pas à jour au moment de l'activation → snapshot à 0 → points faussés.
 - Fix : activation snapshots utilisent maintenant `fetchPlayerStatsById` (`/landing` seasonTotals, plus fiable). Déactivation et deadline_baselines conservent `fetchPlayerStatsAsOfDate` (filtrage par date intentionnel). Commit : `229ce5e`
