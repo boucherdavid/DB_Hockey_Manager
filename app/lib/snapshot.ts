@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { fetchPlayerStatsById, EMPTY_STATS } from './nhl-snapshot'
+import { fetchPlayerStatsSafe, EMPTY_STATS } from './nhl-snapshot'
 
 export type SnapshotType = 'activation' | 'deactivation' | 'season_end' | 'deadline_baseline'
 
@@ -30,7 +30,7 @@ export async function takeSnapshot({
 }: SnapshotParams): Promise<{ error?: string }> {
   const supabase = await createClient()
 
-  const stats = nhlId ? (await fetchPlayerStatsById(nhlId, gameType) ?? EMPTY_STATS) : EMPTY_STATS
+  const stats = nhlId ? await fetchPlayerStatsSafe(nhlId, gameType as 2 | 3) : EMPTY_STATS
 
   const { error } = await supabase.from('player_stat_snapshots').insert({
     player_id:      playerId,

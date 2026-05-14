@@ -368,7 +368,7 @@ export async function submitPlayoffPoolChangeAction(input: {
     }
   }
 
-  const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
+  const { fetchPlayerStatsSafe } = await import('@/lib/nhl-snapshot')
   const now = new Date().toISOString()
 
   // Remove player
@@ -384,7 +384,7 @@ export async function submitPlayoffPoolChangeAction(input: {
 
     // Deactivation snapshot — stats courantes du joueur sortant
     if (input.removeNhlId) {
-      const stats = (await fetchPlayerStatsById(input.removeNhlId, 3)) ?? EMPTY_STATS
+      const stats = await fetchPlayerStatsSafe(input.removeNhlId, 3)
       await db.from('player_stat_snapshots').upsert({
         player_id: input.removePlayerId,
         pooler_id: input.poolerId,
@@ -427,7 +427,7 @@ export async function submitPlayoffPoolChangeAction(input: {
     // Activation snapshot — game-log jusqu'à minuit demain → matchs du jour inclus dans la baseline
     // upsert pour gérer les réactivations d'un joueur déjà présent cette saison
     if (input.addNhlId) {
-      const stats = (await fetchPlayerStatsById(input.addNhlId, 3)) ?? EMPTY_STATS
+      const stats = await fetchPlayerStatsSafe(input.addNhlId, 3)
       await db.from('player_stat_snapshots').upsert({
         player_id: input.addPlayerId,
         pooler_id: input.poolerId,
@@ -572,7 +572,7 @@ export async function submitSeriesBatchAction(input: {
     }
   }
 
-  const { fetchPlayerStatsById, EMPTY_STATS } = await import('@/lib/nhl-snapshot')
+  const { fetchPlayerStatsSafe } = await import('@/lib/nhl-snapshot')
   const now = new Date().toISOString()
 
   // Appliquer les retraits
@@ -587,7 +587,7 @@ export async function submitSeriesBatchAction(input: {
     if (error) return { error: error.message }
 
     if (r.nhlId) {
-      const stats = (await fetchPlayerStatsById(r.nhlId, 3)) ?? EMPTY_STATS
+      const stats = await fetchPlayerStatsSafe(r.nhlId, 3)
       await db.from('player_stat_snapshots').upsert({
         player_id: r.playerId, pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId, snapshot_type: 'deactivation', taken_at: now, ...stats,
@@ -624,7 +624,7 @@ export async function submitSeriesBatchAction(input: {
     // Activation snapshot — effectif demain (game-log jusqu'à minuit demain)
     // upsert pour gérer les réactivations d'un joueur déjà présent cette saison
     if (a.nhlId) {
-      const stats = (await fetchPlayerStatsById(a.nhlId, 3)) ?? EMPTY_STATS
+      const stats = await fetchPlayerStatsSafe(a.nhlId, 3)
       await db.from('player_stat_snapshots').upsert({
         player_id: a.playerId, pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId, snapshot_type: 'activation', taken_at: now, ...stats,

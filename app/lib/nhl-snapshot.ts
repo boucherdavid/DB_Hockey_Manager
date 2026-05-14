@@ -61,6 +61,22 @@ export async function fetchPlayerStatsAsOfDate(
 }
 
 /**
+ * Retourne les stats NHL d'un joueur de façon robuste : tente fetchPlayerStatsById
+ * (endpoint /landing, rapide), puis bascule sur fetchPlayerStatsAsOfDate (game-log,
+ * endpoint différent) si le premier échoue. EMPTY_STATS seulement si les deux échouent.
+ * À utiliser pour les snapshots live (activation / deactivation) à la place de
+ * fetchPlayerStatsById ?? EMPTY_STATS.
+ */
+export async function fetchPlayerStatsSafe(
+  nhlId: number,
+  gameType: 2 | 3,
+): Promise<SnapshotStats> {
+  const stats = await fetchPlayerStatsById(nhlId, gameType)
+  if (stats !== null) return stats
+  return fetchPlayerStatsAsOfDate(nhlId, gameType, new Date())
+}
+
+/**
  * Retourne les stats cumulatives NHL d'un joueur pour la saison en cours.
  * gameType: 2 = saison régulière, 3 = séries
  * Retourne des zéros si le joueur n'a pas encore joué ou si l'appel échoue.
