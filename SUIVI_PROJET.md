@@ -86,6 +86,14 @@ Je l'utiliserai pour:
 
 ### 2026-05-14
 
+**[Fix] — Pool séries : mécanique snapshots post-deadline — série de correctifs** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/lib/nhl-snapshot.ts`, `app/lib/snapshot.ts`) :
+- **Cause racine** : `fetchPlayerStatsById ?? EMPTY_STATS` + UPSERT silencieux sans contrainte UNIQUE → snapshots absents ou à 0 si l'API NHL est indisponible lors de l'ajout. `live_cache` (via GitHub Action `playoff_stats.yml`, 6h UTC quotidien) finit par être non-vide pendant que `activation=0` → delta = toutes les stats (gonflé).
+- **Fix 1** : `fetchPlayerStatsSafe` — fallback automatique sur game-log si `/landing` échoue. Commit `148a017`
+- **Fix 2** : `recalcDeactivationSnapshotsAction` — corrige deactivation=0 pour les retraits post-deadline. `.or()` au lieu de `.in()`. Commits `66c674e`, `f869742`
+- **Fix 3** : logique standings — `added_at` dans le select roster, référence post-deadline = `activation` seulement (pas `deadline_baseline`), auto-correction `activation:=live_cache` si activation=0 et live_cache≠0. Commit `de1723c`
+- **Fix 4** : joueur actif post-deadline sans activation snapshot → référence=0 en mémoire (pas invisible), DELETE+INSERT remplace UPSERT. Commit `2178cd1`
+- **Comportement résiduel** : si API échoue lors d'un ajout, joueur affiche 0pts jusqu'au lendemain 2h ET (GitHub Action crée le `live_cache`, auto-correction s'applique au prochain chargement).
+
 **[Fix] — Pool séries : recalcDeactivationSnapshotsAction — snapshots de retrait à zéro** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/admin/series/ChangeLogPanel.tsx`) :
 - **Cause** : `fetchPlayerStatsById ?? EMPTY_STATS` dans `submitSeriesBatchAction` — si l'API NHL est indisponible au moment d'un batch de changements, tous les snapshots (activation ET deactivation) sont créés à 0. Les joueurs retirés perdent leurs points accumulés ; les joueurs ajoutés reçoivent tous leurs points passés en delta.
 - **Fix** : nouvelle fonction `recalcDeactivationSnapshotsAction` — recalcule les deactivation snapshots pour tous les retraits post-deadline en utilisant `fetchPlayerStatsAsOfDate(nhlId, 3, removedAt)`. Même approche que pour les activations. Ajoutée au bouton "↺ Corriger données" (aux côtés de `recalcPostDeadlineSnapshotsAction` et `recalcMissingBaselinesAction`).
