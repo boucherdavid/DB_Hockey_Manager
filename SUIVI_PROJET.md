@@ -93,6 +93,14 @@ Je l'utiliserai pour:
 - **Fix 3** : logique standings — `added_at` dans le select roster, référence post-deadline = `activation` seulement (pas `deadline_baseline`), auto-correction `activation:=live_cache` si activation=0 et live_cache≠0. Commit `de1723c`
 - **Fix 4** : joueur actif post-deadline sans activation snapshot → référence=0 en mémoire (pas invisible), DELETE+INSERT remplace UPSERT. Commit `2178cd1`
 - **Comportement résiduel** : si API échoue lors d'un ajout, joueur affiche 0pts jusqu'au lendemain 2h ET (GitHub Action crée le `live_cache`, auto-correction s'applique au prochain chargement).
+- **Résultat final** : "11 corrections effectuées" après clic sur "↺ Corriger données". Landeskog=1pt, Hall=3pts, Wedgewood=2pts, Makar=0pts (COL éliminé sans stats). Nouveaux joueurs à 0pts correct. Vincent = 20pts. ✓
+
+**Règles à appliquer pour la saison régulière** (priorité haute avant le chantier standings saison) :
+1. `player_stat_snapshots` n'a PAS de contrainte UNIQUE — **toujours DELETE+INSERT**, jamais UPSERT avec onConflict. Le UPSERT échoue silencieusement et ne retourne aucune erreur.
+2. **`fetchPlayerStatsSafe`** pour tous les snapshots live (activation + deactivation) — fallback automatique sur le game-log si /landing échoue. Déjà en place dans `lib/snapshot.ts`.
+3. **`nhl_id` non-null** obligatoire avant tout ajout post-deadline — sans lui, le snapshot est impossible et le bouton de correction ne peut pas aider.
+4. **Joueurs post-deadline** : référence = `activation` uniquement (pas `deadline_baseline`). Auto-correction si `activation=0` et `live_cache≠0` → `activation:=live_cache`.
+5. **Bouton "Corriger données"** (ou équivalent en saison) : couvre activation, deactivation et baselines manquantes — utile comme filet de sécurité mais ne devrait plus être nécessaire si les points 1-2 sont appliqués.
 
 **[Fix] — Pool séries : recalcDeactivationSnapshotsAction — snapshots de retrait à zéro** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/admin/series/ChangeLogPanel.tsx`) :
 - **Cause** : `fetchPlayerStatsById ?? EMPTY_STATS` dans `submitSeriesBatchAction` — si l'API NHL est indisponible au moment d'un batch de changements, tous les snapshots (activation ET deactivation) sont créés à 0. Les joueurs retirés perdent leurs points accumulés ; les joueurs ajoutés reçoivent tous leurs points passés en delta.
