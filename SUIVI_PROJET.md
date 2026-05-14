@@ -86,10 +86,13 @@ Je l'utiliserai pour:
 
 ### 2026-05-14
 
-**[Fix] — Pool séries : recalcul activation snapshot utilise fetchPlayerStatsAsOfDate** (`app/app/gestion-series/playoff-pool-actions.ts`) :
-- **Cause** : `recalcPostDeadlineSnapshotsAction` utilisait `fetchPlayerStatsById` (stats actuelles totales) pour recalculer les snapshots d'activation. Pour un joueur ajouté le 11 mai puis retiré, les stats actuelles sont plus élevées que les stats au moment de l'ajout → delta = deactivation - current = erroné (ex. Dobes, ajouté le 11 mai, avait des points en trop depuis le 8 mai).
-- **Fix** : remplacé par `fetchPlayerStatsAsOfDate(nhlId, 3, addedAt)` — stats strictement avant la date d'ajout. Correct pour un recalcul rétroactif car l'API NHL est stable quelques jours plus tard.
-- **À faire** : cliquer "↺ Corriger données" dans `/admin/series` pour recalculer l'activation de Dobes. Commit : `TBD`
+**[Fix + Leçons] — Pool séries : activation snapshot post-deadline et prévention pour la saison régulière** (`app/app/gestion-series/playoff-pool-actions.ts`) :
+- **Bug Dobes (pool séries 2026, laissé tel quel)** : activation snapshot à 0 (API NHL n'avait pas ses stats au moment de l'ajout) → delta = toutes les stats depuis le début du pool, pas depuis son ajout le 11 mai → points en trop. Le bouton "Corriger données" ne pouvait pas corriger : probablement `nhl_id = null` pour ce joueur → les fonctions de correction le skippent silencieusement et retournent `fixed = 0`, faisant croire qu'il n'y a rien à corriger.
+- **Fix déployé** : `recalcPostDeadlineSnapshotsAction` utilise désormais `fetchPlayerStatsAsOfDate(nhlId, 3, addedAt)` au lieu de `fetchPlayerStatsById` (stats actuelles). Un recalcul rétroactif doit utiliser la date d'ajout, pas les stats actuelles (un joueur retiré continue d'accumuler des stats après son retrait). Commit : `843ded6`
+- **Leçons pour la saison régulière** :
+  1. Tout joueur ajouté après la deadline doit avoir `nhl_id` non-null **avant** l'ajout — sans `nhl_id`, le snapshot d'activation est impossible à calculer ou à corriger ultérieurement.
+  2. Le bouton de correction retourne `fixed = 0` même quand des joueurs sont skippés à cause d'un `nhl_id` null — ne pas interpréter "0 corrections" comme "tout est correct".
+  3. Si un joueur a trop de points (delta depuis le début du pool), vérifier son snapshot `activation` : s'il est à 0 alors que le joueur avait des stats à son arrivée, c'est le bug API. Fix : SQL direct ou s'assurer que `nhl_id` est valide puis re-cliquer "Corriger données".
 
 **[Fix] — Pool séries : snapshots d'activation incorrects (ex. Dobes → 0 victoires)** (`app/gestion-series/playoff-pool-actions.ts`, `app/admin/series/ChangeLogPanel.tsx`) :
 - Cause : `fetchPlayerStatsAsOfDate` (game-log endpoint, lent) retournait `EMPTY_STATS` si l'API n'était pas à jour au moment de l'activation → snapshot à 0 → points faussés.
