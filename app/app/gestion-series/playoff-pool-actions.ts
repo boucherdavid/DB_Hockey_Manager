@@ -977,7 +977,7 @@ export async function getPlayoffPoolStandingsAction(
       .eq('pool_season_id', poolSeasonId),
     supabase
       .from('playoff_pool_rosters')
-      .select('pooler_id, player_id, position_slot, is_active, removal_reason, players(first_name, last_name, nhl_id, teams(code))')
+      .select('pooler_id, player_id, position_slot, is_active, removal_reason, added_at, players(first_name, last_name, nhl_id, teams(code))')
       .eq('pool_season_id', poolSeasonId),
     supabase.from('scoring_config').select('stat_key, points, points_playoffs'),
     supabase.from('poolers').select('id, name').order('name'),
@@ -1003,29 +1003,31 @@ export async function getPlayoffPoolStandingsAction(
     pm.get(s.player_id)![s.snapshot_type as 'activation' | 'deactivation' | 'deadline_baseline' | 'live_cache'] = s
   }
 
-  // Auto-création des baselines deadline manquantes — par joueur, pas "tout ou rien".
-  // Inclut les joueurs retirés post-deadline (voluntary/elimination) qui n'ont pas de baseline :
-  // cas typique d'un joueur retiré avant la première visite de /classement-series.
   const deadlinePassed = saisonRow?.playoff_submission_deadline
     ? new Date() > new Date(saisonRow.playoff_submission_deadline)
     : false
+  const deadline = saisonRow?.playoff_submission_deadline
+    ? new Date(saisonRow.playoff_submission_deadline)
+    : null
 
-  if (deadlinePassed) {
+  if (deadlinePassed && deadline) {
+    const db = createAdminClient()
+
+    // 1. Auto-création des baselines manquantes — uniquement pour les joueurs ajoutés
+    // AVANT la deadline. Les ajouts post-deadline utilisent activation comme référence.
     const existingBaselines = new Set(
       (snapshots ?? [])
         .filter((s: any) => s.snapshot_type === 'deadline_baseline')
         .map((s: any) => `${s.pooler_id}:${s.player_id}`),
     )
-    // Joueurs actifs + retraits post-deadline sans baseline
     const needingBaseline = (rosters ?? []).filter((r: any) =>
       (r.is_active || r.removal_reason === 'voluntary' || r.removal_reason === 'elimination')
-      && !existingBaselines.has(`${r.pooler_id}:${r.player_id}`),
+      && !existingBaselines.has(`${r.pooler_id}:${r.player_id}`)
+      && (!r.added_at || new Date(r.added_at) <= deadline),
     )
 
     if (needingBaseline.length > 0) {
-      const db = createAdminClient()
       const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
-      const deadline = new Date(saisonRow!.playoff_submission_deadline)
       const statsCache = new Map<number, any>()
       const newBaselines: any[] = []
 
@@ -1056,6 +1058,25 @@ export async function getPlayoffPoolStandingsAction(
           pm.get(b.player_id)!.deadline_baseline = b
         }
       }
+    }
+
+    // 2. Auto-correction des snapshots d'activation à zéro pour les ajouts post-deadline.
+    // Symptôme : activation=0 + live_cache non-vide → bug API lors de l'ajout.
+    // Correction : activation = live_cache (le joueur n'a pas encore contribué depuis son ajout).
+    const brokenActivations: any[] = []
+    for (const r of rosters ?? []) {
+      if (!r.added_at || new Date(r.added_at) <= deadline) continue
+      const pm = snapMap.get(r.pooler_id)
+      const snaps = pm?.get(r.player_id)
+      if (!snaps?.activation || !snaps?.live_cache) continue
+      const actZero = !snaps.activation.goals && !snaps.activation.assists && !snaps.activation.goalie_wins && !snaps.activation.goalie_otl && !snaps.activation.goalie_shutouts
+      const lcNonZero = !!(snaps.live_cache.goals || snaps.live_cache.assists || snaps.live_cache.goalie_wins || snaps.live_cache.goalie_otl || snaps.live_cache.goalie_shutouts)
+      if (!actZero || !lcNonZero) continue
+      snaps.activation = { ...snaps.activation, goals: snaps.live_cache.goals, assists: snaps.live_cache.assists, goalie_wins: snaps.live_cache.goalie_wins, goalie_otl: snaps.live_cache.goalie_otl, goalie_shutouts: snaps.live_cache.goalie_shutouts }
+      brokenActivations.push({ player_id: r.player_id, pooler_id: r.pooler_id, pool_season_id: poolSeasonId, snapshot_type: 'activation', taken_at: r.added_at, goals: snaps.live_cache.goals, assists: snaps.live_cache.assists, goalie_wins: snaps.live_cache.goalie_wins, goalie_otl: snaps.live_cache.goalie_otl, goalie_shutouts: snaps.live_cache.goalie_shutouts })
+    }
+    if (brokenActivations.length > 0) {
+      await db.from('player_stat_snapshots').upsert(brokenActivations, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
     }
   }
 
@@ -1115,9 +1136,12 @@ export async function getPlayoffPoolStandingsAction(
       if (!r.is_active && !r.removal_reason) continue
 
       const snaps = pm.get(r.player_id) ?? {}
-      // deadline_baseline prioritaire sur activation (joueurs ajoutés avant deadline)
-      // activation seul pour les joueurs ajoutés après deadline (pas de baseline pour eux)
-      const reference = snaps.deadline_baseline ?? snaps.activation
+      // Ajouts post-deadline : activation seulement (pas de deadline_baseline — ils n'étaient pas là)
+      // Ajouts pré-deadline : deadline_baseline en priorité, fallback activation
+      const isPostDeadlineEntry = deadlinePassed && deadline && r.added_at && new Date(r.added_at) > deadline
+      const reference = isPostDeadlineEntry
+        ? snaps.activation
+        : (snaps.deadline_baseline ?? snaps.activation)
       const deactivation = snaps.deactivation
       if (!reference) continue // Jamais eu de snapshot — ignorer
 
