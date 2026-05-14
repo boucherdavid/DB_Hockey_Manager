@@ -737,24 +737,32 @@ export async function recalcDeactivationSnapshotsAction(
 
   const deadline = new Date(saisonRow.playoff_submission_deadline)
 
-  // Tous les retraits post-deadline (voluntary + elimination) avec leur date de retrait
-  const { data: postDeadlineRemovals } = await db
+  // Tous les retraits post-deadline (voluntary + elimination) avec leur date de retrait.
+  // Utilise .or() car .in() sur removal_reason est peu fiable avec certaines versions Supabase.
+  const { data: postDeadlineRemovals, error: removalErr } = await db
     .from('playoff_pool_rosters')
     .select('player_id, pooler_id, removed_at, players(nhl_id)')
     .eq('pool_season_id', poolSeasonId)
-    .in('removal_reason', ['voluntary', 'elimination'])
+    .or('removal_reason.eq.voluntary,removal_reason.eq.elimination')
+    .not('removed_at', 'is', null)
     .gt('removed_at', deadline.toISOString())
 
+  if (removalErr) return { fixed: 0, error: removalErr.message }
   if (!postDeadlineRemovals?.length) return { fixed: 0 }
 
-  const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
+  const { fetchPlayerStatsAsOfDate, fetchPlayerStatsSafe } = await import('@/lib/nhl-snapshot')
   let fixed = 0
 
   for (const entry of postDeadlineRemovals as any[]) {
     const nhlId = entry.players?.nhl_id
     if (!nhlId || !entry.removed_at) continue
 
-    const stats = await fetchPlayerStatsAsOfDate(nhlId, 3, new Date(entry.removed_at))
+    // Stats au moment du retrait (avant la journée du retrait).
+    // Si le game-log retourne tout à zéro (échec API), on tente fetchPlayerStatsSafe
+    // en fallback (donne les stats totales actuelles — correct pour équipes éliminées).
+    let stats = await fetchPlayerStatsAsOfDate(nhlId, 3, new Date(entry.removed_at))
+    const isAllZero = !stats.goals && !stats.assists && !stats.goalie_wins && !stats.goalie_otl && !stats.goalie_shutouts
+    if (isAllZero) stats = await fetchPlayerStatsSafe(nhlId, 3)
 
     const { error } = await db.from('player_stat_snapshots').upsert({
       player_id: entry.player_id,
