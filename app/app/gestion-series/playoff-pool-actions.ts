@@ -424,18 +424,21 @@ export async function submitPlayoffPoolChangeAction(input: {
       if (error) return { error: error.message }
     }
 
-    // Activation snapshot — game-log jusqu'à minuit demain → matchs du jour inclus dans la baseline
-    // upsert pour gérer les réactivations d'un joueur déjà présent cette saison
+    // Activation snapshot — DELETE + INSERT pour éviter la dépendance à une contrainte UNIQUE.
     if (input.addNhlId) {
       const stats = await fetchPlayerStatsSafe(input.addNhlId, 3)
-      await db.from('player_stat_snapshots').upsert({
+      await db.from('player_stat_snapshots')
+        .delete()
+        .eq('pooler_id', input.poolerId).eq('player_id', input.addPlayerId)
+        .eq('pool_season_id', input.poolSeasonId).eq('snapshot_type', 'activation')
+      await db.from('player_stat_snapshots').insert({
         player_id: input.addPlayerId,
         pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId,
         snapshot_type: 'activation',
         taken_at: now,
         ...stats,
-      }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
+      })
     }
   }
 
@@ -621,14 +624,18 @@ export async function submitSeriesBatchAction(input: {
       if (error) return { error: error.message }
     }
 
-    // Activation snapshot — effectif demain (game-log jusqu'à minuit demain)
-    // upsert pour gérer les réactivations d'un joueur déjà présent cette saison
+    // Activation snapshot — DELETE + INSERT pour éviter la dépendance à une contrainte UNIQUE.
+    // Capture les stats actuelles comme baseline (le joueur ne compte que les jeux futurs).
     if (a.nhlId) {
       const stats = await fetchPlayerStatsSafe(a.nhlId, 3)
-      await db.from('player_stat_snapshots').upsert({
+      await db.from('player_stat_snapshots')
+        .delete()
+        .eq('pooler_id', input.poolerId).eq('player_id', a.playerId)
+        .eq('pool_season_id', input.poolSeasonId).eq('snapshot_type', 'activation')
+      await db.from('player_stat_snapshots').insert({
         player_id: a.playerId, pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId, snapshot_type: 'activation', taken_at: now, ...stats,
-      }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
+      })
     }
   }
 
@@ -1069,11 +1076,12 @@ export async function getPlayoffPoolStandingsAction(
       const pm = snapMap.get(r.pooler_id)
       const snaps = pm?.get(r.player_id)
       if (!snaps?.activation || !snaps?.live_cache) continue
-      const actZero = !snaps.activation.goals && !snaps.activation.assists && !snaps.activation.goalie_wins && !snaps.activation.goalie_otl && !snaps.activation.goalie_shutouts
+      const actZero = !snaps.activation || (!snaps.activation.goals && !snaps.activation.assists && !snaps.activation.goalie_wins && !snaps.activation.goalie_otl && !snaps.activation.goalie_shutouts)
       const lcNonZero = !!(snaps.live_cache.goals || snaps.live_cache.assists || snaps.live_cache.goalie_wins || snaps.live_cache.goalie_otl || snaps.live_cache.goalie_shutouts)
       if (!actZero || !lcNonZero) continue
-      snaps.activation = { ...snaps.activation, goals: snaps.live_cache.goals, assists: snaps.live_cache.assists, goalie_wins: snaps.live_cache.goalie_wins, goalie_otl: snaps.live_cache.goalie_otl, goalie_shutouts: snaps.live_cache.goalie_shutouts }
-      brokenActivations.push({ player_id: r.player_id, pooler_id: r.pooler_id, pool_season_id: poolSeasonId, snapshot_type: 'activation', taken_at: r.added_at, goals: snaps.live_cache.goals, assists: snaps.live_cache.assists, goalie_wins: snaps.live_cache.goalie_wins, goalie_otl: snaps.live_cache.goalie_otl, goalie_shutouts: snaps.live_cache.goalie_shutouts })
+      const corrected = { goals: snaps.live_cache.goals, assists: snaps.live_cache.assists, goalie_wins: snaps.live_cache.goalie_wins, goalie_otl: snaps.live_cache.goalie_otl, goalie_shutouts: snaps.live_cache.goalie_shutouts }
+      snaps.activation = { ...(snaps.activation ?? {}), ...corrected }
+      brokenActivations.push({ player_id: r.player_id, pooler_id: r.pooler_id, pool_season_id: poolSeasonId, snapshot_type: 'activation', taken_at: r.added_at, ...corrected })
     }
     if (brokenActivations.length > 0) {
       await db.from('player_stat_snapshots').upsert(brokenActivations, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
@@ -1139,9 +1147,15 @@ export async function getPlayoffPoolStandingsAction(
       // Ajouts post-deadline : activation seulement (pas de deadline_baseline — ils n'étaient pas là)
       // Ajouts pré-deadline : deadline_baseline en priorité, fallback activation
       const isPostDeadlineEntry = deadlinePassed && deadline && r.added_at && new Date(r.added_at) > deadline
-      const reference = isPostDeadlineEntry
-        ? snaps.activation
-        : (snaps.deadline_baseline ?? snaps.activation)
+      const ZERO = { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0 }
+      let reference: any
+      if (isPostDeadlineEntry) {
+        // Si l'activation est absente (UPSERT raté lors de l'ajout) : utiliser 0 pour les actifs
+        // afin de ne pas les rendre invisibles. L'auto-correction le corrigera si live_cache existe.
+        reference = snaps.activation ?? (r.is_active ? ZERO : undefined)
+      } else {
+        reference = snaps.deadline_baseline ?? snaps.activation
+      }
       const deactivation = snaps.deactivation
       if (!reference) continue // Jamais eu de snapshot — ignorer
 
