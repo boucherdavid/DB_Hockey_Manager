@@ -771,14 +771,19 @@ export async function recalcDeactivationSnapshotsAction(
     const isAllZero = !stats.goals && !stats.assists && !stats.goalie_wins && !stats.goalie_otl && !stats.goalie_shutouts
     if (isAllZero) stats = await fetchPlayerStatsSafe(nhlId, 3)
 
-    const { error } = await db.from('player_stat_snapshots').upsert({
+    // DELETE + INSERT pour éviter la dépendance à la contrainte UNIQUE
+    await db.from('player_stat_snapshots')
+      .delete()
+      .eq('pooler_id', entry.pooler_id).eq('player_id', entry.player_id)
+      .eq('pool_season_id', poolSeasonId).eq('snapshot_type', 'deactivation')
+    const { error } = await db.from('player_stat_snapshots').insert({
       player_id: entry.player_id,
       pooler_id: entry.pooler_id,
       pool_season_id: poolSeasonId,
       snapshot_type: 'deactivation',
       taken_at: entry.removed_at,
       ...stats,
-    }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
+    })
 
     if (!error) fixed++
   }
