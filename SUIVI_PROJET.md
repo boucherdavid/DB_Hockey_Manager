@@ -86,6 +86,13 @@ Je l'utiliserai pour:
 
 ### 2026-05-14
 
+**[Feat] — Pool séries : support multi-période (re-ajout d'un joueur)** (`app/app/gestion-series/playoff-pool-actions.ts`) :
+- Re-add : toujours INSERT un nouveau row dans `playoff_pool_rosters` (plus de UPDATE). L'historique des périodes est conservé.
+- Snapshots activation/deactivation : INSERT pur (plus de DELETE+INSERT ni UPSERT). Plusieurs paires par joueur possibles.
+- Nouvelle fonction `calcPlayoffPoints` : accumule les deltas de toutes les périodes d'un joueur (deadline_baseline→deactivation + activation→deactivation + activation→courant).
+- Standings refactorisé : groupement par joueur (toutes périodes), boucle cumulative alignée avec `calcFromSnapshots` de la saison régulière. Auto-correction activation=0 en mémoire dans `calcPlayoffPoints`.
+- Compatible saison régulière : même pattern INSERT pur déjà utilisé dans `lib/snapshot.ts`.
+
 **[Fix] — Pool séries : mécanique snapshots post-deadline — série de correctifs** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/lib/nhl-snapshot.ts`, `app/lib/snapshot.ts`) :
 - **Cause racine** : `fetchPlayerStatsById ?? EMPTY_STATS` + UPSERT silencieux sans contrainte UNIQUE → snapshots absents ou à 0 si l'API NHL est indisponible lors de l'ajout. `live_cache` (via GitHub Action `playoff_stats.yml`, 6h UTC quotidien) finit par être non-vide pendant que `activation=0` → delta = toutes les stats (gonflé).
 - **Fix 1** : `fetchPlayerStatsSafe` — fallback automatique sur game-log si `/landing` échoue. Commit `148a017`
