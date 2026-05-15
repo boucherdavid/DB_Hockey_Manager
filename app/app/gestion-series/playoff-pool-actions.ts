@@ -600,9 +600,10 @@ export async function submitSeriesBatchAction(input: {
     })
     if (error) return { error: error.message }
 
-    // Activation snapshot — INSERT pour préserver l'historique multi-période
-    if (a.nhlId) {
-      const stats = await fetchPlayerStatsSafe(a.nhlId, 3)
+    // Activation snapshot — fallback BD si le client n'a pas transmis nhlId
+    const nhlIdForSnap = a.nhlId ?? ((await db.from('players').select('nhl_id').eq('id', a.playerId).single()).data?.nhl_id ?? null)
+    if (nhlIdForSnap) {
+      const stats = await fetchPlayerStatsSafe(nhlIdForSnap, 3)
       await db.from('player_stat_snapshots').insert({
         player_id: a.playerId, pooler_id: input.poolerId,
         pool_season_id: input.poolSeasonId, snapshot_type: 'activation', taken_at: now, ...stats,

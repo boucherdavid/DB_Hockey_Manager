@@ -94,6 +94,11 @@ Je l'utiliserai pour:
 - Joueurs à période unique : comportement inchangé, pas d'icône.
 - Note : à implémenter aussi pour la saison régulière dans une prochaine session.
 
+**[Fix] — Pool séries : activation snapshot manquant si nhlId null côté client** (`app/app/gestion-series/playoff-pool-actions.ts`) :
+- Si le client transmet `nhlId: null` pour un ajout (race condition ou player picker sans nhl_id), le `if (a.nhlId)` était sauté silencieusement et aucun snapshot d'activation n'était créé.
+- Fix : fallback BD — si `a.nhlId` est null, on relit `players.nhl_id` via l'admin client avant de tenter le snapshot.
+- Cause probable pour Demidov : `nhlId` null au moment de la soumission du batch. "Corriger données" a recréé le snapshot manuellement (11 corrections le 15 mai).
+
 **[Fix] — Pool séries : auto-correction annulait les points des joueurs ajoutés à 0** (`app/app/gestion-series/playoff-pool-actions.ts`) :
 - **Cause** : l'auto-correction dans `calcPlayoffPoints` ("si `activation=0` et `live_cache≠0` → utiliser live_cache comme baseline") tirait aussi pour les ajouts post-deadline dont les stats étaient **légitimement à 0** au moment de l'ajout. Delta = live_cache − live_cache = 0.
 - **Exemple** : Ivan Demidov ajouté à 8h10 (0G 0A en séries), 1G+1A le soir. Le lendemain : 0 pts dans le pool.
