@@ -952,12 +952,14 @@ function calcPlayoffPoints(
     new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime(),
   )
   let activation: any = null
+  let activationType: string | null = null
   let hasRef = false
   let gls = 0, ast = 0, wins = 0, otl = 0, so = 0
 
   for (const snap of sorted) {
     if (snap.snapshot_type === 'deadline_baseline' || snap.snapshot_type === 'activation') {
       activation = snap  // Deux activations consécutives → la plus récente remplace (ex: correction)
+      activationType = snap.snapshot_type
       hasRef = true
     } else if (snap.snapshot_type === 'deactivation' && activation) {
       gls  += (snap.goals ?? 0)          - (activation.goals ?? 0)
@@ -966,6 +968,7 @@ function calcPlayoffPoints(
       otl  += (snap.goalie_otl ?? 0)      - (activation.goalie_otl ?? 0)
       so   += (snap.goalie_shutouts ?? 0) - (activation.goalie_shutouts ?? 0)
       activation = null
+      activationType = null
     }
   }
   if (!hasRef) return null
@@ -974,10 +977,12 @@ function calcPlayoffPoints(
   if (isActive && activation) {
     let ref = activation
     const lc = currentLive ?? ps.live_cache
-    // Auto-correction en mémoire : activation=0 + live_cache≠0 → baseline := live_cache (delta=0)
+    // Auto-correction : deadline_baseline=0 + live_cache≠0 → baseline := live_cache (delta=0)
+    // Seulement pour deadline_baseline (baseline potentiellement erroné) — PAS pour activation
+    // (ajout post-deadline avec stats légitimement à 0 au moment de l'ajout).
     const actZero = !ref.goals && !ref.assists && !ref.goalie_wins && !ref.goalie_otl && !ref.goalie_shutouts
     const lcNonZero = lc && (lc.goals || lc.assists || lc.goalie_wins || lc.goalie_otl || lc.goalie_shutouts)
-    if (actZero && lcNonZero) ref = lc
+    if (activationType === 'deadline_baseline' && actZero && lcNonZero) ref = lc
     const end = lc ?? ref
     gls  += (end.goals ?? 0)          - (ref.goals ?? 0)
     ast  += (end.assists ?? 0)         - (ref.assists ?? 0)

@@ -84,6 +84,14 @@ Je l'utiliserai pour:
 **[Fix] — Pipeline Python : backfill_nhl_ids crash 406** (`python_script/backfill_nhl_ids.py`) :
 - `maybe_single()` plantait avec 2 saisons actives (saison régulière + séries). Ajout de `.eq('is_playoff', False)` sur la query. Commit : `0e6c4a8`
 
+### 2026-05-15
+
+**[Fix] — Pool séries : auto-correction annulait les points des joueurs ajoutés à 0** (`app/app/gestion-series/playoff-pool-actions.ts`) :
+- **Cause** : l'auto-correction dans `calcPlayoffPoints` ("si `activation=0` et `live_cache≠0` → utiliser live_cache comme baseline") tirait aussi pour les ajouts post-deadline dont les stats étaient **légitimement à 0** au moment de l'ajout. Delta = live_cache − live_cache = 0.
+- **Exemple** : Ivan Demidov ajouté à 8h10 (0G 0A en séries), 1G+1A le soir. Le lendemain : 0 pts dans le pool.
+- **Fix** : l'auto-correction est maintenant restreinte au type `deadline_baseline` (snapshot pré-deadline potentiellement erroné). Les snaps `activation` (ajouts post-deadline) sont toujours pris tels quels.
+- **Dobes non affecté** : ses stats à l'activation n'étaient pas 0 (victoires antérieures) → auto-correction ne tirait pas.
+
 ### 2026-05-14
 
 **[Feat] — Pool séries : support multi-période (re-ajout d'un joueur)** (`app/app/gestion-series/playoff-pool-actions.ts`) :
