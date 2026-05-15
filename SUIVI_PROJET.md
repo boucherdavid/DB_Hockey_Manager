@@ -86,6 +86,14 @@ Je l'utiliserai pour:
 
 ### 2026-05-15
 
+**[Feat] — Pool séries : popup détail multi-période dans classement** (`app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/gestion-series/playoff-pool-actions.ts`) :
+- `calcPlayoffPoints` retourne maintenant `periods: PeriodInfo[]` (une entrée par paire activation→deactivation + période ouverte).
+- Chaque période contient : stats delta (B/A ou V/DP/BL), points calculés, `activatedAt` / `deactivatedAt`.
+- Joueurs avec 2+ périodes : icône `↩N` cliquable à côté du nom dans le tableau de détail.
+- Clic sur l'icône ou le nom ouvre un popup modal centré : détail par période (dates, stats, pts) + total.
+- Joueurs à période unique : comportement inchangé, pas d'icône.
+- Note : à implémenter aussi pour la saison régulière dans une prochaine session.
+
 **[Fix] — Pool séries : auto-correction annulait les points des joueurs ajoutés à 0** (`app/app/gestion-series/playoff-pool-actions.ts`) :
 - **Cause** : l'auto-correction dans `calcPlayoffPoints` ("si `activation=0` et `live_cache≠0` → utiliser live_cache comme baseline") tirait aussi pour les ajouts post-deadline dont les stats étaient **légitimement à 0** au moment de l'ajout. Delta = live_cache − live_cache = 0.
 - **Exemple** : Ivan Demidov ajouté à 8h10 (0G 0A en séries), 1G+1A le soir. Le lendemain : 0 pts dans le pool.

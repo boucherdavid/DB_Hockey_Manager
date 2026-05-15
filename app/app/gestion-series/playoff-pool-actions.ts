@@ -59,6 +59,17 @@ export type PlayoffChangeCounts = {
   elimination: number
 }
 
+export type PeriodInfo = {
+  goals: number
+  assists: number
+  goalie_wins: number
+  goalie_otl: number
+  goalie_shutouts: number
+  points: number
+  activatedAt: string
+  deactivatedAt: string | null  // null = période ouverte (joueur encore actif)
+}
+
 export type PlayoffPoolStanding = {
   poolerId: string
   poolerName: string
@@ -77,6 +88,7 @@ export type PlayoffPoolStanding = {
     goalieShutouts: number
     points: number
     isActive: boolean
+    periods: PeriodInfo[]
   }[]
 }
 
@@ -943,11 +955,16 @@ type PlayerSnaps = { snaps: any[]; live_cache?: any }
  * deadline_baseline agit comme première activation pour les joueurs pré-deadline.
  * Auto-correction en mémoire : si activation=0 et live_cache≠0, le delta = 0 pour l'instant.
  */
+function calcPts(g: number, a: number, w: number, l: number, s: number, cfg: Record<string, number>) {
+  return g * (cfg['goal'] ?? 1) + a * (cfg['assist'] ?? 1) + w * (cfg['goalie_win'] ?? 2) + l * (cfg['goalie_otl'] ?? 1) + s * (cfg['goalie_shutout'] ?? 0)
+}
+
 function calcPlayoffPoints(
   ps: PlayerSnaps,
   isActive: boolean,
   currentLive: any | null,
-): { goals: number; assists: number; goalie_wins: number; goalie_otl: number; goalie_shutouts: number } | null {
+  cfg: Record<string, number>,
+): { goals: number; assists: number; goalie_wins: number; goalie_otl: number; goalie_shutouts: number; periods: PeriodInfo[] } | null {
   const sorted = [...ps.snaps].sort((a, b) =>
     new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime(),
   )
@@ -955,6 +972,7 @@ function calcPlayoffPoints(
   let activationType: string | null = null
   let hasRef = false
   let gls = 0, ast = 0, wins = 0, otl = 0, so = 0
+  const periods: PeriodInfo[] = []
 
   for (const snap of sorted) {
     if (snap.snapshot_type === 'deadline_baseline' || snap.snapshot_type === 'activation') {
@@ -962,11 +980,13 @@ function calcPlayoffPoints(
       activationType = snap.snapshot_type
       hasRef = true
     } else if (snap.snapshot_type === 'deactivation' && activation) {
-      gls  += (snap.goals ?? 0)          - (activation.goals ?? 0)
-      ast  += (snap.assists ?? 0)         - (activation.assists ?? 0)
-      wins += (snap.goalie_wins ?? 0)     - (activation.goalie_wins ?? 0)
-      otl  += (snap.goalie_otl ?? 0)      - (activation.goalie_otl ?? 0)
-      so   += (snap.goalie_shutouts ?? 0) - (activation.goalie_shutouts ?? 0)
+      const dg = (snap.goals ?? 0)          - (activation.goals ?? 0)
+      const da = (snap.assists ?? 0)         - (activation.assists ?? 0)
+      const dw = (snap.goalie_wins ?? 0)     - (activation.goalie_wins ?? 0)
+      const dl = (snap.goalie_otl ?? 0)      - (activation.goalie_otl ?? 0)
+      const ds = (snap.goalie_shutouts ?? 0) - (activation.goalie_shutouts ?? 0)
+      gls += dg; ast += da; wins += dw; otl += dl; so += ds
+      periods.push({ goals: dg, assists: da, goalie_wins: dw, goalie_otl: dl, goalie_shutouts: ds, points: calcPts(dg, da, dw, dl, ds, cfg), activatedAt: activation.taken_at, deactivatedAt: snap.taken_at })
       activation = null
       activationType = null
     }
@@ -984,14 +1004,16 @@ function calcPlayoffPoints(
     const lcNonZero = lc && (lc.goals || lc.assists || lc.goalie_wins || lc.goalie_otl || lc.goalie_shutouts)
     if (activationType === 'deadline_baseline' && actZero && lcNonZero) ref = lc
     const end = lc ?? ref
-    gls  += (end.goals ?? 0)          - (ref.goals ?? 0)
-    ast  += (end.assists ?? 0)         - (ref.assists ?? 0)
-    wins += (end.goalie_wins ?? 0)     - (ref.goalie_wins ?? 0)
-    otl  += (end.goalie_otl ?? 0)      - (ref.goalie_otl ?? 0)
-    so   += (end.goalie_shutouts ?? 0) - (ref.goalie_shutouts ?? 0)
+    const dg = (end.goals ?? 0)          - (ref.goals ?? 0)
+    const da = (end.assists ?? 0)         - (ref.assists ?? 0)
+    const dw = (end.goalie_wins ?? 0)     - (ref.goalie_wins ?? 0)
+    const dl = (end.goalie_otl ?? 0)      - (ref.goalie_otl ?? 0)
+    const ds = (end.goalie_shutouts ?? 0) - (ref.goalie_shutouts ?? 0)
+    gls += dg; ast += da; wins += dw; otl += dl; so += ds
+    periods.push({ goals: dg, assists: da, goalie_wins: dw, goalie_otl: dl, goalie_shutouts: ds, points: calcPts(dg, da, dw, dl, ds, cfg), activatedAt: activation.taken_at, deactivatedAt: null })
   }
 
-  return { goals: gls, assists: ast, goalie_wins: wins, goalie_otl: otl, goalie_shutouts: so }
+  return { goals: gls, assists: ast, goalie_wins: wins, goalie_otl: otl, goalie_shutouts: so, periods }
 }
 
 // ─── Standings ────────────────────────────────────────────────────────────────
@@ -1162,8 +1184,8 @@ export async function getPlayoffPoolStandingsAction(
       }
 
       const currentLive = liveMap.has(playerId) ? liveMap.get(playerId) : ps?.live_cache ?? null
-      const delta = ps ? calcPlayoffPoints(ps, isActive, currentLive)
-        : { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0 }
+      const delta = ps ? calcPlayoffPoints(ps, isActive, currentLive, cfg)
+        : { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0, periods: [] as PeriodInfo[] }
       if (!delta) continue
 
       const pts =
@@ -1192,6 +1214,7 @@ export async function getPlayoffPoolStandingsAction(
         goalieShutouts: delta.goalie_shutouts,
         points:         pts,
         isActive,
+        periods:        delta.periods,
       })
       total += pts
     }

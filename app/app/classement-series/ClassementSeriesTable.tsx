@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { fmtPts } from '@/lib/nhl-stats'
-import type { PlayoffPoolStanding } from '@/app/gestion-series/playoff-pool-actions'
+import type { PlayoffPoolStanding, PeriodInfo } from '@/app/gestion-series/playoff-pool-actions'
 import type { StreakInfo } from '@/lib/streaks'
 import StreakLegend from '@/components/StreakLegend'
 
@@ -29,6 +29,74 @@ function StreakBadge({ nhlId, streaks }: { nhlId: number | null; streaks: Record
   return <span className="text-sm" title={title}>{meta.emoji}</span>
 }
 
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short', timeZone: 'America/Toronto' })
+}
+
+type PeriodPopupProps = {
+  playerName: string
+  positionSlot: 'F' | 'D' | 'G'
+  periods: PeriodInfo[]
+  totalPoints: number
+  onClose: () => void
+}
+
+function PeriodPopup({ playerName, positionSlot, periods, totalPoints, onClose }: PeriodPopupProps) {
+  const isGoalie = positionSlot === 'G'
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-xs"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <span className="font-semibold text-gray-800 text-sm">{playerName}</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-lg leading-none ml-2"
+            aria-label="Fermer"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="px-4 py-3 space-y-3">
+          {periods.map((p, i) => (
+            <div key={i} className="space-y-0.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-500">
+                  Période {i + 1}
+                  {p.deactivatedAt === null && (
+                    <span className="ml-1.5 text-green-600 font-semibold">actif</span>
+                  )}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {fmtDate(p.activatedAt)} → {p.deactivatedAt ? fmtDate(p.deactivatedAt) : '…'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-50 rounded px-3 py-1.5">
+                <span className="text-sm text-gray-600">
+                  {isGoalie
+                    ? `${p.goalie_wins}V  ${p.goalie_otl}DP  ${p.goalie_shutouts}BL`
+                    : `${p.goals}B  ${p.assists}A`}
+                </span>
+                <span className="text-sm font-bold text-blue-600">{fmtPts(p.points)} pts</span>
+              </div>
+            </div>
+          ))}
+          <div className="border-t pt-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-700">Total</span>
+            <span className="text-sm font-bold text-blue-700">{fmtPts(totalPoints)} pts</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function groupBySlot(players: PlayoffPoolStanding['players']) {
   const groups: Record<'F' | 'D' | 'G', PlayoffPoolStanding['players']> = { F: [], D: [], G: [] }
   for (const p of players) groups[p.positionSlot].push(p)
@@ -46,9 +114,24 @@ export default function ClassementSeriesTable({
   streaks?: Record<number, StreakInfo>
 }) {
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [periodPopup, setPeriodPopup] = useState<{
+    playerName: string
+    positionSlot: 'F' | 'D' | 'G'
+    periods: PeriodInfo[]
+    totalPoints: number
+  } | null>(null)
 
   return (
     <div className="space-y-6">
+      {periodPopup && (
+        <PeriodPopup
+          playerName={periodPopup.playerName}
+          positionSlot={periodPopup.positionSlot}
+          periods={periodPopup.periods}
+          totalPoints={periodPopup.totalPoints}
+          onClose={() => setPeriodPopup(null)}
+        />
+      )}
       <StreakLegend />
       {/* Tableau synthèse */}
       <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
@@ -142,12 +225,28 @@ export default function ClassementSeriesTable({
                               {slotLabel[slot]}
                             </td>
                           </tr>
-                          {players.map(p => (
+                          {players.map(p => {
+                            const isMultiPeriod = p.periods.length > 1
+                            const playerName = `${p.lastName}, ${p.firstName}`
+                            return (
                             <tr key={p.playerId} className={p.isActive ? 'hover:bg-gray-50' : 'hover:bg-gray-50 opacity-50'}>
                               <td className="px-4 py-2">
-                                <span className={`font-medium ${p.isActive ? 'text-gray-800' : 'text-gray-500'}`}>
-                                  {p.lastName}, {p.firstName}
+                                <span
+                                  className={`font-medium ${p.isActive ? 'text-gray-800' : 'text-gray-500'} ${isMultiPeriod ? 'cursor-pointer hover:underline' : ''}`}
+                                  onClick={isMultiPeriod ? () => setPeriodPopup({ playerName, positionSlot: p.positionSlot, periods: p.periods, totalPoints: p.points }) : undefined}
+                                >
+                                  {playerName}
                                 </span>
+                                {isMultiPeriod && (
+                                  <button
+                                    type="button"
+                                    title={`${p.periods.length} périodes — voir le détail`}
+                                    className="ml-1.5 text-xs text-indigo-400 hover:text-indigo-600 align-middle"
+                                    onClick={() => setPeriodPopup({ playerName, positionSlot: p.positionSlot, periods: p.periods, totalPoints: p.points })}
+                                  >
+                                    ↩{p.periods.length}
+                                  </button>
+                                )}
                                 {!p.isActive && (
                                   <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">retiré</span>
                                 )}
@@ -167,7 +266,8 @@ export default function ClassementSeriesTable({
                                 {fmtPts(p.points)}
                               </td>
                             </tr>
-                          ))}
+                            )
+                          })}
                         </>
                       ))}
                     </tbody>
