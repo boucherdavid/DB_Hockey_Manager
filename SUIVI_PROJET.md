@@ -94,6 +94,12 @@ Je l'utiliserai pour:
 - Joueurs à période unique : comportement inchangé, pas d'icône.
 - Note : à implémenter aussi pour la saison régulière dans une prochaine session.
 
+**[Fix] — Standings séries : fallback game-log si endpoint /landing sans entrée playoffs** (`app/lib/nhl-snapshot.ts`, `app/app/gestion-series/playoff-pool-actions.ts`) :
+- `fetchPlayerStatsById` retournait `EMPTY_STATS` (0G 0A) quand `/landing` n'avait pas d'entrée `seasonTotals` pour `gameTypeId=3`. Ces zéros masquaient les vraies stats.
+- Fix 1 : `fetchPlayerStatsById` retourne maintenant `null` quand aucune entrée playoffs — permet au fallback game-log de `fetchPlayerStatsSafe` de s'activer.
+- Fix 2 : Le fetch live des standings utilise maintenant `fetchPlayerStatsSafe` (landing → game-log si null) au lieu de `fetchPlayerStatsById` directement.
+- Résultat : Demidov (et tout joueur sans entrée `/landing` playoffs) reçoit ses stats via le game-log NHL.
+
 **[Fix] — Pool séries : activation snapshot manquant si nhlId null côté client** (`app/app/gestion-series/playoff-pool-actions.ts`) :
 - Si le client transmet `nhlId: null` pour un ajout (race condition ou player picker sans nhl_id), le `if (a.nhlId)` était sauté silencieusement et aucun snapshot d'activation n'était créé.
 - Fix : fallback BD — si `a.nhlId` est null, on relit `players.nhl_id` via l'admin client avant de tenter le snapshot.

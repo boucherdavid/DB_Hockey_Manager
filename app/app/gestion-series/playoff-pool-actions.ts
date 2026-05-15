@@ -1129,12 +1129,12 @@ export async function getPlayoffPoolStandingsAction(
       const nhlId = (r.players as any)?.nhl_id
       if (nhlId) uniqueActive.set(r.player_id, nhlId)
     }
-    const { fetchPlayerStatsById } = await import('@/lib/nhl-snapshot')
+    const { fetchPlayerStatsSafe } = await import('@/lib/nhl-snapshot')
     await Promise.all(
       [...uniqueActive.entries()].map(([playerId, nhlId]) =>
-        fetchPlayerStatsById(nhlId, 3).then(stats => {
-          // null = échec API — ne pas ajouter à liveMap pour éviter un delta négatif
-          if (stats !== null) liveMap.set(playerId, stats)
+        fetchPlayerStatsSafe(nhlId, 3).then(stats => {
+          // fetchPlayerStatsSafe retourne toujours un objet valide (jamais null)
+          liveMap.set(playerId, stats)
         })
       )
     )

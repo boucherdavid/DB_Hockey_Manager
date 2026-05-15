@@ -99,8 +99,9 @@ export async function fetchPlayerStatsById(
       s => Number(s.season) === NHL_SEASON_ID && Number(s.gameTypeId) === gameType,
     )
 
-    // Joueur sans stats pour ce gameType (ex: pas encore joué en playoffs) → 0 légitimes
-    if (!current) return EMPTY_STATS
+    // Aucune entrée pour ce gameType → null (pas des zéros "certains").
+    // Permet aux appelants de tomber en fallback game-log via fetchPlayerStatsSafe.
+    if (!current) return null
 
     return {
       goals:           Number(current.goals    ?? 0),
