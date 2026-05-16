@@ -965,6 +965,7 @@ function calcPlayoffPoints(
   isActive: boolean,
   currentLive: any | null,
   cfg: Record<string, number>,
+  deadline: Date | null,
 ): { goals: number; assists: number; goalie_wins: number; goalie_otl: number; goalie_shutouts: number; periods: PeriodInfo[] } | null {
   const sorted = [...ps.snaps].sort((a, b) =>
     new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime(),
@@ -977,6 +978,13 @@ function calcPlayoffPoints(
 
   for (const snap of sorted) {
     if (snap.snapshot_type === 'deadline_baseline' || snap.snapshot_type === 'activation') {
+      // Ignorer les activations strictement pré-deadline : gestion de roster avant soumission,
+      // ne compte pas dans le pool. deadline_baseline est daté exactement à la deadline → toujours inclus.
+      if (deadline && snap.snapshot_type === 'activation' && new Date(snap.taken_at) < deadline) {
+        activation = null
+        activationType = null
+        continue
+      }
       activation = snap  // Deux activations consécutives → la plus récente remplace (ex: correction)
       activationType = snap.snapshot_type
       hasRef = true
@@ -1185,7 +1193,7 @@ export async function getPlayoffPoolStandingsAction(
       }
 
       const currentLive = liveMap.has(playerId) ? liveMap.get(playerId) : ps?.live_cache ?? null
-      const delta = ps ? calcPlayoffPoints(ps, isActive, currentLive, cfg)
+      const delta = ps ? calcPlayoffPoints(ps, isActive, currentLive, cfg, deadline)
         : { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0, periods: [] as PeriodInfo[] }
       if (!delta) continue
 

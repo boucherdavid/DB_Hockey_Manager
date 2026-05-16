@@ -94,6 +94,10 @@ Je l'utiliserai pour:
 - Joueurs à période unique : comportement inchangé, pas d'icône.
 - Note : à implémenter aussi pour la saison régulière dans une prochaine session.
 
+**[Fix] — Pool séries : périodes pré-deadline ignorées dans calcPlayoffPoints** (`app/app/gestion-series/playoff-pool-actions.ts`) :
+- Les snapshots `activation` pris AVANT la `playoff_submission_deadline` (gestion de roster pre-soumission) étaient inclus dans les périodes et le calcul de points — ex: Demidov ajouté+retiré le 8 mai (avant deadline) créait une "période 1" factice du 8 mai au 8 mai.
+- Fix : `calcPlayoffPoints` accepte maintenant un paramètre `deadline: Date | null` et ignore les `activation` dont le `taken_at < deadline`. Les `deadline_baseline` (datés exactement à la deadline) sont toujours inclus.
+
 **[Fix] — Standings séries : fallback game-log si endpoint /landing sans entrée playoffs** (`app/lib/nhl-snapshot.ts`, `app/app/gestion-series/playoff-pool-actions.ts`) :
 - `fetchPlayerStatsById` retournait `EMPTY_STATS` (0G 0A) quand `/landing` n'avait pas d'entrée `seasonTotals` pour `gameTypeId=3`. Ces zéros masquaient les vraies stats.
 - Fix 1 : `fetchPlayerStatsById` retourne maintenant `null` quand aucune entrée playoffs — permet au fallback game-log de `fetchPlayerStatsSafe` de s'activer.
