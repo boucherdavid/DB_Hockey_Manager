@@ -1,10 +1,16 @@
 """
 Mise à jour quotidienne des game-logs pour le pool des séries.
-Récupère les matchs joués hier (ET) pour chaque joueur actif du pool
+Récupère les matchs joués hier (ET) pour TOUS les joueurs de la table `players`
 et les insère/met à jour dans player_game_logs.
+
+Couvre tous les joueurs suivis par l'app (pool actif + échanges + joueurs libres),
+évitant tout backfill d'urgence lors d'une activation en cours de saison.
 
 Exécuté par GitHub Action chaque nuit après la fin des matchs
 (schedule : 0 6 * * * UTC = 2h AM ET).
+
+Fin de saison : vider player_game_logs pour la saison terminée une fois les
+standings finaux archivés dans playoff_pool_standings_cache.
 """
 
 import os
@@ -35,7 +41,7 @@ def get_yesterday_et() -> str:
 
 
 def fetch_schedule_for_date(date_str: str) -> list[dict]:
-    """Retourne la liste des matchs (avec startTimeUTC) pour une date donnée."""
+    """Retourne la liste des matchs playoffs (avec startTimeUTC) pour une date."""
     url = f'{NHL_WEB}/v1/schedule/{date_str}'
     r = requests.get(url, timeout=10)
     r.raise_for_status()
@@ -92,7 +98,6 @@ def main() -> None:
 
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    # Date d'hier ET
     target_date = get_yesterday_et()
     print(f'Date cible : {target_date}')
 
@@ -108,8 +113,7 @@ def main() -> None:
     if not resp.data:
         print('Aucune saison de séries active — rien à faire.')
         return
-    pool_season_id = resp.data['id']
-    print(f'Saison : {resp.data["season"]} (id={pool_season_id})')
+    print(f'Saison : {resp.data["season"]} (id={resp.data["id"]})')
 
     # Matchs d'hier avec leurs heures de début
     try:
@@ -122,67 +126,57 @@ def main() -> None:
         print(f'Aucun match de séries le {target_date} — rien à faire.')
         return
 
-    # {gameId: startTimeUTC}
     start_time_map: dict[int, str] = {
-        g['id']: g['startTimeUTC'] for g in schedule_games if g.get('startTimeUTC')
+        g['id']: g['startTimeUTC']
+        for g in schedule_games
+        if g.get('startTimeUTC')
     }
-    print(f'{len(schedule_games)} match(s) trouvé(s) : {list(start_time_map.keys())}')
+    print(f'{len(schedule_games)} match(s) : {list(start_time_map.keys())}')
 
-    # Joueurs actifs du pool
-    rosters = (
-        client.table('playoff_pool_rosters')
-        .select('player_id, players(nhl_id)')
-        .eq('pool_season_id', pool_season_id)
-        .eq('is_active', True)
+    # Tous les joueurs avec un nhl_id — pas seulement les actifs du pool
+    players_resp = (
+        client.table('players')
+        .select('id, nhl_id')
+        .not_('nhl_id', 'is', None)
         .execute()
-        .data or []
     )
-    player_map: dict[int, int] = {}
-    for r in rosters:
-        nhl_id = (r.get('players') or {}).get('nhl_id')
-        if nhl_id:
-            player_map[r['player_id']] = nhl_id
-
-    print(f'{len(player_map)} joueurs actifs.\n')
+    player_map: dict[int, int] = {
+        r['id']: r['nhl_id']
+        for r in (players_resp.data or [])
+        if r.get('nhl_id')
+    }
+    print(f'{len(player_map)} joueurs à vérifier.\n')
 
     rows: list[dict] = []
     errors = 0
 
-    for i, (player_id, nhl_id) in enumerate(player_map.items(), 1):
-        print(f'  [{i}/{len(player_map)}] nhl_id={nhl_id}', end=' ')
+    for player_id, nhl_id in player_map.items():
         try:
             game_log = fetch_player_game_log(nhl_id)
-        except Exception as e:
-            print(f'✗ {e}')
+        except Exception:
             errors += 1
+            time.sleep(0.1)
             continue
 
-        # Filtrer uniquement les matchs de la date cible
         day_games = [g for g in game_log if g.get('gameDate') == target_date]
         if not day_games:
-            print('— pas de match hier')
-            time.sleep(0.1)
+            time.sleep(0.05)
             continue
 
         for g in day_games:
             game_id = g.get('gameId')
             start_time = start_time_map.get(game_id, '')
             if not start_time:
-                print(f'✗ startTimeUTC introuvable pour gameId={game_id}')
                 continue
             rows.append(parse_game_log_row(player_id, nhl_id, g, start_time))
 
-        stats_str = ', '.join(
-            f'{g.get("goals",0)}B {g.get("assists",0)}A' for g in day_games
-        )
-        print(f'→ {stats_str}')
-        time.sleep(0.15)
+        time.sleep(0.1)
 
     if not rows:
-        print('\nAucun game-log à insérer.')
+        print('Aucun game-log à insérer pour cette date.')
         return
 
-    print(f'\n{len(rows)} lignes à upsert dans player_game_logs...')
+    print(f'{len(rows)} lignes à upsert...')
     (
         client.table('player_game_logs')
         .upsert(rows, on_conflict='player_id,game_date,season,game_type')

@@ -1,7 +1,7 @@
 """
 Backfill des game-logs pour le pool des séries.
-Récupère tous les matchs joués par les joueurs du pool depuis le début des séries
-et les insère dans player_game_logs via upsert.
+Récupère tous les matchs joués par TOUS les joueurs de la table `players`
+depuis le début des séries et les insère dans player_game_logs via upsert.
 
 Usage :
     python backfill_playoff_game_logs.py
@@ -52,9 +52,6 @@ def fetch_schedule_start_times(date_str: str) -> dict[int, str]:
 
 
 def parse_game_log_row(player_id: int, nhl_id: int, g: dict, start_time: str) -> dict:
-    """Transforme une entrée de game-log NHL en ligne player_game_logs."""
-    # Patineurs : goals / assists
-    # Gardiens  : wins (decision='W'), otLosses (decision='O'), shutouts
     goals   = int(g.get('goals',   0) or 0)
     assists = int(g.get('assists', 0) or 0)
 
@@ -92,54 +89,42 @@ def main() -> None:
 
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    # Saison de séries active
-    resp = (
-        client.table('pool_seasons')
-        .select('id, season')
-        .eq('is_active', True)
-        .eq('is_playoff', True)
-        .maybe_single()
+    # Tous les joueurs avec un nhl_id (pas seulement ceux du pool actif)
+    # Couvre les échanges, rappels, joueurs libres potentiels, etc.
+    players_resp = (
+        client.table('players')
+        .select('id, nhl_id')
+        .not_('nhl_id', 'is', None)
         .execute()
     )
-    if not resp.data:
-        print('Aucune saison de séries active.')
-        return
-    pool_season_id = resp.data['id']
-    print(f'Saison : {resp.data["season"]} (id={pool_season_id})')
+    player_map: dict[int, int] = {
+        r['id']: r['nhl_id']
+        for r in (players_resp.data or [])
+        if r.get('nhl_id')
+    }
+    print(f'{len(player_map)} joueurs à backfiller.\n')
 
-    # Tous les joueurs du pool (actifs + retirés) — dédupliqués par player_id
-    rosters = (
-        client.table('playoff_pool_rosters')
-        .select('player_id, players(nhl_id)')
-        .eq('pool_season_id', pool_season_id)
-        .execute()
-        .data or []
-    )
-    player_map: dict[int, int] = {}  # player_id → nhl_id
-    for r in rosters:
-        nhl_id = (r.get('players') or {}).get('nhl_id')
-        if nhl_id:
-            player_map[r['player_id']] = nhl_id
-
-    print(f'{len(player_map)} joueurs uniques à backfiller.\n')
-
-    # Cache pour éviter de fetcher le schedule plusieurs fois par date
-    schedule_cache: dict[str, dict[int, str]] = {}   # date → {gameId: startTimeUTC}
-    game_start_cache: dict[int, str] = {}             # gameId → startTimeUTC
+    # Cache pour éviter de refetcher le schedule plusieurs fois par date
+    schedule_cache: dict[str, dict[int, str]] = {}
+    game_start_cache: dict[int, str] = {}
 
     rows: list[dict] = []
     errors = 0
+    skipped = 0
 
     for i, (player_id, nhl_id) in enumerate(player_map.items(), 1):
-        print(f'  [{i}/{len(player_map)}] player_id={player_id} nhl_id={nhl_id}', end=' ')
+        if i % 50 == 0:
+            print(f'  [{i}/{len(player_map)}] en cours...')
         try:
             game_log = fetch_player_game_log(nhl_id)
         except Exception as e:
-            print(f'✗ game-log: {e}')
             errors += 1
             continue
 
-        print(f'→ {len(game_log)} match(s)')
+        if not game_log:
+            skipped += 1
+            time.sleep(0.05)
+            continue
 
         for g in game_log:
             game_id   = g.get('gameId')
@@ -147,33 +132,30 @@ def main() -> None:
             if not game_id or not game_date:
                 continue
 
-            # Résoudre startTimeUTC via le schedule
             if game_id not in game_start_cache:
                 if game_date not in schedule_cache:
                     try:
                         schedule_cache[game_date] = fetch_schedule_start_times(game_date)
                         time.sleep(0.1)
                     except Exception as e:
-                        print(f'    ✗ schedule {game_date}: {e}')
                         schedule_cache[game_date] = {}
                 game_start_cache[game_id] = schedule_cache[game_date].get(game_id, '')
 
             start_time = game_start_cache.get(game_id, '')
             if not start_time:
-                print(f'    ✗ startTimeUTC introuvable pour gameId={game_id} ({game_date})')
                 continue
 
             rows.append(parse_game_log_row(player_id, nhl_id, g, start_time))
 
-        time.sleep(0.15)
+        time.sleep(0.1)
+
+    print(f'\n{len(rows)} lignes à insérer ({errors} erreurs API, {skipped} sans matchs)...')
 
     if not rows:
-        print('\nAucune ligne à insérer.')
+        print('Aucune ligne à insérer.')
         return
 
-    print(f'\n{len(rows)} lignes à insérer dans player_game_logs...')
-
-    BATCH = 100
+    BATCH = 200
     inserted = 0
     for i in range(0, len(rows), BATCH):
         batch = rows[i:i + BATCH]
@@ -185,7 +167,7 @@ def main() -> None:
         inserted += len(batch)
         print(f'  {inserted}/{len(rows)} insérées')
 
-    print(f'\n✓ Backfill terminé — {inserted} lignes, {errors} erreur(s).')
+    print(f'\n✓ Backfill terminé — {inserted} lignes dans player_game_logs.')
 
 
 if __name__ == '__main__':
