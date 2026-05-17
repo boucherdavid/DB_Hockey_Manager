@@ -946,84 +946,6 @@ export async function getPlayoffChangeLogAction(
   return log.sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime()).slice(0, limit)
 }
 
-// ─── Helpers standings ────────────────────────────────────────────────────────
-
-type PlayerSnaps = { snaps: any[]; live_cache?: any }
-
-/**
- * Calcule le total de points d'un joueur sur TOUTES ses périodes actives.
- * Supporte les re-ajouts (plusieurs paires activation→deactivation).
- * deadline_baseline agit comme première activation pour les joueurs pré-deadline.
- * Auto-correction en mémoire : si activation=0 et live_cache≠0, le delta = 0 pour l'instant.
- */
-function calcPts(g: number, a: number, w: number, l: number, s: number, cfg: Record<string, number>) {
-  return g * (cfg['goal'] ?? 1) + a * (cfg['assist'] ?? 1) + w * (cfg['goalie_win'] ?? 2) + l * (cfg['goalie_otl'] ?? 1) + s * (cfg['goalie_shutout'] ?? 0)
-}
-
-function calcPlayoffPoints(
-  ps: PlayerSnaps,
-  isActive: boolean,
-  currentLive: any | null,
-  cfg: Record<string, number>,
-  deadline: Date | null,
-): { goals: number; assists: number; goalie_wins: number; goalie_otl: number; goalie_shutouts: number; periods: PeriodInfo[] } | null {
-  const sorted = [...ps.snaps].sort((a, b) =>
-    new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime(),
-  )
-  let activation: any = null
-  let activationType: string | null = null
-  let hasRef = false
-  let gls = 0, ast = 0, wins = 0, otl = 0, so = 0
-  const periods: PeriodInfo[] = []
-
-  for (const snap of sorted) {
-    if (snap.snapshot_type === 'deadline_baseline' || snap.snapshot_type === 'activation') {
-      // Ignorer les activations strictement pré-deadline : gestion de roster avant soumission,
-      // ne compte pas dans le pool. deadline_baseline est daté exactement à la deadline → toujours inclus.
-      if (deadline && snap.snapshot_type === 'activation' && new Date(snap.taken_at) < deadline) {
-        activation = null
-        activationType = null
-        continue
-      }
-      activation = snap  // Deux activations consécutives → la plus récente remplace (ex: correction)
-      activationType = snap.snapshot_type
-      hasRef = true
-    } else if (snap.snapshot_type === 'deactivation' && activation) {
-      const dg = (snap.goals ?? 0)          - (activation.goals ?? 0)
-      const da = (snap.assists ?? 0)         - (activation.assists ?? 0)
-      const dw = (snap.goalie_wins ?? 0)     - (activation.goalie_wins ?? 0)
-      const dl = (snap.goalie_otl ?? 0)      - (activation.goalie_otl ?? 0)
-      const ds = (snap.goalie_shutouts ?? 0) - (activation.goalie_shutouts ?? 0)
-      gls += dg; ast += da; wins += dw; otl += dl; so += ds
-      periods.push({ goals: dg, assists: da, goalie_wins: dw, goalie_otl: dl, goalie_shutouts: ds, points: calcPts(dg, da, dw, dl, ds, cfg), activatedAt: activation.taken_at, deactivatedAt: snap.taken_at })
-      activation = null
-      activationType = null
-    }
-  }
-  if (!hasRef) return null
-
-  // Période ouverte (joueur actif)
-  if (isActive && activation) {
-    let ref = activation
-    const lc = currentLive ?? ps.live_cache
-    // Auto-correction : deadline_baseline=0 + live_cache≠0 → baseline := live_cache (delta=0)
-    // Seulement pour deadline_baseline (baseline potentiellement erroné) — PAS pour activation
-    // (ajout post-deadline avec stats légitimement à 0 au moment de l'ajout).
-    const actZero = !ref.goals && !ref.assists && !ref.goalie_wins && !ref.goalie_otl && !ref.goalie_shutouts
-    const lcNonZero = lc && (lc.goals || lc.assists || lc.goalie_wins || lc.goalie_otl || lc.goalie_shutouts)
-    if (activationType === 'deadline_baseline' && actZero && lcNonZero) ref = lc
-    const end = lc ?? ref
-    const dg = (end.goals ?? 0)          - (ref.goals ?? 0)
-    const da = (end.assists ?? 0)         - (ref.assists ?? 0)
-    const dw = (end.goalie_wins ?? 0)     - (ref.goalie_wins ?? 0)
-    const dl = (end.goalie_otl ?? 0)      - (ref.goalie_otl ?? 0)
-    const ds = (end.goalie_shutouts ?? 0) - (ref.goalie_shutouts ?? 0)
-    gls += dg; ast += da; wins += dw; otl += dl; so += ds
-    periods.push({ goals: dg, assists: da, goalie_wins: dw, goalie_otl: dl, goalie_shutouts: ds, points: calcPts(dg, da, dw, dl, ds, cfg), activatedAt: activation.taken_at, deactivatedAt: null })
-  }
-
-  return { goals: gls, assists: ast, goalie_wins: wins, goalie_otl: otl, goalie_shutouts: so, periods }
-}
 
 // ─── Standings ────────────────────────────────────────────────────────────────
 
@@ -1033,122 +955,77 @@ export async function getPlayoffPoolStandingsAction(
 ): Promise<PlayoffPoolStanding[]> {
   const supabase = await createClient()
 
-  const [{ data: snapshots }, { data: rosters }, { data: scoringRows }, { data: poolers }, { data: saisonRow }] = await Promise.all([
-    supabase
-      .from('player_stat_snapshots')
-      .select('pooler_id, player_id, snapshot_type, taken_at, goals, assists, goalie_wins, goalie_otl, goalie_shutouts')
-      .eq('pool_season_id', poolSeasonId),
+  const [{ data: rosters }, { data: scoringRows }, { data: poolers }, { data: saisonRow }] = await Promise.all([
     supabase
       .from('playoff_pool_rosters')
-      .select('pooler_id, player_id, position_slot, is_active, removal_reason, added_at, players(first_name, last_name, nhl_id, teams(code))')
+      .select('pooler_id, player_id, position_slot, is_active, removal_reason, added_at, removed_at, players(first_name, last_name, nhl_id, teams(code))')
       .eq('pool_season_id', poolSeasonId),
     supabase.from('scoring_config').select('stat_key, points, points_playoffs'),
     supabase.from('poolers').select('id, name').order('name'),
-    supabase.from('pool_seasons').select('playoff_max_f, playoff_max_d, playoff_max_g, playoff_submission_deadline').eq('id', poolSeasonId).single(),
+    supabase.from('pool_seasons').select('playoff_max_f, playoff_max_d, playoff_max_g, season').eq('id', poolSeasonId).single(),
   ])
 
   const maxF = saisonRow?.playoff_max_f ?? 5
   const maxD = saisonRow?.playoff_max_d ?? 3
   const maxG = saisonRow?.playoff_max_g ?? 1
 
+  // Identifiant saison NHL : '2026-PO' → parseInt = 2026 → 20252026
+  const rawYear = parseInt(saisonRow?.season ?? '2026')
+  const nhlSeasonId = (rawYear - 1) * 10000 + rawYear
+
   const cfg: Record<string, number> = {}
   for (const row of scoringRows ?? []) {
     cfg[row.stat_key] = row.points_playoffs != null ? row.points_playoffs : row.points
   }
 
-  // Group snapshots: poolerId → playerId → { snaps: tous sauf live_cache, live_cache }
-  // Supporte plusieurs activations/deactivations (multi-période)
-  type SnapMap = Map<string, Map<number, PlayerSnaps>>
-  const snapMap: SnapMap = new Map()
-  for (const s of snapshots ?? []) {
-    if (!snapMap.has(s.pooler_id)) snapMap.set(s.pooler_id, new Map())
-    const pm = snapMap.get(s.pooler_id)!
-    if (!pm.has(s.player_id)) pm.set(s.player_id, { snaps: [] })
-    const ps = pm.get(s.player_id)!
-    if (s.snapshot_type === 'live_cache') {
-      ps.live_cache = s
-    } else {
-      ps.snaps.push(s)
-    }
+  function calcPts(g: number, a: number, w: number, l: number, s: number): number {
+    return g * (cfg['goal'] ?? 1) + a * (cfg['assist'] ?? 1) + w * (cfg['goalie_win'] ?? 2) + l * (cfg['goalie_otl'] ?? 1) + s * (cfg['goalie_shutout'] ?? 0)
   }
 
-  const deadlinePassed = saisonRow?.playoff_submission_deadline
-    ? new Date() > new Date(saisonRow.playoff_submission_deadline)
-    : false
-  const deadline = saisonRow?.playoff_submission_deadline
-    ? new Date(saisonRow.playoff_submission_deadline)
-    : null
+  // Tous les player_id présents dans le pool
+  const playerIds = [...new Set((rosters ?? []).map((r: any) => r.player_id as number))]
 
-  // Auto-création des deadline_baseline manquantes pour les joueurs pré-deadline
-  // (ajoutés avant ou à la deadline — pas les ajouts post-deadline qui utilisent activation)
-  if (deadlinePassed && deadline) {
-    const existingBaselines = new Set(
-      (snapshots ?? [])
-        .filter((s: any) => s.snapshot_type === 'deadline_baseline')
-        .map((s: any) => `${s.pooler_id}:${s.player_id}`),
-    )
-    const needingBaseline = (rosters ?? []).filter((r: any) =>
-      (r.is_active || r.removal_reason === 'voluntary' || r.removal_reason === 'elimination')
-      && !existingBaselines.has(`${r.pooler_id}:${r.player_id}`)
-      && (!r.added_at || new Date(r.added_at) <= deadline),
-    )
-
-    if (needingBaseline.length > 0) {
-      const db = createAdminClient()
-      const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
-      const statsCache = new Map<number, any>()
-      const newBaselines: any[] = []
-
-      for (const r of needingBaseline as any[]) {
-        const nhlId = (r.players as any)?.nhl_id
-        if (!nhlId) continue
-        if (!statsCache.has(nhlId)) {
-          statsCache.set(nhlId, await fetchPlayerStatsAsOfDate(nhlId, 3, deadline))
-        }
-        newBaselines.push({
-          player_id: r.player_id,
-          pooler_id: r.pooler_id,
-          pool_season_id: poolSeasonId,
-          snapshot_type: 'deadline_baseline',
-          taken_at: deadline.toISOString(),
-          ...statsCache.get(nhlId),
-        })
-      }
-
-      if (newBaselines.length > 0) {
-        await db.from('player_stat_snapshots').insert(newBaselines)
-        for (const b of newBaselines) {
-          if (!snapMap.has(b.pooler_id)) snapMap.set(b.pooler_id, new Map())
-          const pm = snapMap.get(b.pooler_id)!
-          if (!pm.has(b.player_id)) pm.set(b.player_id, { snaps: [] })
-          pm.get(b.player_id)!.snaps.push(b)
-        }
-      }
-    }
+  // Game-logs pour ces joueurs (séries, saison courante)
+  type GameLog = {
+    player_id: number
+    game_start_time: string
+    goals: number
+    assists: number
+    goalie_wins: number
+    goalie_otl: number
+    goalie_shutouts: number
   }
-  // Note : l'auto-correction activation=0 est gérée en mémoire dans calcPlayoffPoints
-
-  // Fetch live NHL playoff stats for currently active players (one call per unique player)
-  const liveMap = new Map<number, any>() // playerId → SnapshotStats
-  if (fetchLive) {
-    const uniqueActive = new Map<number, number>() // playerId → nhlId
-    for (const r of rosters ?? []) {
-      if (!r.is_active || uniqueActive.has(r.player_id)) continue
-      const nhlId = (r.players as any)?.nhl_id
-      if (nhlId) uniqueActive.set(r.player_id, nhlId)
-    }
-    const { fetchPlayerStatsSafe } = await import('@/lib/nhl-snapshot')
-    await Promise.all(
-      [...uniqueActive.entries()].map(([playerId, nhlId]) =>
-        fetchPlayerStatsSafe(nhlId, 3).then(stats => {
-          // fetchPlayerStatsSafe retourne toujours un objet valide (jamais null)
-          liveMap.set(playerId, stats)
-        })
-      )
-    )
+  let gameLogs: GameLog[] = []
+  if (playerIds.length > 0) {
+    const { data } = await supabase
+      .from('player_game_logs')
+      .select('player_id, game_start_time, goals, assists, goalie_wins, goalie_otl, goalie_shutouts')
+      .in('player_id', playerIds)
+      .eq('season', nhlSeasonId)
+      .eq('game_type', 3)
+    gameLogs = (data ?? []) as GameLog[]
   }
 
-  // Group rosters by pooler, then by player (toutes les périodes)
+  // Index par player_id
+  const logsByPlayer = new Map<number, GameLog[]>()
+  for (const gl of gameLogs) {
+    if (!logsByPlayer.has(gl.player_id)) logsByPlayer.set(gl.player_id, [])
+    logsByPlayer.get(gl.player_id)!.push(gl)
+  }
+
+  // Game-logs dans une fenêtre d'activation :
+  //   activé AVANT la mise en jeu  ET  pas encore désactivé quand le match a commencé
+  function logsForPeriod(playerId: number, addedAt: string, removedAt: string | null): GameLog[] {
+    const logs = logsByPlayer.get(playerId) ?? []
+    const start = new Date(addedAt)
+    const end   = removedAt ? new Date(removedAt) : null
+    return logs.filter(gl => {
+      const t = new Date(gl.game_start_time)
+      return start < t && (end === null || end >= t)
+    })
+  }
+
+  // Grouper les rosters par pooler
   const rosterMap = new Map<string, any[]>()
   for (const r of rosters ?? []) {
     if (!rosterMap.has(r.pooler_id)) rosterMap.set(r.pooler_id, [])
@@ -1159,7 +1036,7 @@ export async function getPlayoffPoolStandingsAction(
   const standings: PlayoffPoolStanding[] = []
 
   for (const [poolerId, rosterEntries] of rosterMap.entries()) {
-    // Compter les joueurs actifs uniques par position (multi-période : un joueur → une seule entrée active)
+    // Vérifier l'alignement minimum par position
     const uniqueActive = new Map<number, any>()
     for (const r of rosterEntries) { if (r.is_active) uniqueActive.set(r.player_id, r) }
     const countF = [...uniqueActive.values()].filter(r => r.position_slot === 'F').length
@@ -1167,47 +1044,50 @@ export async function getPlayoffPoolStandingsAction(
     const countG = [...uniqueActive.values()].filter(r => r.position_slot === 'G').length
     if (countF < maxF || countD < maxD || countG < maxG) continue
 
-    const pm = snapMap.get(poolerId) ?? new Map()
-    const players: PlayoffPoolStanding['players'] = []
-    let total = 0
-
-    // Grouper toutes les entrées par joueur (toutes les périodes confondues)
+    // Grouper les périodes d'activation par joueur
     const entriesByPlayer = new Map<number, any[]>()
     for (const r of rosterEntries) {
       if (!entriesByPlayer.has(r.player_id)) entriesByPlayer.set(r.player_id, [])
       entriesByPlayer.get(r.player_id)!.push(r)
     }
 
+    const players: PlayoffPoolStanding['players'] = []
+    let total = 0
+
     for (const [playerId, playerEntries] of entriesByPlayer.entries()) {
       const activeEntry = playerEntries.find((e: any) => e.is_active)
       const isActive = !!activeEntry
-      // Afficher si actif OU si a eu au moins un retrait post-deadline (contribué au pool)
-      const hasPostDeadlineEntry = playerEntries.some((e: any) => e.removal_reason)
-      if (!isActive && !hasPostDeadlineEntry) continue
+      const hasContribution = playerEntries.some((e: any) => e.removal_reason)
+      if (!isActive && !hasContribution) continue
 
-      const ps = pm.get(playerId)
-      // Aucun snapshot + pas de live_cache → pas de baseline calculable
-      if (!ps || (!ps.snaps.length && !ps.live_cache)) {
-        // Si le joueur est actif, l'afficher à 0pts pour qu'il reste visible
-        if (!isActive) continue
+      // Cumuler les stats sur toutes les périodes (triées chronologiquement)
+      let totalGoals = 0, totalAssists = 0, totalWins = 0, totalOtl = 0, totalSo = 0
+      const periods: PeriodInfo[] = []
+      const sortedEntries = [...playerEntries].sort(
+        (a: any, b: any) => new Date(a.added_at).getTime() - new Date(b.added_at).getTime(),
+      )
+
+      for (const period of sortedEntries) {
+        const pLogs = logsForPeriod(playerId, period.added_at, period.removed_at ?? null)
+        const pg = pLogs.reduce((s, gl) => s + gl.goals, 0)
+        const pa = pLogs.reduce((s, gl) => s + gl.assists, 0)
+        const pw = pLogs.reduce((s, gl) => s + gl.goalie_wins, 0)
+        const pl = pLogs.reduce((s, gl) => s + gl.goalie_otl, 0)
+        const ps = pLogs.reduce((s, gl) => s + gl.goalie_shutouts, 0)
+        totalGoals += pg; totalAssists += pa; totalWins += pw; totalOtl += pl; totalSo += ps
+
+        if (pLogs.length > 0 || period.is_active) {
+          periods.push({
+            goals: pg, assists: pa, goalie_wins: pw, goalie_otl: pl, goalie_shutouts: ps,
+            points: calcPts(pg, pa, pw, pl, ps),
+            activatedAt:   period.added_at,
+            deactivatedAt: period.removed_at ?? null,
+          })
+        }
       }
 
-      const currentLive = liveMap.has(playerId) ? liveMap.get(playerId) : ps?.live_cache ?? null
-      const delta = ps ? calcPlayoffPoints(ps, isActive, currentLive, cfg, deadline)
-        : { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0, periods: [] as PeriodInfo[] }
-      if (!delta) continue
-
-      const pts =
-        delta.goals           * (cfg['goal']          ?? 1) +
-        delta.assists         * (cfg['assist']         ?? 1) +
-        delta.goalie_wins     * (cfg['goalie_win']     ?? 2) +
-        delta.goalie_otl      * (cfg['goalie_otl']     ?? 1) +
-        delta.goalie_shutouts * (cfg['goalie_shutout'] ?? 0)
-
-      // Entrée la plus récente pour les infos d'affichage (nom, équipe, position)
-      const displayEntry = activeEntry ?? playerEntries.sort(
-        (a: any, b: any) => new Date(b.removed_at ?? '2000').getTime() - new Date(a.removed_at ?? '2000').getTime()
-      )[0]
+      const pts = calcPts(totalGoals, totalAssists, totalWins, totalOtl, totalSo)
+      const displayEntry = activeEntry ?? sortedEntries[sortedEntries.length - 1]
 
       players.push({
         playerId,
@@ -1216,14 +1096,14 @@ export async function getPlayoffPoolStandingsAction(
         lastName:       (displayEntry.players as any)?.last_name ?? '',
         teamCode:       (displayEntry.players as any)?.teams?.code ?? null,
         positionSlot:   displayEntry.position_slot as 'F' | 'D' | 'G',
-        goals:          delta.goals,
-        assists:        delta.assists,
-        goalieWins:     delta.goalie_wins,
-        goalieOtl:      delta.goalie_otl,
-        goalieShutouts: delta.goalie_shutouts,
+        goals:          totalGoals,
+        assists:        totalAssists,
+        goalieWins:     totalWins,
+        goalieOtl:      totalOtl,
+        goalieShutouts: totalSo,
         points:         pts,
         isActive,
-        periods:        delta.periods,
+        periods,
       })
       total += pts
     }
@@ -1240,7 +1120,7 @@ export async function getPlayoffPoolStandingsAction(
 
   const sorted = standings.sort((a, b) => b.totalPoints - a.totalPoints)
 
-  // Mise à jour du cache BD quand on a des stats live (évite les appels NHL à chaque page load)
+  // Mise à jour du cache BD (appelé depuis /classement-series)
   if (fetchLive && sorted.length > 0) {
     const db = createAdminClient()
     await db.from('playoff_pool_standings_cache').upsert(

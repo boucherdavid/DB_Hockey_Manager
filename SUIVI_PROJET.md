@@ -94,6 +94,15 @@ Je l'utiliserai pour:
 - Joueurs à période unique : comportement inchangé, pas d'icône.
 - Note : à implémenter aussi pour la saison régulière dans une prochaine session.
 
+**[Refonte] — Pool séries : calcul des points basé sur game-logs (remplace les snapshots)** (`python_script/import_playoff_stats.py`, `python_script/backfill_playoff_game_logs.py`, `app/app/gestion-series/playoff-pool-actions.ts`, `supabase_migrations/player_game_logs.sql`) :
+- **Architecture** : `player_stat_snapshots` remplacé par `player_game_logs` (une ligne par match joué par joueur). Impossible d'avoir des points négatifs avec cette approche.
+- **Migration SQL** : nouvelle table `player_game_logs` avec `game_start_time TIMESTAMPTZ` pour la règle activation avant mise en jeu.
+- **Backfill** : `backfill_playoff_game_logs.py` — récupère tous les matchs joués depuis le 19 avril pour les joueurs du pool.
+- **GitHub Action** : `import_playoff_stats.py` réécrit — insère les game-logs des matchs de la veille au lieu de `live_cache`.
+- **Standings** : `getPlayoffPoolStandingsAction` réécrit — calcule les points par somme des game-logs dans les fenêtres `added_at → removed_at` de `playoff_pool_rosters`. Règle : `added_at < game_start_time AND (removed_at IS NULL OR removed_at >= game_start_time)`.
+- **Nettoyage à venir** : supprimer les snapshot writes dans les batch actions et les fonctions `recalcPostDeadlineSnapshotsAction` / `recalcDeactivationSnapshotsAction` (code mort, `player_stat_snapshots` toujours présente en BD).
+- **Prochaine étape** : exécuter la migration SQL dans Supabase, puis lancer `backfill_playoff_game_logs.py`.
+
 **[Fix] — Pool séries : périodes pré-deadline ignorées dans calcPlayoffPoints** (`app/app/gestion-series/playoff-pool-actions.ts`) :
 - Les snapshots `activation` pris AVANT la `playoff_submission_deadline` (gestion de roster pre-soumission) étaient inclus dans les périodes et le calcul de points — ex: Demidov ajouté+retiré le 8 mai (avant deadline) créait une "période 1" factice du 8 mai au 8 mai.
 - Fix : `calcPlayoffPoints` accepte maintenant un paramètre `deadline: Date | null` et ignore les `activation` dont le `taken_at < deadline`. Les `deadline_baseline` (datés exactement à la deadline) sont toujours inclus.
