@@ -36,6 +36,9 @@ CREATE INDEX IF NOT EXISTS idx_game_logs_date
 -- RLS
 ALTER TABLE player_game_logs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "lecture publique game_logs" ON player_game_logs;
+DROP POLICY IF EXISTS "admin modifie game_logs"    ON player_game_logs;
+
 CREATE POLICY "lecture publique game_logs"
   ON player_game_logs FOR SELECT USING (true);
 
