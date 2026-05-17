@@ -137,7 +137,6 @@ def main() -> None:
     players_resp = (
         client.table('players')
         .select('id, nhl_id')
-        .not_('nhl_id', 'is', None)
         .execute()
     )
     player_map: dict[int, int] = {
