@@ -100,8 +100,20 @@ Je l'utiliserai pour:
 - **Backfill** : `backfill_playoff_game_logs.py` — récupère tous les matchs joués depuis le 19 avril pour les joueurs du pool.
 - **GitHub Action** : `import_playoff_stats.py` réécrit — insère les game-logs des matchs de la veille au lieu de `live_cache`.
 - **Standings** : `getPlayoffPoolStandingsAction` réécrit — calcule les points par somme des game-logs dans les fenêtres `added_at → removed_at` de `playoff_pool_rosters`. Règle : `added_at < game_start_time AND (removed_at IS NULL OR removed_at >= game_start_time)`.
-- **Nettoyage à venir** : supprimer les snapshot writes dans les batch actions et les fonctions `recalcPostDeadlineSnapshotsAction` / `recalcDeactivationSnapshotsAction` (code mort, `player_stat_snapshots` toujours présente en BD).
+- **Nettoyage (2026-05-18)** : snapshot writes supprimés partout — voir entrée ci-dessous.
 - **Validation (2026-05-18)** : Necas, Hutson, Lacombe, Byram vérifiés manuellement — totaux corrects avec différentes périodes d'activation. ✓
+
+### 2026-05-18
+
+**[Chore] — Suppression des writes vers player_stat_snapshots** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/admin/series/ChangeLogPanel.tsx`, `app/app/admin/series/series-admin-actions.ts`, `app/app/gestion-effectifs/actions.ts`, `app/app/admin/mouvements/actions.ts`, `app/app/admin/rosters/actions.ts`, `app/app/admin/transactions/actions.ts`, `app/app/admin/config/actions.ts`, `app/lib/snapshot.ts`) :
+- Supprimé les writes vers `player_stat_snapshots` dans `submitSingleChangeAction` et `submitSeriesBatchAction` (pool séries).
+- Supprimé `recalcPostDeadlineSnapshotsAction`, `recalcDeactivationSnapshotsAction`, `recalcMissingBaselinesAction` (fonctions mortes depuis migration game-logs).
+- Supprimé `resetBaselineToDeadlineAction` dans `series-admin-actions.ts` (dead code).
+- Retiré le bouton "↺ Corriger données" de `ChangeLogPanel.tsx` — le panel affiche toujours le journal de changements.
+- Supprimé `takeSnapshot` et `snap()` dans toutes les batch actions saison régulière (`gestion-effectifs`, `admin/mouvements`, `admin/rosters`, `admin/transactions`).
+- Supprimé `seasonEndSyncAction` et le composant `SeasonEndSync.tsx` de la page `/admin/config`.
+- Supprimé `lib/snapshot.ts` (plus aucun consommateur).
+- **Table `player_stat_snapshots` toujours présente** : `lib/standings.ts` (classement saison régulière) lit encore cette table. Le DROP TABLE attendra la migration game-logs pour la saison régulière (prochaine session avant octobre 2026).
 - **Prochaine étape** : nettoyer le code mort (snapshot writes dans batch actions, `recalcPostDeadlineSnapshotsAction`, `recalcDeactivationSnapshotsAction`, bouton "Corriger données" admin), puis supprimer `player_stat_snapshots` en BD.
 
 **[Fix] — Pool séries : périodes pré-deadline ignorées dans calcPlayoffPoints** (`app/app/gestion-series/playoff-pool-actions.ts`) :

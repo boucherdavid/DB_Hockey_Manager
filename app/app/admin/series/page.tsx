@@ -48,7 +48,7 @@ export default async function AdminSeriesPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-800">Pool des séries — {saison.season}</h1>
-      <ChangeLogPanel poolSeasonId={saison.id} log={changeLog} />
+      <ChangeLogPanel log={changeLog} />
       <SeriesAdminManager
         saison={saison}
         participatingTeamIds={participatingTeamIds}

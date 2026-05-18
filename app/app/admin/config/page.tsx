@@ -4,7 +4,6 @@ import ConfigForm from './ConfigForm'
 import SeasonsManager from './SeasonsManager'
 import InitTabs from './InitTabs'
 import ScoringConfig from './ScoringConfig'
-import SeasonEndSync from './SeasonEndSync'
 import { type Pick, type Pooler } from './PicksEditor'
 
 export default async function AdminConfigPage() {
@@ -72,9 +71,6 @@ export default async function AdminConfigPage() {
             ? <ConfigForm saison={activeRegSaison} />
             : <div className="bg-white rounded-lg shadow p-6 text-gray-400 text-sm">Aucune saison régulière active.</div>
           }
-          {activeRegSaison && (
-            <SeasonEndSync seasonId={activeRegSaison.id} season={activeRegSaison.season} />
-          )}
         </div>
 
         {/* Pool Séries — saison playoff */}

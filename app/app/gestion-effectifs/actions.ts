@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { takeSnapshot } from '@/lib/snapshot'
+
 import { sendPushToUser } from '@/lib/push'
 
 export type PlayerType = 'actif' | 'reserviste' | 'ltir' | 'recrue'
@@ -264,10 +264,6 @@ export async function submitBatchAction(input: {
     })
   }
 
-  async function snap(playerId: number, nhlId: number | null, type: 'activation' | 'deactivation') {
-    await takeSnapshot({ playerId, nhlId, poolerId: input.poolerId, poolSeasonId: input.saisonId, snapshotType: type })
-  }
-
   async function checkReactivationDelay(playerId: number) {
     if (isAdmin) return  // les admins ne sont pas soumis au délai
     const { data: lastDeact } = await db
@@ -296,7 +292,6 @@ export async function submitBatchAction(input: {
     if (!e) throw new Error('Entrée introuvable')
     await db.from('pooler_rosters').update({ player_type: toType }).eq('id', entryId)
     await log(e.player_id, toType === 'ltir' ? 'ltir' : 'deactivation', e.player_type, toType)
-    await snap(e.player_id, e.players?.nhl_id ?? null, 'deactivation')
   }
 
   async function activate(entryId: number, fromType: string, withDelayCheck = false) {
@@ -305,7 +300,6 @@ export async function submitBatchAction(input: {
     if (withDelayCheck) await checkReactivationDelay(e.player_id)
     await db.from('pooler_rosters').update({ player_type: 'actif' }).eq('id', entryId)
     await log(e.player_id, fromType === 'ltir' ? 'retour_ltir' : 'activation', fromType, 'actif')
-    await snap(e.player_id, e.players?.nhl_id ?? null, 'activation')
   }
 
   async function addNewPlayer(playerId: number, playerType: 'actif' | 'reserviste', signingType: 'al' | 'ltir') {
@@ -337,8 +331,6 @@ export async function submitBatchAction(input: {
       })
     }
 
-    const { data: p } = await db.from('players').select('nhl_id').eq('id', playerId).single()
-
     // Choisir le bon budget et type de log
     let logType: string
     if (signingType === 'ltir' && ltirUsed < maxLtir) {
@@ -350,7 +342,6 @@ export async function submitBatchAction(input: {
     }
 
     await log(playerId, logType, null, playerType)
-    if (playerType === 'actif') await snap(playerId, p?.nhl_id ?? null, 'activation')
   }
 
   // ─── Process actions ────────────────────────────────────────────────────────
@@ -396,7 +387,6 @@ export async function submitBatchAction(input: {
           if (!action.releaseEntryId) throw new Error('Joueur manquant (libération)')
           const e = await getEntry(action.releaseEntryId)
           if (!e) throw new Error('Entrée introuvable (libération)')
-          if (e.player_type === 'actif') await snap(e.player_id, e.players?.nhl_id ?? null, 'deactivation')
           await log(e.player_id, e.player_type === 'actif' ? 'deactivation' : 'retrait', e.player_type, null)
           await db.from('pooler_rosters')
             .update({ is_active: false, removed_at: changedAt }).eq('id', action.releaseEntryId)

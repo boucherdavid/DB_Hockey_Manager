@@ -380,7 +380,6 @@ export async function submitPlayoffPoolChangeAction(input: {
     }
   }
 
-  const { fetchPlayerStatsSafe } = await import('@/lib/nhl-snapshot')
   const now = new Date().toISOString()
 
   // Remove player
@@ -393,19 +392,6 @@ export async function submitPlayoffPoolChangeAction(input: {
       .update({ is_active: false, removed_at: now, removal_reason: reason })
       .eq('id', input.removeEntryId)
     if (error) return { error: error.message }
-
-    // Deactivation snapshot — INSERT (multi-période : un joueur peut avoir plusieurs deactivations)
-    if (input.removeNhlId) {
-      const stats = await fetchPlayerStatsSafe(input.removeNhlId, 3)
-      await db.from('player_stat_snapshots').insert({
-        player_id: input.removePlayerId,
-        pooler_id: input.poolerId,
-        pool_season_id: input.poolSeasonId,
-        snapshot_type: 'deactivation',
-        taken_at: now,
-        ...stats,
-      })
-    }
   }
 
   // Add player — toujours INSERT un nouveau row pour préserver l'historique des périodes
@@ -419,19 +405,6 @@ export async function submitPlayoffPoolChangeAction(input: {
       added_at: now,
     })
     if (error) return { error: error.message }
-
-    // Activation snapshot — INSERT pour préserver l'historique multi-période
-    if (input.addNhlId) {
-      const stats = await fetchPlayerStatsSafe(input.addNhlId, 3)
-      await db.from('player_stat_snapshots').insert({
-        player_id: input.addPlayerId,
-        pooler_id: input.poolerId,
-        pool_season_id: input.poolSeasonId,
-        snapshot_type: 'activation',
-        taken_at: now,
-        ...stats,
-      })
-    }
   }
 
   // Notifier l'admin seulement après la deadline (changements avec budget)
@@ -567,7 +540,6 @@ export async function submitSeriesBatchAction(input: {
     }
   }
 
-  const { fetchPlayerStatsSafe } = await import('@/lib/nhl-snapshot')
   const now = new Date().toISOString()
 
   // Appliquer les retraits
@@ -580,15 +552,6 @@ export async function submitSeriesBatchAction(input: {
       .update({ is_active: false, removed_at: now, removal_reason: reason })
       .eq('id', r.entryId)
     if (error) return { error: error.message }
-
-    if (r.nhlId) {
-      const stats = await fetchPlayerStatsSafe(r.nhlId, 3)
-      // INSERT — multi-période : un joueur peut avoir plusieurs deactivations
-      await db.from('player_stat_snapshots').insert({
-        player_id: r.playerId, pooler_id: input.poolerId,
-        pool_season_id: input.poolSeasonId, snapshot_type: 'deactivation', taken_at: now, ...stats,
-      })
-    }
   }
 
   // Appliquer les ajouts — toujours INSERT pour préserver l'historique multi-période
@@ -599,16 +562,6 @@ export async function submitSeriesBatchAction(input: {
       is_active: true, added_at: now,
     })
     if (error) return { error: error.message }
-
-    // Activation snapshot — fallback BD si le client n'a pas transmis nhlId
-    const nhlIdForSnap = a.nhlId ?? ((await db.from('players').select('nhl_id').eq('id', a.playerId).single()).data?.nhl_id ?? null)
-    if (nhlIdForSnap) {
-      const stats = await fetchPlayerStatsSafe(nhlIdForSnap, 3)
-      await db.from('player_stat_snapshots').insert({
-        player_id: a.playerId, pooler_id: input.poolerId,
-        pool_season_id: input.poolSeasonId, snapshot_type: 'activation', taken_at: now, ...stats,
-      })
-    }
   }
 
   if (!isAdmin && isLocked) {
@@ -630,225 +583,7 @@ export async function submitSeriesBatchAction(input: {
   return {}
 }
 
-// ─── Admin : recalcul snapshots post-deadline ─────────────────────────────────
-// Corrige les snapshots d'activation pour les joueurs ajoutés après la deadline
-// dont le snapshot était à zéro (ex: bug fetchPlayerStatsById gardiens).
 
-export async function recalcPostDeadlineSnapshotsAction(
-  poolSeasonId: number,
-): Promise<{ fixed: number; error?: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { fixed: 0, error: 'Non authentifié' }
-  const { data: poolerSelf } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
-  if (!poolerSelf?.is_admin) return { fixed: 0, error: 'Non autorisé' }
-
-  const db = createAdminClient()
-  const { data: saisonRow } = await db
-    .from('pool_seasons')
-    .select('playoff_submission_deadline, season')
-    .eq('id', poolSeasonId)
-    .single()
-  if (!saisonRow?.playoff_submission_deadline) return { fixed: 0, error: 'Deadline introuvable' }
-
-  const deadline = new Date(saisonRow.playoff_submission_deadline)
-
-  // Entrées actives ou retirées ajoutées APRÈS la deadline
-  const { data: postDeadlineEntries } = await db
-    .from('playoff_pool_rosters')
-    .select('id, player_id, pooler_id, added_at, players(nhl_id)')
-    .eq('pool_season_id', poolSeasonId)
-    .gt('added_at', deadline.toISOString())
-
-  if (!postDeadlineEntries?.length) return { fixed: 0 }
-
-  const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
-
-  // Pour chaque entrée post-deadline : recalculer le snapshot d'activation
-  // via fetchPlayerStatsAsOfDate(addedAt) — stats strictement avant la date d'ajout.
-  // Plus correct que fetchPlayerStatsById (stats actuelles) pour un recalcul rétroactif :
-  // le joueur peut avoir accumulé des stats après son retrait du pool.
-  let fixed = 0
-  for (const entry of postDeadlineEntries) {
-    const nhlId = (entry.players as any)?.nhl_id
-    if (!nhlId) continue
-
-    const stats = await fetchPlayerStatsAsOfDate(nhlId, 3, new Date(entry.added_at))
-
-    const { error } = await db.from('player_stat_snapshots').upsert({
-      player_id: entry.player_id,
-      pooler_id: entry.pooler_id,
-      pool_season_id: poolSeasonId,
-      snapshot_type: 'activation',
-      taken_at: entry.added_at,
-      ...stats,
-    }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
-
-    if (!error) fixed++
-  }
-
-  revalidatePath('/classement-series')
-  revalidatePath('/admin/series')
-  return { fixed }
-}
-
-// ─── Admin : recalcul des snapshots de désactivation ─────────────────────────
-// Recalcule les deactivation snapshots pour tous les retraits post-deadline.
-// Corrige les snapshots à zéro causés par un échec de fetchPlayerStatsById au
-// moment du retrait (ex: API NHL indisponible lors d'un batch de changements).
-
-export async function recalcDeactivationSnapshotsAction(
-  poolSeasonId: number,
-): Promise<{ fixed: number; error?: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { fixed: 0, error: 'Non authentifié' }
-  const { data: poolerSelf } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
-  if (!poolerSelf?.is_admin) return { fixed: 0, error: 'Non autorisé' }
-
-  const db = createAdminClient()
-  const { data: saisonRow } = await db
-    .from('pool_seasons')
-    .select('playoff_submission_deadline')
-    .eq('id', poolSeasonId)
-    .single()
-  if (!saisonRow?.playoff_submission_deadline) return { fixed: 0, error: 'Deadline introuvable' }
-
-  const deadline = new Date(saisonRow.playoff_submission_deadline)
-
-  // Tous les retraits post-deadline (voluntary + elimination) avec leur date de retrait.
-  // Utilise .or() car .in() sur removal_reason est peu fiable avec certaines versions Supabase.
-  const { data: postDeadlineRemovals, error: removalErr } = await db
-    .from('playoff_pool_rosters')
-    .select('player_id, pooler_id, removed_at, players(nhl_id)')
-    .eq('pool_season_id', poolSeasonId)
-    .or('removal_reason.eq.voluntary,removal_reason.eq.elimination')
-    .not('removed_at', 'is', null)
-    .gt('removed_at', deadline.toISOString())
-
-  if (removalErr) return { fixed: 0, error: removalErr.message }
-  if (!postDeadlineRemovals?.length) return { fixed: 0 }
-
-  const { fetchPlayerStatsAsOfDate, fetchPlayerStatsSafe } = await import('@/lib/nhl-snapshot')
-  let fixed = 0
-
-  for (const entry of postDeadlineRemovals as any[]) {
-    const nhlId = entry.players?.nhl_id
-    if (!nhlId || !entry.removed_at) continue
-
-    // Stats au moment du retrait (avant la journée du retrait).
-    // Si le game-log retourne tout à zéro (échec API), on tente fetchPlayerStatsSafe
-    // en fallback (donne les stats totales actuelles — correct pour équipes éliminées).
-    let stats = await fetchPlayerStatsAsOfDate(nhlId, 3, new Date(entry.removed_at))
-    const isAllZero = !stats.goals && !stats.assists && !stats.goalie_wins && !stats.goalie_otl && !stats.goalie_shutouts
-    if (isAllZero) stats = await fetchPlayerStatsSafe(nhlId, 3)
-
-    // DELETE + INSERT pour éviter la dépendance à la contrainte UNIQUE
-    await db.from('player_stat_snapshots')
-      .delete()
-      .eq('pooler_id', entry.pooler_id).eq('player_id', entry.player_id)
-      .eq('pool_season_id', poolSeasonId).eq('snapshot_type', 'deactivation')
-    const { error } = await db.from('player_stat_snapshots').insert({
-      player_id: entry.player_id,
-      pooler_id: entry.pooler_id,
-      pool_season_id: poolSeasonId,
-      snapshot_type: 'deactivation',
-      taken_at: entry.removed_at,
-      ...stats,
-    })
-
-    if (!error) fixed++
-  }
-
-  revalidatePath('/classement-series')
-  revalidatePath('/admin/series')
-  return { fixed }
-}
-
-// ─── Admin : recalcul des baselines deadline manquantes ───────────────────────
-// Crée les deadline_baseline pour tous les joueurs (actifs ou retirés post-deadline)
-// qui n'en ont pas encore. Corrige aussi les removal_reason = null pour des retraits
-// survenus après la deadline (bug: client envoyait 'free' si deadline pas chargée).
-
-export async function recalcMissingBaselinesAction(
-  poolSeasonId: number,
-): Promise<{ fixed: number; error?: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { fixed: 0, error: 'Non authentifié' }
-  const { data: poolerSelf } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
-  if (!poolerSelf?.is_admin) return { fixed: 0, error: 'Non autorisé' }
-
-  const db = createAdminClient()
-  const { data: saisonRow } = await db
-    .from('pool_seasons')
-    .select('playoff_submission_deadline')
-    .eq('id', poolSeasonId)
-    .single()
-  if (!saisonRow?.playoff_submission_deadline) return { fixed: 0, error: 'Deadline introuvable' }
-
-  const deadline = new Date(saisonRow.playoff_submission_deadline)
-
-  // Corriger les retraits post-deadline dont removal_reason est null (bug client)
-  const { data: wrongReasonEntries } = await db
-    .from('playoff_pool_rosters')
-    .select('id')
-    .eq('pool_season_id', poolSeasonId)
-    .is('removal_reason', null)
-    .not('removed_at', 'is', null)
-    .gt('removed_at', deadline.toISOString())
-  for (const entry of wrongReasonEntries ?? []) {
-    await db.from('playoff_pool_rosters')
-      .update({ removal_reason: 'voluntary' })
-      .eq('id', entry.id)
-  }
-
-  // Tous les joueurs actifs + retraits post-deadline (y compris ceux qu'on vient de corriger)
-  const [{ data: allEntries }, { data: existingRows }] = await Promise.all([
-    db.from('playoff_pool_rosters')
-      .select('player_id, pooler_id, removal_reason, is_active, players(nhl_id)')
-      .eq('pool_season_id', poolSeasonId)
-      .or('is_active.eq.true,removal_reason.eq.voluntary,removal_reason.eq.elimination'),
-    db.from('player_stat_snapshots')
-      .select('pooler_id, player_id')
-      .eq('pool_season_id', poolSeasonId)
-      .eq('snapshot_type', 'deadline_baseline'),
-  ])
-
-  const existingSet = new Set(
-    (existingRows ?? []).map((e: any) => `${e.pooler_id}:${e.player_id}`),
-  )
-  const needingBaseline = (allEntries ?? []).filter((e: any) =>
-    !existingSet.has(`${e.pooler_id}:${e.player_id}`),
-  )
-
-  if (needingBaseline.length === 0) return { fixed: 0 }
-
-  const { fetchPlayerStatsAsOfDate } = await import('@/lib/nhl-snapshot')
-  const statsCache = new Map<number, any>()
-  let fixed = 0
-
-  for (const entry of needingBaseline as any[]) {
-    const nhlId = entry.players?.nhl_id
-    if (!nhlId) continue
-    if (!statsCache.has(nhlId)) {
-      statsCache.set(nhlId, await fetchPlayerStatsAsOfDate(nhlId, 3, deadline))
-    }
-    const { error } = await db.from('player_stat_snapshots').upsert({
-      player_id: entry.player_id,
-      pooler_id: entry.pooler_id,
-      pool_season_id: poolSeasonId,
-      snapshot_type: 'deadline_baseline',
-      taken_at: deadline.toISOString(),
-      ...statsCache.get(nhlId),
-    }, { onConflict: 'pooler_id,player_id,pool_season_id,snapshot_type' })
-    if (!error) fixed++
-  }
-
-  revalidatePath('/classement-series')
-  revalidatePath('/admin/series')
-  return { fixed }
-}
 
 // ─── Confirm alignment ────────────────────────────────────────────────────────
 

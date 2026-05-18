@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { takeSeasonEndSnapshots } from '@/lib/snapshot'
 
 const REVALIDATE_PATHS = ['/admin/config', '/admin', '/', '/poolers', '/dashboard']
 const revalidateAll = () => REVALIDATE_PATHS.forEach(p => revalidatePath(p))
@@ -419,21 +418,4 @@ export async function updateCapAction(
   revalidatePath('/')
   revalidatePath('/poolers')
   return {}
-}
-
-
-export async function seasonEndSyncAction(
-  seasonId: number,
-): Promise<{ count?: number; errors?: string[]; error?: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Non authentifié.' }
-
-  const { data: pooler } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
-  if (!pooler?.is_admin) return { error: 'Accès refusé.' }
-
-  const result = await takeSeasonEndSnapshots(seasonId)
-  revalidatePath('/admin/config')
-  revalidatePath('/classement')
-  return result
 }

@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { takeSnapshot } from '@/lib/snapshot'
 
 export type ActionType = 'transfer' | 'promote' | 'sign' | 'reactivate' | 'release' | 'type_change' | 'ballotage'
 
@@ -24,12 +23,6 @@ type VEntry = {
   nhl_id: number | null
 }
 
-type SnapshotTask = {
-  playerId: number
-  nhlId: number | null
-  poolerId: string
-  snapshotType: 'activation' | 'deactivation'
-}
 
 function getPlayerBucket(position: string | null): 'forward' | 'defense' | 'goalie' {
   const pos = (position ?? '').toUpperCase()
@@ -191,9 +184,6 @@ export async function submitTransactionAction(
     }
   }
 
-  // Valider préconditions, simuler et collecter les snapshots nécessaires
-  const snapshotTasks: SnapshotTask[] = []
-
   for (const item of items) {
     const { action_type, from_pooler_id, to_pooler_id, player_id, pick_id, old_player_type, new_player_type } = item
 
@@ -210,10 +200,6 @@ export async function submitTransactionAction(
       const entry = fromRoster?.find(e => e.player_id === player_id)
       if (!entry) return { error: `Joueur (id: ${player_id}) introuvable dans le roster source.` }
       const destType = new_player_type ?? entry.player_type
-      if (entry.player_type === 'actif')
-        snapshotTasks.push({ playerId: player_id, nhlId: entry.nhl_id, poolerId: from_pooler_id!, snapshotType: 'deactivation' })
-      if (destType === 'actif')
-        snapshotTasks.push({ playerId: player_id, nhlId: entry.nhl_id, poolerId: to_pooler_id!, snapshotType: 'activation' })
       fromRoster!.splice(fromRoster!.indexOf(entry), 1)
       virtual.get(to_pooler_id!)!.push({ roster_id: -1, player_id, player_type: destType, position: entry.position, cap_number: entry.cap_number, nhl_id: entry.nhl_id })
       continue
@@ -223,8 +209,6 @@ export async function submitTransactionAction(
       const roster = virtual.get(to_pooler_id!)!
       const entry = roster.find(e => e.player_id === player_id && e.player_type === 'recrue')
       if (!entry) return { error: `Recrue (id: ${player_id}) introuvable dans la banque.` }
-      if (new_player_type === 'actif')
-        snapshotTasks.push({ playerId: player_id!, nhlId: entry.nhl_id, poolerId: to_pooler_id!, snapshotType: 'activation' })
       entry.player_type = new_player_type!
       continue
     }
@@ -233,8 +217,6 @@ export async function submitTransactionAction(
       const p = signPlayerMap.get(player_id!)
       if (!p) return { error: `Joueur (id: ${player_id}) introuvable.` }
       const cap = p.player_contracts?.find((c: any) => c.season === saison.season)?.cap_number ?? 0
-      if (new_player_type === 'actif')
-        snapshotTasks.push({ playerId: player_id!, nhlId: p.nhl_id ?? null, poolerId: to_pooler_id!, snapshotType: 'activation' })
       virtual.get(to_pooler_id!)!.push({ roster_id: -1, player_id: player_id!, player_type: new_player_type!, position: p.position, cap_number: cap, nhl_id: p.nhl_id ?? null })
       continue
     }
@@ -243,8 +225,6 @@ export async function submitTransactionAction(
       const roster = virtual.get(to_pooler_id!)!
       const entry = roster.find(e => e.player_id === player_id && e.player_type === 'ltir')
       if (!entry) return { error: `Joueur (id: ${player_id}) non trouvé en LTIR.` }
-      if (new_player_type === 'actif')
-        snapshotTasks.push({ playerId: player_id!, nhlId: entry.nhl_id, poolerId: to_pooler_id!, snapshotType: 'activation' })
       entry.player_type = new_player_type!
       continue
     }
@@ -253,8 +233,6 @@ export async function submitTransactionAction(
       const roster = virtual.get(from_pooler_id!)!
       const entry = roster.find(e => e.player_id === player_id)
       if (!entry) return { error: `Joueur (id: ${player_id}) introuvable dans le roster.` }
-      if (entry.player_type === 'actif')
-        snapshotTasks.push({ playerId: player_id!, nhlId: entry.nhl_id, poolerId: from_pooler_id!, snapshotType: 'deactivation' })
       roster.splice(roster.indexOf(entry), 1)
       continue
     }
@@ -263,11 +241,6 @@ export async function submitTransactionAction(
       const roster = virtual.get(from_pooler_id!)!
       const entry = roster.find(e => e.player_id === player_id && e.player_type === old_player_type)
       if (!entry) return { error: `Joueur (id: ${player_id}) avec type "${old_player_type}" introuvable.` }
-      const poolerId = from_pooler_id!
-      if (old_player_type === 'actif')
-        snapshotTasks.push({ playerId: player_id!, nhlId: entry.nhl_id, poolerId, snapshotType: 'deactivation' })
-      if (new_player_type === 'actif')
-        snapshotTasks.push({ playerId: player_id!, nhlId: entry.nhl_id, poolerId, snapshotType: 'activation' })
       entry.player_type = new_player_type!
       continue
     }
@@ -379,17 +352,6 @@ export async function submitTransactionAction(
       if (error) return { error: error.message }
       continue
     }
-  }
-
-  // Snapshots fire-and-forget — ne bloquent pas la réponse
-  if (snapshotTasks.length > 0) {
-    Promise.all(snapshotTasks.map(t => takeSnapshot({
-      playerId:     t.playerId,
-      nhlId:        t.nhlId,
-      poolerId:     t.poolerId,
-      poolSeasonId: saisonId,
-      snapshotType: t.snapshotType,
-    }))).catch(() => {})
   }
 
   return {}

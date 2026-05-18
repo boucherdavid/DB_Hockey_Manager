@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { takeSnapshot } from '@/lib/snapshot'
+
 import { sendPushToUser } from '@/lib/push'
 
 export type PlayerType = 'actif' | 'reserviste' | 'ltir' | 'recrue'
@@ -167,16 +167,11 @@ export async function submitMouvementAction(
     })
   }
 
-  async function snap(playerId: number, nhlId: number | null, type: 'activation' | 'deactivation') {
-    await takeSnapshot({ playerId, nhlId, poolerId: input.poolerId, poolSeasonId: input.saisonId, snapshotType: type })
-  }
-
   async function deactivate(entryId: number, toType: 'reserviste' | 'ltir') {
     const e = await getEntry(entryId)
     if (!e) throw new Error('Entrée introuvable')
     await supabase.from('pooler_rosters').update({ player_type: toType }).eq('id', entryId)
     await log(e.player_id, toType === 'ltir' ? 'ltir' : 'deactivation', e.player_type, toType)
-    await snap(e.player_id, e.players?.nhl_id ?? null, 'deactivation')
     return e
   }
 
@@ -186,7 +181,6 @@ export async function submitMouvementAction(
     await supabase.from('pooler_rosters').update({ player_type: 'actif' }).eq('id', entryId)
     const changeType = fromType === 'ltir' ? 'retour_ltir' : 'activation'
     await log(e.player_id, changeType, fromType, 'actif')
-    await snap(e.player_id, e.players?.nhl_id ?? null, 'activation')
     return e
   }
 
@@ -204,9 +198,7 @@ export async function submitMouvementAction(
         pool_season_id: input.saisonId, player_type: playerType, is_active: true,
       })
     }
-    const { data: p } = await supabase.from('players').select('nhl_id').eq('id', playerId).single()
     await log(playerId, 'signature_agent_libre', null, playerType)
-    if (playerType === 'actif') await snap(playerId, p?.nhl_id ?? null, 'activation')
   }
 
   try {
@@ -249,7 +241,6 @@ export async function submitMouvementAction(
         if (!input.releaseEntryId) return { error: 'Joueur manquant' }
         const e = await getEntry(input.releaseEntryId)
         if (!e) return { error: 'Entrée introuvable' }
-        if (e.player_type === 'actif') await snap(e.player_id, e.players?.nhl_id ?? null, 'deactivation')
         await log(e.player_id, e.player_type === 'actif' ? 'deactivation' : 'retrait', e.player_type, null)
         await supabase.from('pooler_rosters')
           .update({ is_active: false, removed_at: changedAt }).eq('id', input.releaseEntryId)
