@@ -103,6 +103,27 @@ Je l'utiliserai pour:
 - **Nettoyage (2026-05-18)** : snapshot writes supprimés partout — voir entrée ci-dessous.
 - **Validation (2026-05-18)** : Necas, Hutson, Lacombe, Byram vérifiés manuellement — totaux corrects avec différentes périodes d'activation. ✓
 
+### 2026-05-18 (suite 2)
+
+**[Feat] — `/admin/historique` : saisie des transactions historiques 2024-25** (`app/app/admin/historique/`, `app/components/Navbar.tsx`) :
+- Nouvelle page admin pour saisir les données historiques de la saison 2024-25 en staging, en vue de valider la mécanique game-logs.
+- 4 types de transactions : échange même pooler (swap), échange entre poolers (trade symétrique auto), ajout seulement, retrait seulement.
+- Roster actuel du pooler chargé dynamiquement (joueurs avec `removed_at IS NULL`) pour le sélecteur "joueur sortant".
+- Recherche de joueurs pour l'acquisition. Trade inter-poolers : symétrie automatique (le joueur A envoie = B reçoit, pas de double saisie).
+- Journal des 50 dernières transactions en temps réel (badges verts/rouges ajout/retrait).
+- Lien dans la navbar admin desktop. Commit : `01cafb1`
+
+**Prérequis staging déjà faits :**
+- Contrainte UNIQUE sur `pooler_rosters` absente du staging (pas besoin de la supprimer).
+- `pool_season` 2024-25 créée (nhl_cap=88M, cap_multiplier=1.25 → pool_cap=110M, is_active=true en staging temporairement).
+- Saison 2025-26 désactivée temporairement dans staging pour saisie.
+
+**Prochaines étapes :**
+1. Entrer les rosters initiaux via `/admin/rosters` Mode init en staging, puis SQL `UPDATE added_at = '2024-10-01'`.
+2. Entrer les transactions chronologiques via `/admin/historique`.
+3. Script Python backfill game-logs 2024-25 (gameType=2, season=20242025).
+4. Script de validation : somme game-logs dans fenêtres `added_at→removed_at` × scoring config → comparer avec Excel.
+
 ### 2026-05-18 (suite)
 
 **[Feat] — Pool séries : changements volontaires illimités + délai réactivation 3 jours** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/gestion-series/GestionSeriesManager.tsx`) :
