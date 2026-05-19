@@ -329,10 +329,8 @@ export default function GestionSeriesManager({
   const isLocked = saison.submissionDeadline ? new Date() > new Date(saison.submissionDeadline) : false
   const poolerName = poolers?.find(p => p.id === poolerId)?.name ?? selfPoolerName
 
-  // Budget restant compte du panier
-  const cartElim = cartRemovals.filter(r => r.isElimination).length
+  // Compteur affiché (informatif seulement — plus de limites)
   const cartVoluntary = cartRemovals.filter(r => !r.isElimination).length
-  const remainingElim = saison.maxElimChanges - counts.elimination - cartElim
   const remainingVoluntary = saison.maxChanges - counts.voluntary - cartVoluntary
 
   const pendingRemovalIds = useMemo(() => new Set(cartRemovals.map(r => r.entryId)), [cartRemovals])
@@ -343,12 +341,10 @@ export default function GestionSeriesManager({
 
   const canMarkForRemovalEntry = (entry: PlayoffPoolEntry): boolean => {
     if (pendingRemovalIds.has(entry.id)) return false // déjà en sortie
-    if (isAdmin || !isLocked) return true
-    if (entry.teamEliminated) return remainingElim > 0
-    return true // changements volontaires illimités
+    return true // changements illimités
   }
 
-  const canAddPlayer = true // changements volontaires illimités
+  const canAddPlayer = true // changements illimités
 
   // IDs exclus du sélecteur : joueurs du roster non en sortie + joueurs déjà ajoutés au panier
   const excludeIds = useMemo(() => new Set([
@@ -356,7 +352,7 @@ export default function GestionSeriesManager({
     ...pendingAdditionPlayerIds,
   ]), [entries, pendingRemovalPlayerIds, pendingAdditionPlayerIds])
 
-  const isTrulyLocked = isLocked && !isAdmin && remainingElim <= 0 && !hasEliminatedPlayers
+  const isTrulyLocked = false // changements illimités — jamais verrouillé
 
   useEffect(() => {
     setLoading(true)
@@ -515,9 +511,6 @@ export default function GestionSeriesManager({
           <div className="flex gap-4 text-xs">
             <span className="text-gray-600">
               Changements : {counts.voluntary}{cartVoluntary > 0 ? `+${cartVoluntary}` : ''} / illimité
-            </span>
-            <span className={counts.elimination + cartElim >= saison.maxElimChanges && isLocked ? 'text-red-600 font-semibold' : 'text-gray-600'}>
-              Remplacements élim. : {counts.elimination}{cartElim > 0 ? `+${cartElim}` : ''}/{saison.maxElimChanges}
             </span>
           </div>
         </div>

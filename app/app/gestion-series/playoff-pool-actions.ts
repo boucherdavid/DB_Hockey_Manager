@@ -490,40 +490,22 @@ export async function submitSeriesBatchAction(input: {
   const elimRemovals = input.removals.filter(r => r.removalType === 'elimination')
   const voluntaryRemovals = input.removals.filter(r => r.removalType === 'voluntary')
 
-  if (isLocked && !isAdmin) {
-    const { data: history } = await db
-      .from('playoff_pool_rosters')
-      .select('removal_reason')
-      .eq('pooler_id', input.poolerId)
-      .eq('pool_season_id', input.poolSeasonId)
-      .not('removed_at', 'is', null)
-    const used = history ?? []
-    const voluntaryUsed = used.filter((r: any) => r.removal_reason === 'voluntary').length
-    const elimUsed = used.filter((r: any) => r.removal_reason === 'elimination').length
-    const maxElim = saisonRow.playoff_max_elim_changes ?? 5
-    const maxVoluntary = saisonRow.playoff_max_changes ?? 5
+  // Vérifier que les retraits 'élimination' sont bien sur des équipes éliminées
+  if (isLocked && !isAdmin && elimRemovals.length > 0) {
+    const [{ data: eliminations }, { data: participating }] = await Promise.all([
+      db.from('playoff_eliminations').select('team_id').eq('pool_season_id', input.poolSeasonId),
+      db.from('playoff_participating_teams').select('team_id').eq('pool_season_id', input.poolSeasonId),
+    ])
+    const elimTeamIds = new Set((eliminations ?? []).map((e: any) => e.team_id))
+    const participatingIds = new Set((participating ?? []).map((e: any) => e.team_id))
+    const isEliminated = (tid: number) =>
+      elimTeamIds.has(tid) || (participatingIds.size > 0 && !participatingIds.has(tid))
 
-    if (elimUsed + elimRemovals.length > maxElim) {
-      return { error: `Ce panier dépasserait la limite de ${maxElim} remplacements d'élimination (${elimUsed} déjà utilisés).` }
-    }
-
-    // Vérifier que les retraits 'élimination' sont bien sur des équipes éliminées
-    if (elimRemovals.length > 0) {
-      const [{ data: eliminations }, { data: participating }] = await Promise.all([
-        db.from('playoff_eliminations').select('team_id').eq('pool_season_id', input.poolSeasonId),
-        db.from('playoff_participating_teams').select('team_id').eq('pool_season_id', input.poolSeasonId),
-      ])
-      const elimTeamIds = new Set((eliminations ?? []).map((e: any) => e.team_id))
-      const participatingIds = new Set((participating ?? []).map((e: any) => e.team_id))
-      const isEliminated = (tid: number) =>
-        elimTeamIds.has(tid) || (participatingIds.size > 0 && !participatingIds.has(tid))
-
-      for (const r of elimRemovals) {
-        const { data: pTeam } = await db.from('players').select('teams(id)').eq('id', r.playerId).single()
-        const tid = (pTeam?.teams as any)?.id
-        if (tid && !isEliminated(tid)) {
-          return { error: "Un joueur marqué 'élimination' n'est pas sur une équipe éliminée." }
-        }
+    for (const r of elimRemovals) {
+      const { data: pTeam } = await db.from('players').select('teams(id)').eq('id', r.playerId).single()
+      const tid = (pTeam?.teams as any)?.id
+      if (tid && !isEliminated(tid)) {
+        return { error: "Un joueur marqué 'élimination' n'est pas sur une équipe éliminée." }
       }
     }
   }
