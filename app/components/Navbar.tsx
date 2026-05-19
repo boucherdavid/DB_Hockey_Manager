@@ -280,6 +280,7 @@ export default function Navbar({
                       <div className="border-t my-1" />
                       <Link href="/admin/joueurs"      className={dropdownLinkClass('/admin/joueurs')}>Procédure mise à jour</Link>
                       <div className="border-t my-1" />
+                      <Link href="/admin/historique"   className={dropdownLinkClass('/admin/historique')}>Saisie historique transactions</Link>
                       <Link href="/admin/config"       className={dropdownLinkClass('/admin/config')}>Configuration des pools</Link>
                       <Link href="/admin/suivi"        className={dropdownLinkClass('/admin/suivi')}>Suivi des activités</Link>
                       <Link href="/admin/feedback"     className={dropdownLinkClass('/admin/feedback')}>
