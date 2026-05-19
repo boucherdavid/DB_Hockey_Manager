@@ -345,10 +345,10 @@ export default function GestionSeriesManager({
     if (pendingRemovalIds.has(entry.id)) return false // déjà en sortie
     if (isAdmin || !isLocked) return true
     if (entry.teamEliminated) return remainingElim > 0
-    return remainingVoluntary > 0
+    return true // changements volontaires illimités
   }
 
-  const canAddPlayer = !isLocked || isAdmin || remainingVoluntary > 0 || (remainingElim > 0 && hasEliminatedPlayers) || cartRemovals.length > 0
+  const canAddPlayer = true // changements volontaires illimités
 
   // IDs exclus du sélecteur : joueurs du roster non en sortie + joueurs déjà ajoutés au panier
   const excludeIds = useMemo(() => new Set([
@@ -356,7 +356,7 @@ export default function GestionSeriesManager({
     ...pendingAdditionPlayerIds,
   ]), [entries, pendingRemovalPlayerIds, pendingAdditionPlayerIds])
 
-  const isTrulyLocked = isLocked && !isAdmin && remainingVoluntary <= 0 && remainingElim <= 0
+  const isTrulyLocked = isLocked && !isAdmin && remainingElim <= 0 && !hasEliminatedPlayers
 
   useEffect(() => {
     setLoading(true)
@@ -513,8 +513,8 @@ export default function GestionSeriesManager({
             <span className="text-gray-400 text-xs ml-2">{deadlineLabel(saison.submissionDeadline)}</span>
           </div>
           <div className="flex gap-4 text-xs">
-            <span className={counts.voluntary + cartVoluntary >= saison.maxChanges && isLocked ? 'text-red-600 font-semibold' : 'text-gray-600'}>
-              Changements : {counts.voluntary}{cartVoluntary > 0 ? `+${cartVoluntary}` : ''}/{saison.maxChanges}
+            <span className="text-gray-600">
+              Changements : {counts.voluntary}{cartVoluntary > 0 ? `+${cartVoluntary}` : ''} / illimité
             </span>
             <span className={counts.elimination + cartElim >= saison.maxElimChanges && isLocked ? 'text-red-600 font-semibold' : 'text-gray-600'}>
               Remplacements élim. : {counts.elimination}{cartElim > 0 ? `+${cartElim}` : ''}/{saison.maxElimChanges}

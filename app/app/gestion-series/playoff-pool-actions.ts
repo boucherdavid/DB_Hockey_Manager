@@ -373,10 +373,28 @@ export async function submitPlayoffPoolChangeAction(input: {
           if (!isEliminated) return { error: "Ce joueur n'est pas sur une équipe éliminée." }
         }
       }
-    } else {
-      if (voluntaryUsed >= (saisonRow.playoff_max_changes ?? 5)) {
-        return { error: `Limite de ${saisonRow.playoff_max_changes} changements volontaires atteinte.` }
-      }
+    }
+  }
+
+  // Délai de réactivation : 3 jours après un retrait volontaire (non-admin seulement)
+  if (!isAdmin && isLocked && input.addPlayerId) {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: lastRow } = await db
+      .from('playoff_pool_rosters')
+      .select('removed_at')
+      .eq('pooler_id', input.poolerId)
+      .eq('pool_season_id', input.poolSeasonId)
+      .eq('player_id', input.addPlayerId)
+      .not('removed_at', 'is', null)
+      .order('removed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (lastRow?.removed_at && lastRow.removed_at > threeDaysAgo) {
+      const earliest = new Date(new Date(lastRow.removed_at).getTime() + 3 * 24 * 60 * 60 * 1000)
+      const formatted = earliest.toLocaleDateString('fr-CA', { weekday: 'long', month: 'long', day: 'numeric' })
+      const { data: pRow } = await db.from('players').select('first_name, last_name').eq('id', input.addPlayerId).single()
+      const name = pRow ? `${(pRow as any).first_name} ${(pRow as any).last_name}` : 'Ce joueur'
+      return { error: `${name} ne peut pas être remis dans l'alignement avant le ${formatted}.` }
     }
   }
 
@@ -488,9 +506,6 @@ export async function submitSeriesBatchAction(input: {
     if (elimUsed + elimRemovals.length > maxElim) {
       return { error: `Ce panier dépasserait la limite de ${maxElim} remplacements d'élimination (${elimUsed} déjà utilisés).` }
     }
-    if (voluntaryUsed + voluntaryRemovals.length > maxVoluntary) {
-      return { error: `Ce panier dépasserait la limite de ${maxVoluntary} changements volontaires (${voluntaryUsed} déjà utilisés).` }
-    }
 
     // Vérifier que les retraits 'élimination' sont bien sur des équipes éliminées
     if (elimRemovals.length > 0) {
@@ -537,6 +552,30 @@ export async function submitSeriesBatchAction(input: {
     if (projectedCap > poolCap) {
       const fmt = (n: number) => new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
       return { error: `Ce panier dépasse la masse salariale (${fmt(projectedCap)} / ${fmt(poolCap)}).` }
+    }
+  }
+
+  // Délai de réactivation : 3 jours après un retrait volontaire (non-admin seulement)
+  if (!isAdmin && isLocked && input.additions.length > 0) {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+    for (const a of input.additions) {
+      const { data: lastRow } = await db
+        .from('playoff_pool_rosters')
+        .select('removed_at')
+        .eq('pooler_id', input.poolerId)
+        .eq('pool_season_id', input.poolSeasonId)
+        .eq('player_id', a.playerId)
+        .not('removed_at', 'is', null)
+        .order('removed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (lastRow?.removed_at && lastRow.removed_at > threeDaysAgo) {
+        const earliest = new Date(new Date(lastRow.removed_at).getTime() + 3 * 24 * 60 * 60 * 1000)
+        const formatted = earliest.toLocaleDateString('fr-CA', { weekday: 'long', month: 'long', day: 'numeric' })
+        const { data: pRow } = await db.from('players').select('first_name, last_name').eq('id', a.playerId).single()
+        const name = pRow ? `${(pRow as any).first_name} ${(pRow as any).last_name}` : 'Ce joueur'
+        return { error: `${name} ne peut pas être remis dans l'alignement avant le ${formatted}.` }
+      }
     }
   }
 
