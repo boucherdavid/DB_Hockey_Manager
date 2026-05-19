@@ -103,6 +103,15 @@ Je l'utiliserai pour:
 - **Nettoyage (2026-05-18)** : snapshot writes supprimés partout — voir entrée ci-dessous.
 - **Validation (2026-05-18)** : Necas, Hutson, Lacombe, Byram vérifiés manuellement — totaux corrects avec différentes périodes d'activation. ✓
 
+### 2026-05-18 (suite)
+
+**[Feat] — Pool séries : changements volontaires illimités + délai réactivation 3 jours** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/gestion-series/GestionSeriesManager.tsx`) :
+- Supprimé la limite de changements volontaires post-deadline (côté serveur dans `submitPlayoffPoolChangeAction` et `submitSeriesBatchAction`, côté client dans `canMarkForRemovalEntry`, `canAddPlayer`, `isTrulyLocked`, display).
+- Ajouté délai de réactivation de 3 jours : si un joueur a été retiré volontairement, il ne peut pas être remis dans l'alignement avant 3 jours — l'erreur indique la date exacte (ex: "Martin St-Louis ne peut pas être remis dans l'alignement avant le lundi 25 mai."). Admin exempt.
+- UI : affiche "Changements : X / illimité" au lieu de "X/N".
+- Objectif : tester la mécanique de réactivation avec dates avant de l'appliquer à la saison régulière.
+- Commit : `0b6d18a`
+
 ### 2026-05-18
 
 **[Chore] — Suppression des writes vers player_stat_snapshots** (`app/app/gestion-series/playoff-pool-actions.ts`, `app/app/admin/series/ChangeLogPanel.tsx`, `app/app/admin/series/series-admin-actions.ts`, `app/app/gestion-effectifs/actions.ts`, `app/app/admin/mouvements/actions.ts`, `app/app/admin/rosters/actions.ts`, `app/app/admin/transactions/actions.ts`, `app/app/admin/config/actions.ts`, `app/lib/snapshot.ts`) :
