@@ -103,6 +103,29 @@ Je l'utiliserai pour:
 - **Nettoyage (2026-05-18)** : snapshot writes supprimés partout — voir entrée ci-dessous.
 - **Validation (2026-05-18)** : Necas, Hutson, Lacombe, Byram vérifiés manuellement — totaux corrects avec différentes périodes d'activation. ✓
 
+### 2026-05-18 (suite 3)
+
+**[Fix] — Pool séries : contrainte UNIQUE sur `playoff_pool_rosters` bloquait les réactivations** (`supabase_migrations/drop_unique_playoff_pool_rosters.sql`) :
+- La contrainte `UNIQUE(pool_season_id, pooler_id, player_id)` empêchait de réactiver un joueur déjà présent dans la saison (multi-période).
+- Supprimée en prod et staging. Remplacée par un index non-unique de performance.
+- Migration documentée dans `supabase_migrations/drop_unique_playoff_pool_rosters.sql`. Commit : `38c56a3`
+
+**[Refactor] — Pool séries : suppression limite et compteur remplacements élimination** (`GestionSeriesManager.tsx`, `playoff-pool-actions.ts`) :
+- Avec changements volontaires illimités, la limite séparée pour les remplacements d'élimination n'avait plus de sens.
+- Retiré : check de limite côté serveur, compteur "Remplacements élim." côté client, `cartElim`, `remainingElim`.
+- Conservé : validation que le joueur marqué "élimination" est bien sur une équipe éliminée.
+- `isTrulyLocked = false` — l'alignement n'est plus jamais verrouillé pendant la période de test. Commit : `ddea674`
+
+**État du chantier validation 2024-25 (en cours) :**
+- Staging prêt : saison 2024-25 active, contrainte UNIQUE supprimée, `/admin/historique` déployé.
+- `/admin/historique` validé fonctionnel (changements séries prod confirment la mécanique).
+- **Prochaine session** :
+  1. Entrer les rosters initiaux 2024-25 via `/admin/rosters` Mode init en staging (8 poolers × ~20 joueurs)
+  2. SQL : `UPDATE pooler_rosters SET added_at = '2024-10-01' WHERE pool_season_id = (SELECT id FROM pool_seasons WHERE season = '2024-25') AND added_at > '2024-10-01'`
+  3. Entrer les transactions historiques dans `/admin/historique` (fichier Excel chronologique)
+  4. Script Python backfill game-logs 2024-25 (gameType=2, season=20242025)
+  5. Script de validation : points par pooler via game-logs × scoring config → comparer avec Excel
+
 ### 2026-05-18 (suite 2)
 
 **[Feat] — `/admin/historique` : saisie des transactions historiques 2024-25** (`app/app/admin/historique/`, `app/components/Navbar.tsx`) :
