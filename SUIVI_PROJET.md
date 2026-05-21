@@ -103,6 +103,15 @@ Je l'utiliserai pour:
 - **Nettoyage (2026-05-18)** : snapshot writes supprimés partout — voir entrée ci-dessous.
 - **Validation (2026-05-18)** : Necas, Hutson, Lacombe, Byram vérifiés manuellement — totaux corrects avec différentes périodes d'activation. ✓
 
+### 2026-05-21 (suite)
+
+**[Fix] — Pool séries : délai de réactivation 3 jours ignoré pour l'admin** (`app/app/gestion-series/playoff-pool-actions.ts`, `GestionSeriesManager.tsx`) :
+- Bug : la condition `!isAdmin` sur le check cooldown permettait à l'admin de réactiver un joueur immédiatement après l'avoir retiré de son propre roster.
+- Fix serveur : le bypass admin s'applique uniquement quand l'admin corrige le roster d'un **autre** pooler (`adminBypassCooldown = isAdmin && user.id !== input.poolerId`). Quand l'admin gère son propre roster, la règle des 3 jours s'applique.
+- Ajout client : nouvelle action `getRecentlyRemovedAction` — récupère les joueurs retirés volontairement dans les 3 derniers jours. Le `PlayerPicker` affiche ces joueurs grisés avec une date "dispo le X" au lieu de les laisser sélectionnables. Le `cooldownMap` est recalculé à chaque changement de pooler.
+- Nettoyage : suppression du prop `isAdmin` inutilisé dans `SlotRow`, simplification de `cartVoluntary`.
+- Commit : `05fffa9`
+
 ### 2026-05-21
 
 **[Feat] — Notifications push : détection désync souscription** (`app/app/compte/PushToggle.tsx`, `app/app/compte/push-actions.ts`) :
