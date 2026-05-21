@@ -27,7 +27,12 @@ from dotenv import load_dotenv
 from supabase import create_client
 
 sys.stdout.reconfigure(encoding='utf-8')
-load_dotenv()
+
+# Chargement anticipé pour que --env soit disponible avant parse_args
+_pre = argparse.ArgumentParser(add_help=False)
+_pre.add_argument('--env', default='.env')
+_pre_args, _ = _pre.parse_known_args()
+load_dotenv(_pre_args.env)
 
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
@@ -96,6 +101,7 @@ def parse_game_log_row(player_id: int, nhl_id: int, nhl_season: int, g: dict, st
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--env',    default='.env',    help="Fichier d'environnement (ex: .env.staging)")
     parser.add_argument('--season', help="Saison pool (ex: 2025-26). Par défaut: première trouvée.")
     args = parser.parse_args()
 
