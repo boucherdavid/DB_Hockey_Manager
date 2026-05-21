@@ -25,9 +25,11 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 PROD_URL = os.getenv('SUPABASE_URL')
 PROD_KEY = os.getenv('SUPABASE_SERVICE_KEY')
 
-load_dotenv(os.path.join(BASE_DIR, '.env.staging'))
-STAGING_URL     = os.getenv('STAGING_SUPABASE_URL')
-STAGING_KEY     = os.getenv('STAGING_SERVICE_KEY')
+# .env.staging utilise SUPABASE_URL/SUPABASE_SERVICE_KEY — charger avec override
+# pour lire les valeurs staging dans des variables séparées
+load_dotenv(os.path.join(BASE_DIR, '.env.staging'), override=True)
+STAGING_URL      = os.getenv('SUPABASE_URL')
+STAGING_KEY      = os.getenv('SUPABASE_SERVICE_KEY')
 STAGING_PASSWORD = os.getenv('STAGING_PASSWORD', 'Staging2026!')
 
 if not all([PROD_URL, PROD_KEY, STAGING_URL, STAGING_KEY]):
