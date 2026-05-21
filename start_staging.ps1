@@ -18,6 +18,7 @@ if ($existing) {
 
 # Swap : .env.local (prod) → .env.local.prod  /  .env.staging.local → .env.local
 if (Test-Path $envLocal) {
+    if (Test-Path $envLocalProd) { Remove-Item $envLocalProd }
     Rename-Item $envLocal $envLocalProd
 }
 Copy-Item $envStaging $envLocal
