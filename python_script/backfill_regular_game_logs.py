@@ -46,11 +46,21 @@ def to_nhl_season(season: str) -> int:
     return start * 10000 + (start + 1)
 
 
-def fetch_player_game_log(nhl_id: int, nhl_season: int) -> list[dict]:
+def fetch_player_game_log(nhl_id: int, nhl_season: int, retries: int = 3) -> list[dict]:
     url = f'{NHL_WEB}/v1/player/{nhl_id}/game-log/{nhl_season}/{GAME_TYPE}'
-    r = requests.get(url, timeout=10)
-    r.raise_for_status()
-    return r.json().get('gameLog', [])
+    for attempt in range(retries):
+        try:
+            r = requests.get(url, timeout=15)
+            r.raise_for_status()
+            return r.json().get('gameLog', [])
+        except Exception as e:
+            if attempt < retries - 1:
+                wait = 5 * (attempt + 1)
+                print(f'  Retry {attempt + 1}/{retries - 1} nhl_id={nhl_id} (attente {wait}s)...')
+                time.sleep(wait)
+            else:
+                raise
+    return []
 
 
 def fetch_schedule_start_times(date_str: str) -> dict[int, str]:
