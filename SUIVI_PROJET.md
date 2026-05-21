@@ -103,6 +103,23 @@ Je l'utiliserai pour:
 - **Nettoyage (2026-05-18)** : snapshot writes supprimés partout — voir entrée ci-dessous.
 - **Validation (2026-05-18)** : Necas, Hutson, Lacombe, Byram vérifiés manuellement — totaux corrects avec différentes périodes d'activation. ✓
 
+### 2026-05-21 (suite 2)
+
+**[Feat] — Backfill game-logs saison régulière + réécriture buildStandings** (`python_script/backfill_regular_game_logs.py`, `app/lib/standings.ts`) :
+- `backfill_regular_game_logs.py` : fetche les game-logs NHL (game_type=2, season=20252026) pour TOUS les joueurs de la table `players` (pas seulement le pool actif — couvre les échanges en cours de saison). Argument `--env` pour cibler `.env.staging`. Retry avec backoff exponentiel sur erreurs API. Upsert idempotent sur `(player_id, game_date, season, game_type)` — aucun risque de collision avec les game-logs séries (game_type=3).
+- `buildStandings` réécrit : abandonne les snapshots et les appels NHL API live. Lit `pooler_rosters` (tous les joueurs, actifs et retirés) + `player_game_logs` (game_type=2). Calcule les points en sommant les logs dans les fenêtres `added_at → removed_at`. Pas de dépendance externe. Commits : `c23629a`, `038edf6`, `4600258`, `f61a959`
+
+**[Fix] — Staging : connexion et menu admin** :
+- `login/page.tsx` : `router.push + router.refresh` remplacé par `window.location.href = '/'` — `router.refresh()` ne re-rend pas le layout racine dans Next.js App Router. Commit : `74cfc5f`
+- Staging Supabase : policy "Pooler gère son profil" sur `poolers` causait récursion infinie (`EXISTS (SELECT 1 FROM poolers...)` dans une policy sur `poolers`). Fix : créer `is_admin()` SECURITY DEFINER + recréer la policy avec `is_admin()`. À documenter dans `setup_staging.py` pour les prochaines installations.
+- `start_staging.ps1` : fix si `.env.local.prod` existe déjà. Commit : `549d592`
+
+**État staging après cette session :**
+- 31 708 game-logs saison régulière insérés dans `player_game_logs` (game_type=2)
+- Saison 2025-26 active en staging
+- Admin connecté et fonctionnel
+- **Prochaine étape** : entrer les rosters initiaux 2025-26 via `/admin/rosters` Mode init, puis valider `/classement` contre l'Excel
+
 ### 2026-05-21 (suite)
 
 **[Fix] — Pool séries : délai de réactivation 3 jours ignoré pour l'admin** (`app/app/gestion-series/playoff-pool-actions.ts`, `GestionSeriesManager.tsx`) :
