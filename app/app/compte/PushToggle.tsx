@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { subscribePushAction, unsubscribePushAction, testPushAction } from './push-actions'
+import { subscribePushAction, unsubscribePushAction, testPushAction, getSubscriptionStatusAction } from './push-actions'
 
-type State = 'loading' | 'unsupported' | 'denied' | 'subscribed' | 'unsubscribed'
+type State = 'loading' | 'unsupported' | 'denied' | 'subscribed' | 'desynced' | 'unsubscribed'
 
 export default function PushToggle() {
   const [state, setState] = useState<State>('loading')
@@ -21,7 +21,9 @@ export default function PushToggle() {
     }
     navigator.serviceWorker.ready.then(async (reg) => {
       const sub = await reg.pushManager.getSubscription()
-      setState(sub ? 'subscribed' : 'unsubscribed')
+      if (!sub) { setState('unsubscribed'); return }
+      const { subscribed } = await getSubscriptionStatusAction(sub.endpoint)
+      setState(subscribed ? 'subscribed' : 'desynced')
     })
   }, [])
 
@@ -81,14 +83,27 @@ export default function PushToggle() {
     </p>
   )
 
+  const dotColor = state === 'subscribed' ? 'bg-green-500' : state === 'desynced' ? 'bg-orange-400' : 'bg-gray-300'
+  const label = state === 'subscribed'
+    ? 'Notifications activées sur cet appareil'
+    : state === 'desynced'
+      ? 'Notifications interrompues — la souscription a expiré ou a été révoquée'
+      : 'Notifications désactivées'
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3">
-        <div className={`w-2.5 h-2.5 rounded-full ${state === 'subscribed' ? 'bg-green-500' : 'bg-gray-300'}`} />
-        <span className="text-sm text-gray-700">
-          {state === 'subscribed' ? 'Notifications activées sur cet appareil' : 'Notifications désactivées'}
+        <div className={`w-2.5 h-2.5 rounded-full ${dotColor}`} />
+        <span className={`text-sm ${state === 'desynced' ? 'text-orange-700' : 'text-gray-700'}`}>
+          {label}
         </span>
       </div>
+      {state === 'desynced' && (
+        <p className="text-xs text-orange-600">
+          Le navigateur croyait les notifications actives, mais elles ne sont plus enregistrées côté serveur.
+          Cliquez sur Réactiver pour rétablir la connexion.
+        </p>
+      )}
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={state === 'subscribed' ? handleUnsubscribe : handleSubscribe}
@@ -96,14 +111,18 @@ export default function PushToggle() {
           className={`px-4 py-2 rounded text-sm font-medium disabled:opacity-50 transition-colors ${
             state === 'subscribed'
               ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
+              : state === 'desynced'
+                ? 'bg-orange-600 text-white hover:bg-orange-700'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
           }`}
         >
           {busy
             ? '...'
             : state === 'subscribed'
               ? 'Désactiver les notifications'
-              : 'Activer les notifications sur cet appareil'}
+              : state === 'desynced'
+                ? 'Réactiver les notifications'
+                : 'Activer les notifications sur cet appareil'}
         </button>
         {state === 'subscribed' && (
           <button

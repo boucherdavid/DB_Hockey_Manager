@@ -42,17 +42,16 @@ export async function unsubscribePushAction(endpoint: string) {
   return {}
 }
 
-export async function getSubscriptionStatusAction() {
+export async function getSubscriptionStatusAction(endpoint?: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { subscribed: false }
 
   const admin = createAdminClient()
-  const { data } = await admin
-    .from('push_subscriptions')
-    .select('endpoint')
-    .eq('user_id', user.id)
+  let query = admin.from('push_subscriptions').select('endpoint').eq('user_id', user.id)
+  if (endpoint) query = query.eq('endpoint', endpoint)
 
+  const { data } = await query
   return { subscribed: (data?.length ?? 0) > 0 }
 }
 
