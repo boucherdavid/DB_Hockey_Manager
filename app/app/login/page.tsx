@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 const STORAGE_KEY = 'hockeypool_saved_accounts'
@@ -26,7 +25,6 @@ function removeAccount(email: string) {
 }
 
 export default function LoginPage() {
-  const router = useRouter()
   const supabase = createClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -50,8 +48,7 @@ export default function LoginPage() {
       setLoading(false)
     } else {
       saveAccount(email)
-      router.push('/')
-      router.refresh()
+      window.location.href = '/'
     }
   }
 
