@@ -174,6 +174,39 @@ export async function getPlayoffChangeCountsAction(
   }
 }
 
+export async function getRecentlyRemovedAction(
+  poolSeasonId: number,
+  poolerId: string,
+): Promise<{ playerId: number; cooldownUntil: string }[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const db = createAdminClient()
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  const { data } = await db
+    .from('playoff_pool_rosters')
+    .select('player_id, removed_at')
+    .eq('pool_season_id', poolSeasonId)
+    .eq('pooler_id', poolerId)
+    .not('removed_at', 'is', null)
+    .eq('removal_reason', 'voluntary')
+    .gt('removed_at', threeDaysAgo)
+    .order('removed_at', { ascending: false })
+
+  const seen = new Set<number>()
+  return (data ?? [])
+    .filter((r: any) => {
+      if (seen.has(r.player_id)) return false
+      seen.add(r.player_id)
+      return true
+    })
+    .map((r: any) => ({
+      playerId: r.player_id,
+      cooldownUntil: new Date(new Date(r.removed_at).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    }))
+}
+
 export async function getAvailablePlayoffPlayersAction(
   poolSeasonId: number,
   season: string,
@@ -376,8 +409,10 @@ export async function submitPlayoffPoolChangeAction(input: {
     }
   }
 
-  // Délai de réactivation : 3 jours après un retrait volontaire (non-admin seulement)
-  if (!isAdmin && isLocked && input.addPlayerId) {
+  // Délai de réactivation : 3 jours après un retrait volontaire.
+  // Exception : admin qui corrige le roster d'un AUTRE pooler (corrections administratives).
+  const adminBypassCooldown = isAdmin && user.id !== input.poolerId
+  if (isLocked && input.addPlayerId && !adminBypassCooldown) {
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
     const { data: lastRow } = await db
       .from('playoff_pool_rosters')

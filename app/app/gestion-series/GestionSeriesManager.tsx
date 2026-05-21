@@ -5,6 +5,7 @@ import {
   getPlayoffPoolRosterAction,
   getPlayoffChangeCountsAction,
   getAvailablePlayoffPlayersAction,
+  getRecentlyRemovedAction,
   submitSeriesBatchAction,
   confirmPlayoffAlignmentAction,
 } from './playoff-pool-actions'
@@ -130,11 +131,12 @@ function CapBar({ entries, poolCap, cartRemovals, cartAdditions, previewAdd }: {
 // ─── PlayerPicker ─────────────────────────────────────────────────────────────
 
 function PlayerPicker({
-  poolSeasonId, season, excludeIds, activeSlot, selected, onSelect, resetKey,
+  poolSeasonId, season, excludeIds, cooldownMap, activeSlot, selected, onSelect, resetKey,
 }: {
   poolSeasonId: number
   season: string
   excludeIds: Set<number>
+  cooldownMap: Map<number, Date>
   activeSlot: 'F' | 'D' | 'G'
   selected: PlayoffPoolPlayerResult | null
   onSelect: (p: PlayoffPoolPlayerResult | null) => void
@@ -205,20 +207,29 @@ function PlayerPicker({
           <div className="max-h-60 overflow-y-auto divide-y divide-gray-50">
             {filtered.length === 0 ? (
               <p className="px-3 py-6 text-xs text-gray-400 text-center">Aucun joueur pour ces filtres.</p>
-            ) : filtered.map(p => (
-              <button key={p.id} onClick={() => onSelect(p)} disabled={p.teamEliminated}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${p.teamEliminated ? 'opacity-40 cursor-not-allowed' : ''}`}>
-                <div className="flex items-center gap-2">
-                  <span className="flex-1 font-medium text-gray-800 truncate">{p.lastName}, {p.firstName}</span>
-                  <span className="text-xs text-gray-400 shrink-0">{p.teamCode}</span>
-                  <span className="text-xs text-gray-400 shrink-0 w-5">{(p.position ?? '').split(',')[0]}</span>
-                  {p.capNumber != null
-                    ? <span className="text-xs font-semibold text-gray-600 tabular-nums shrink-0 w-24 text-right">{capFmt(p.capNumber)}</span>
-                    : <span className="text-xs text-gray-300 shrink-0 w-24 text-right">—</span>}
-                  {p.teamEliminated && <span className="text-xs text-red-400 shrink-0">ÉL.</span>}
-                </div>
-              </button>
-            ))}
+            ) : filtered.map(p => {
+              const cooldownUntil = cooldownMap.get(p.id)
+              const disabled = p.teamEliminated || !!cooldownUntil
+              return (
+                <button key={p.id} onClick={() => onSelect(p)} disabled={disabled}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 font-medium text-gray-800 truncate">{p.lastName}, {p.firstName}</span>
+                    <span className="text-xs text-gray-400 shrink-0">{p.teamCode}</span>
+                    <span className="text-xs text-gray-400 shrink-0 w-5">{(p.position ?? '').split(',')[0]}</span>
+                    {p.capNumber != null
+                      ? <span className="text-xs font-semibold text-gray-600 tabular-nums shrink-0 w-24 text-right">{capFmt(p.capNumber)}</span>
+                      : <span className="text-xs text-gray-300 shrink-0 w-24 text-right">—</span>}
+                    {p.teamEliminated && <span className="text-xs text-red-400 shrink-0">ÉL.</span>}
+                    {cooldownUntil && (
+                      <span className="text-xs text-orange-500 shrink-0">
+                        dispo {cooldownUntil.toLocaleDateString('fr-CA', { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
           </div>
           <div className="px-3 py-1.5 bg-gray-50 border-t text-xs text-gray-400">
             {filtered.length} joueur{filtered.length > 1 ? 's' : ''}
@@ -233,14 +244,13 @@ function PlayerPicker({
 // ─── SlotRow ──────────────────────────────────────────────────────────────────
 
 function SlotRow({
-  slot, index, entry, isLocked, isAdmin, canMarkForRemoval, isPendingRemoval,
+  slot, index, entry, isLocked, canMarkForRemoval, isPendingRemoval,
   onMarkForRemoval, onUndoRemoval,
 }: {
   slot: 'F' | 'D' | 'G'
   index: number
   entry: PlayoffPoolEntry | undefined
   isLocked: boolean
-  isAdmin: boolean
   canMarkForRemoval: boolean
   isPendingRemoval: boolean
   onMarkForRemoval: () => void
@@ -320,6 +330,7 @@ export default function GestionSeriesManager({
   const [addPlayer, setAddPlayer] = useState<PlayoffPoolPlayerResult | null>(null)
   const [searchKey, setSearchKey] = useState(0)
 
+  const [cooldownMap, setCooldownMap] = useState<Map<number, Date>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
@@ -327,11 +338,9 @@ export default function GestionSeriesManager({
   const [isPending, startTransition] = useTransition()
 
   const isLocked = saison.submissionDeadline ? new Date() > new Date(saison.submissionDeadline) : false
+  const adminBypassCooldown = isAdmin && poolerId !== selfPoolerId
   const poolerName = poolers?.find(p => p.id === poolerId)?.name ?? selfPoolerName
 
-  // Compteur affiché (informatif seulement — plus de limites)
-  const cartVoluntary = cartRemovals.filter(r => !r.isElimination).length
-  const remainingVoluntary = saison.maxChanges - counts.voluntary - cartVoluntary
 
   const pendingRemovalIds = useMemo(() => new Set(cartRemovals.map(r => r.entryId)), [cartRemovals])
   const pendingRemovalPlayerIds = useMemo(() => new Set(cartRemovals.map(r => r.playerId)), [cartRemovals])
@@ -359,15 +368,22 @@ export default function GestionSeriesManager({
     setCartRemovals([])
     setCartAdditions([])
     setAddPlayer(null)
+    const fetchCooldown = isLocked && !adminBypassCooldown
+      ? getRecentlyRemovedAction(saison.id, poolerId)
+      : Promise.resolve([] as { playerId: number; cooldownUntil: string }[])
     Promise.all([
       getPlayoffPoolRosterAction(poolerId, saison.id, saison.season),
       getPlayoffChangeCountsAction(poolerId, saison.id),
-    ]).then(([r, c]) => {
+      fetchCooldown,
+    ]).then(([r, c, cooldown]) => {
       setEntries(r)
       setCounts(c)
+      const map = new Map<number, Date>()
+      for (const { playerId, cooldownUntil } of cooldown) map.set(playerId, new Date(cooldownUntil))
+      setCooldownMap(map)
       setLoading(false)
     })
-  }, [poolerId, saison.id, saison.season])
+  }, [poolerId, saison.id, saison.season, isLocked, adminBypassCooldown])
 
   function handleMarkForRemoval(entry: PlayoffPoolEntry) {
     const isElimination = isLocked && !!entry.teamEliminated
@@ -510,7 +526,7 @@ export default function GestionSeriesManager({
           </div>
           <div className="flex gap-4 text-xs">
             <span className="text-gray-600">
-              Changements : {counts.voluntary}{cartVoluntary > 0 ? `+${cartVoluntary}` : ''} / illimité
+              Changements : {counts.voluntary}{cartRemovals.filter(r => !r.isElimination).length > 0 ? `+${cartRemovals.filter(r => !r.isElimination).length}` : ''} / illimité
             </span>
           </div>
         </div>
@@ -579,7 +595,6 @@ export default function GestionSeriesManager({
                         index={i}
                         entry={entry}
                         isLocked={isLocked}
-                        isAdmin={isAdmin}
                         canMarkForRemoval={!!entry && canMarkForRemovalEntry(entry)}
                         isPendingRemoval={!!cartRemoval}
                         onMarkForRemoval={() => entry && handleMarkForRemoval(entry)}
@@ -626,6 +641,7 @@ export default function GestionSeriesManager({
                 poolSeasonId={saison.id}
                 season={saison.season}
                 excludeIds={excludeIds}
+                cooldownMap={cooldownMap}
                 activeSlot={activeSlot}
                 selected={addPlayer}
                 onSelect={setAddPlayer}
