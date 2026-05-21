@@ -103,6 +103,16 @@ Je l'utiliserai pour:
 - **Nettoyage (2026-05-18)** : snapshot writes supprimés partout — voir entrée ci-dessous.
 - **Validation (2026-05-18)** : Necas, Hutson, Lacombe, Byram vérifiés manuellement — totaux corrects avec différentes périodes d'activation. ✓
 
+### 2026-05-21
+
+**[Feat] — Notifications push : détection désync souscription** (`app/app/compte/PushToggle.tsx`, `app/app/compte/push-actions.ts`) :
+- Ajout d'un état `'desynced'` : navigateur pense avoir une souscription active, mais elle n'est plus en DB (peut arriver quand le push échoue 410/404 et nettoie la DB, ou quand l'OS révoque les permissions).
+- Au chargement, si le browser a une souscription, on vérifie que son endpoint exact est bien en DB (`getSubscriptionStatusAction(endpoint)`).
+- Si désynchronisé : point orange + message explicatif + bouton "Réactiver" orange.
+- Si synchronisé : comportement inchangé (point vert, bouton Tester).
+- Contexte : un pooler a eu ses notifications OS coupées sans s'en rendre compte, avec aucun feedback visible dans l'app.
+- Commit : `d14c3eb`
+
 ### 2026-05-18 (suite 3)
 
 **[Fix] — Pool séries : contrainte UNIQUE sur `playoff_pool_rosters` bloquait les réactivations** (`supabase_migrations/drop_unique_playoff_pool_rosters.sql`) :
