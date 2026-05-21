@@ -56,7 +56,12 @@ TABLES = [
     'playoff_participating_teams',
     'playoff_eliminations',
     'playoff_pool_rosters',
+    # Note : player_game_logs est EXCLU — données NHL API, pas prod.
+    # Relancer backfill_regular_game_logs.py et backfill_playoff_game_logs.py après setup.
 ]
+
+# Tables exclues du wipe (données NHL API conservées entre les setups)
+SKIP_WIPE = {'player_game_logs'}
 
 BATCH = 500
 
@@ -170,9 +175,25 @@ for table in TABLES:
 
 # ─── Résumé ───────────────────────────────────────────────────────────────────
 
-print("\n✅ Staging prêt !")
+print("\n✅ Copie terminée !")
 print()
-print("Prochaine étape :")
-print("  Depuis la racine du projet : .\\start_staging.ps1")
-print("  Puis connecte-toi sur http://localhost:3000 avec prenom@staging.test / Staging2026!")
+print("─" * 60)
+print("ÉTAPE MANUELLE REQUISE — SQL Editor Supabase staging :")
+print("─" * 60)
+print("""
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (SELECT 1 FROM poolers WHERE id = auth.uid() AND is_admin = true)
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+DROP POLICY IF EXISTS "Pooler gère son profil" ON poolers;
+CREATE POLICY "Pooler gère son profil" ON poolers FOR ALL
+  USING (id = auth.uid() OR is_admin());
+""")
+print("─" * 60)
+print()
+print("Ensuite :")
+print("  1. .\\start_staging.ps1")
+print("  2. Connecte-toi avec prenom@staging.test / Staging2026!")
+print("  3. python backfill_regular_game_logs.py --env .env.staging --season 2025-26")
 print()
