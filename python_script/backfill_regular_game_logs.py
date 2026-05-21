@@ -131,21 +131,16 @@ def main() -> None:
     print(f'Saison pool : {target["season"]} (id={pool_season_id}) → NHL season {nhl_season}')
     print(f'game_type   : {GAME_TYPE} (saison régulière)\n')
 
-    # Joueurs du pool pour cette saison (actifs ET retirés — toutes les fenêtres)
-    rosters_resp = (
-        client.table('pooler_rosters')
-        .select('player_id, players(id, nhl_id)')
-        .eq('pool_season_id', pool_season_id)
-        .execute()
-    )
-    player_map: dict[int, int] = {}
-    for r in (rosters_resp.data or []):
-        p = r.get('players')
-        if p and p.get('nhl_id'):
-            player_map[p['id']] = p['nhl_id']
+    # Tous les joueurs avec un nhl_id — couvre les échanges, rappels, joueurs
+    # ajoutés en cours de saison dont les logs doivent déjà être présents
+    players_resp = client.table('players').select('id, nhl_id').execute()
+    player_map: dict[int, int] = {
+        r['id']: r['nhl_id']
+        for r in (players_resp.data or [])
+        if r.get('nhl_id')
+    }
 
-    print(f'{len(player_map)} joueurs dans le pool à backfiller.')
-    print('(Seulement les joueurs du pool sont ciblés — pas toute la ligue)\n')
+    print(f'{len(player_map)} joueurs à backfiller (toute la table players).\n')
 
     schedule_cache: dict[str, dict[int, str]] = {}
     game_start_cache: dict[int, str] = {}
