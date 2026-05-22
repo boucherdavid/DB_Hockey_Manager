@@ -100,14 +100,24 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
   )]
   if (playerIds.length === 0) return []
 
-  // Game logs saison régulière — admin client pour bypasser la limite 1000 lignes
+  // Game logs saison régulière — pagination pour dépasser la limite Supabase
   const admin = createAdminClient()
-  const { data: gameLogRows } = await admin
-    .from('player_game_logs')
-    .select('player_id, game_start_time, goals, assists, goalie_wins, goalie_otl, goalie_shutouts')
-    .in('player_id', playerIds)
-    .eq('season', nhlSeason)
-    .eq('game_type', 2)
+  const PAGE = 1000
+  const gameLogRows: GameLogRow[] = []
+  let offset = 0
+  while (true) {
+    const { data: page } = await admin
+      .from('player_game_logs')
+      .select('player_id, game_start_time, goals, assists, goalie_wins, goalie_otl, goalie_shutouts')
+      .in('player_id', playerIds)
+      .eq('season', nhlSeason)
+      .eq('game_type', 2)
+      .range(offset, offset + PAGE - 1)
+    if (!page || page.length === 0) break
+    gameLogRows.push(...(page as GameLogRow[]))
+    if (page.length < PAGE) break
+    offset += PAGE
+  }
 
   // Index par player_id
   const logsByPlayer = new Map<number, GameLogRow[]>()
