@@ -1,3 +1,5 @@
+import { createAdminClient } from '@/lib/supabase/admin'
+
 export type PlayerContrib = {
   nhlId: number | null
   firstName: string
@@ -98,8 +100,9 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
   )]
   if (playerIds.length === 0) return []
 
-  // Game logs saison régulière pour ces joueurs uniquement
-  const { data: gameLogRows } = await supabase
+  // Game logs saison régulière — admin client pour bypasser la limite 1000 lignes
+  const admin = createAdminClient()
+  const { data: gameLogRows } = await admin
     .from('player_game_logs')
     .select('player_id, game_start_time, goals, assists, goalie_wins, goalie_otl, goalie_shutouts')
     .in('player_id', playerIds)
