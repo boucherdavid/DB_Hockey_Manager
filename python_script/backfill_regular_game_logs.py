@@ -191,7 +191,8 @@ def main() -> None:
 
             start_time = game_start_cache.get(game_id, '')
             if not start_time:
-                continue
+                # Fallback : midi UTC pour cette date (suffisant pour les fenêtres d'activation journalières)
+                start_time = f'{game_date}T12:00:00Z'
 
             rows.append(parse_game_log_row(player_id, nhl_id, nhl_season, g, start_time))
 
