@@ -111,8 +111,9 @@ def parse_game_log_row(player_id: int, nhl_id: int, nhl_season: int, g: dict, st
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env',    default='.env',    help="Fichier d'environnement (ex: .env.staging)")
-    parser.add_argument('--season', help="Saison pool (ex: 2025-26). Par défaut: première trouvée.")
+    parser.add_argument('--env',      default='.env',  help="Fichier d'environnement (ex: .env.staging)")
+    parser.add_argument('--season',   help="Saison pool (ex: 2025-26). Par défaut: première trouvée.")
+    parser.add_argument('--nhl-ids',  help="Comma-separated nhl_ids à traiter uniquement (ex: 8476460,8478398)")
     args = parser.parse_args()
 
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -141,14 +142,29 @@ def main() -> None:
     print(f'Saison pool : {target["season"]} (id={pool_season_id}) → NHL season {nhl_season}')
     print(f'game_type   : {GAME_TYPE} (saison régulière)\n')
 
-    # Tous les joueurs avec un nhl_id — couvre les échanges, rappels, joueurs
-    # ajoutés en cours de saison dont les logs doivent déjà être présents
-    players_resp = client.table('players').select('id, nhl_id').execute()
+    # Tous les joueurs avec un nhl_id — pagination pour dépasser la limite 1000 Supabase
+    all_players: list[dict] = []
+    p_offset = 0
+    P_PAGE = 1000
+    while True:
+        resp = client.table('players').select('id, nhl_id').range(p_offset, p_offset + P_PAGE - 1).execute()
+        chunk = resp.data or []
+        all_players.extend(chunk)
+        if len(chunk) < P_PAGE:
+            break
+        p_offset += P_PAGE
+
     player_map: dict[int, int] = {
         r['id']: r['nhl_id']
-        for r in (players_resp.data or [])
+        for r in all_players
         if r.get('nhl_id')
     }
+
+    # Filtre optionnel par nhl_id
+    if args.nhl_ids:
+        target_ids = {int(x.strip()) for x in args.nhl_ids.split(',')}
+        player_map = {pid: nid for pid, nid in player_map.items() if nid in target_ids}
+        print(f'Mode ciblé : {len(player_map)} joueur(s) pour nhl_ids={target_ids}')
 
     print(f'{len(player_map)} joueurs à backfiller (toute la table players).\n')
 
@@ -206,16 +222,25 @@ def main() -> None:
 
     BATCH = 200
     inserted = 0
+    db_errors = 0
     for i in range(0, len(rows), BATCH):
         batch = rows[i:i + BATCH]
-        client.table('player_game_logs').upsert(
+        resp = client.table('player_game_logs').upsert(
             batch, on_conflict='player_id,game_date,season,game_type'
         ).execute()
-        inserted += len(batch)
-        print(f'  {inserted}/{len(rows)} insérées')
+        if hasattr(resp, 'data') and resp.data is not None:
+            inserted += len(batch)
+        else:
+            db_errors += 1
+            print(f'  ⚠ Erreur DB batch {i//BATCH + 1}: {getattr(resp, "error", resp)}')
+            # Afficher les player_ids du batch pour diagnostic
+            pids = {r['player_id'] for r in batch}
+            print(f'    player_ids affectés: {pids}')
+        if (i // BATCH + 1) % 5 == 0 or i + BATCH >= len(rows):
+            print(f'  {i + len(batch)}/{len(rows)} traitées ({db_errors} erreur(s) DB)')
 
     print(f'\n✓ Backfill terminé — {inserted} lignes dans player_game_logs (game_type=2, saison={nhl_season}).')
-    print(f'  {errors} erreur(s) API ignorées.')
+    print(f'  {errors} erreur(s) API ignorées, {db_errors} erreur(s) DB.')
 
 
 if __name__ == '__main__':
