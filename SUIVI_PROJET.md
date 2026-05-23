@@ -103,6 +103,21 @@ Je l'utiliserai pour:
 - **Nettoyage (2026-05-18)** : snapshot writes supprimés partout — voir entrée ci-dessous.
 - **Validation (2026-05-18)** : Necas, Hutson, Lacombe, Byram vérifiés manuellement — totaux corrects avec différentes périodes d'activation. ✓
 
+### 2026-05-23
+
+**[Fix] — Backfill game-logs : pagination manquante sur la table `players`** (`python_script/backfill_regular_game_logs.py`, `python_script/debug_gamelogs.py`) :
+- **Cause racine** : `client.table('players').select(...).execute()` retourne au maximum 1000 lignes (limite Supabase par défaut). La table `players` en staging contient ~1200+ joueurs avec `nhl_id`. Les joueurs avec `player_id` élevé (Scheifele 1541, Connor 1544, McMichael 1502, Maccelli 1304, Marchenko 206 si hors fenêtre) étaient ignorés silencieusement — aucun game-log inséré pour eux.
+- **Symptôme** : plusieurs joueurs affichaient 0 pts dans le classement staging malgré des stats réelles sur marqueur.com. Les runs de backfill signalaient "0 erreurs, 0 sans matchs" sans révéler le problème.
+- **Fix** : pagination sur la lecture de `players` (même pattern que `buildStandings` pour les game-logs, commit `8ddd5b8`). 997 joueurs traités, 48 300 game-logs insérés.
+- **Autres améliorations** : capture des erreurs DB sur chaque batch upsert (auparavant silencieuses), argument `--nhl-ids` pour cibler des joueurs spécifiques.
+- **Diagnostic** : le SQL Editor Supabase était connecté à la PRODUCTION (pas staging) durant tout le debug — requêtes de diagnostic à toujours valider dans le bon projet (`pwblgjdmuaoyfixeyltg` = staging).
+- Commits : `8ddd5b8`, `b9b46f6`, `72c4cc4`, `828e4f5`
+
+**État staging après cette session :**
+- 48 300 game-logs saison régulière pour 997 joueurs dans `player_game_logs` (game_type=2, season=20252026)
+- Classement 2025-26 validé : 8 poolers avec scores réalistes (David 1282, Sébastien F. 1237, etc.)
+- **Prochaine étape** : valider les totaux contre l'Excel poolers pour confirmer la cohérence
+
 ### 2026-05-21 (suite 2)
 
 **[Feat] — Backfill game-logs saison régulière + réécriture buildStandings** (`python_script/backfill_regular_game_logs.py`, `app/lib/standings.ts`) :
