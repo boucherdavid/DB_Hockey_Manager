@@ -1,11 +1,16 @@
 import webpush from 'web-push'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-webpush.setVapidDetails(
-  process.env.VAPID_MAILTO!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!,
-)
+function initVapid() {
+  const subject = process.env.VAPID_MAILTO
+  const pub     = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  const priv    = process.env.VAPID_PRIVATE_KEY
+  if (subject && pub && priv) {
+    webpush.setVapidDetails(subject, pub, priv)
+    return true
+  }
+  return false
+}
 
 export type PushPayload = {
   title: string
@@ -18,6 +23,7 @@ async function sendToSubscriptions(
   payload: PushPayload,
 ) {
   if (!subs || subs.length === 0) return
+  if (!initVapid()) return
   const supabase = createAdminClient()
   const notification = JSON.stringify(payload)
 
