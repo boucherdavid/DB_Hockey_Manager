@@ -54,7 +54,7 @@ function posCategory(pos: string | null): 'F' | 'D' | 'G' {
   if (!pos) return 'F'
   const p = pos.toUpperCase()
   if (p === 'G') return 'G'
-  if (p === 'D' || p === 'LD' || p === 'RD') return 'D'
+  if (p.includes('D')) return 'D'
   return 'F'
 }
 
