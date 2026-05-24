@@ -56,6 +56,22 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-24
+
+**[Feat] — Refonte du menu admin : 4 pages tabulées** (`app/components/AdminTabBar.tsx`, `app/app/admin/pool/page.tsx`, `app/app/admin/init/page.tsx`, `app/app/admin/effectifs/page.tsx`, `app/app/admin/page.tsx`, `app/components/Navbar.tsx`) :
+- Ancien menu : 12 items éparpillés dans le dropdown Admin.
+- Nouveau menu : 4 pages thématiques avec onglets URL-based (`?tab=X`), inspiré du pattern PoolerPageTabs. Navigation server-side pour éviter de charger les données de tous les onglets en même temps.
+- **`/admin/pool`** : Poolers | Configuration | Communication (feedback + notifications) | Suivi.
+- **`/admin/init`** : Rosters initiaux | Banque de recrues | Repêchage recrues | Pré-saison.
+- **`/admin/effectifs`** : Mouvements | Transactions | Historique | Mise à jour données.
+- **`/admin/series`** : inchangé (déjà existant).
+- Dashboard `/admin` simplifié : 4 grandes cartes colorées avec description + badge feedback.
+- Navbar : dropdown réduit à 4 items + badge agrégé (feedback + notifications).
+- Anciennes routes (`/admin/poolers`, `/admin/config`, etc.) toujours accessibles directement mais retirées du menu.
+- `AdminTabBar.tsx` : composant client réutilisable, reçoit `activeTab` en prop (pas de `useSearchParams`), génère des `<Link>` vers `basePath?tab=X`.
+
+
+
 ### 2026-05-12
 
 **[Fix] — Page d'accueil + /resultats : liens repositionnés, date min, pool unique** (`app/page.tsx`, `app/resultats/page.tsx`, `app/resultats/ResultatsManager.tsx`) :

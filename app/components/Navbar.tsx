@@ -264,37 +264,25 @@ export default function Navbar({
                     className={navBtnClass(isActive('/admin'))}>
                     <span className="text-xs bg-blue-500 text-white rounded px-1 py-0.5 mr-1">A</span>
                     Admin
-                    {unreadNotifCount > 0 && (
-                      <span className="ml-1 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadNotifCount}</span>
+                    {(unreadCount > 0 || unreadNotifCount > 0) && (
+                      <span className="ml-1 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                        {unreadCount + unreadNotifCount}
+                      </span>
                     )}
                     <Chevron open={openDropdown === 'admin'} />
                   </button>
                   {openDropdown === 'admin' && (
-                    <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
-                      <Link href="/admin/poolers"      className={dropdownLinkClass('/admin/poolers')}>Gestion des poolers</Link>
-                      <Link href="/admin/rosters"      className={dropdownLinkClass('/admin/rosters')}>Gestion initiale des rosters</Link>
-                      <Link href="/admin/presaison"    className={dropdownLinkClass('/admin/presaison')}>Configuration présaison</Link>
-                      <Link href="/admin/recrues"      className={dropdownLinkClass('/admin/recrues')}>Assignation des recrues</Link>
-                      <Link href="/admin/mouvements"  className={dropdownLinkClass('/admin/mouvements')}>Gestion d&apos;effectifs — pooler</Link>
-                      <Link href="/admin/transactions" className={dropdownLinkClass('/admin/transactions')}>Transactions inter-pooler</Link>
-                      <div className="border-t my-1" />
-                      <Link href="/admin/joueurs"      className={dropdownLinkClass('/admin/joueurs')}>Procédure mise à jour</Link>
-                      <div className="border-t my-1" />
-                      <Link href="/admin/historique"   className={dropdownLinkClass('/admin/historique')}>Saisie historique transactions</Link>
-                      <Link href="/admin/config"       className={dropdownLinkClass('/admin/config')}>Configuration des pools</Link>
-                      <Link href="/admin/suivi"        className={dropdownLinkClass('/admin/suivi')}>Suivi des activités</Link>
-                      <Link href="/admin/feedback"     className={dropdownLinkClass('/admin/feedback')}>
+                    <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                      <Link href="/admin/pool"      className={dropdownLinkClass('/admin/pool')}>
                         <span className="flex items-center justify-between">
-                          {'Boîte de réception'}
+                          Gestion du pool
                           {unreadCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>}
                         </span>
                       </Link>
-                      <Link href="/admin/notifications" className={dropdownLinkClass('/admin/notifications')}>
-                        <span className="flex items-center justify-between">
-                          Notifications
-                          {unreadNotifCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadNotifCount}</span>}
-                        </span>
-                      </Link>
+                      <Link href="/admin/init"      className={dropdownLinkClass('/admin/init')}>Initialisation</Link>
+                      <Link href="/admin/effectifs" className={dropdownLinkClass('/admin/effectifs')}>{'Gestion des effectifs'}</Link>
+                      <div className="border-t my-1" />
+                      <Link href="/admin/series"    className={dropdownLinkClass('/admin/series')}>Pool des séries</Link>
                     </div>
                   )}
                 </div>
@@ -402,31 +390,17 @@ export default function Navbar({
                 <Link href="/aide"     className={mobileLinkClass('/aide')}>Aide &amp; Règlements</Link>
                 <Link href="/signaler" className={mobileLinkClass('/signaler')}>Signaler un problème</Link>
                 {effectiveIsAdmin &&<MobileSection label="Admin" />}
-                {effectiveIsAdmin &&<Link href="/admin/poolers"      className={mobileLinkClass('/admin/poolers')}>Gestion des poolers</Link>}
-                {effectiveIsAdmin &&<Link href="/admin/rosters"      className={mobileLinkClass('/admin/rosters')}>Gestion initiale des rosters</Link>}
-                {effectiveIsAdmin &&<Link href="/admin/presaison"    className={mobileLinkClass('/admin/presaison')}>Configuration présaison</Link>}
-                {effectiveIsAdmin &&<Link href="/admin/recrues"      className={mobileLinkClass('/admin/recrues')}>Assignation des recrues</Link>}
-                {effectiveIsAdmin &&<Link href="/admin/mouvements"  className={mobileLinkClass('/admin/mouvements')}>Gestion d&apos;effectifs — pooler</Link>}
-                {effectiveIsAdmin &&<Link href="/admin/transactions" className={mobileLinkClass('/admin/transactions')}>Transactions inter-pooler</Link>}
-                {effectiveIsAdmin &&<Link href="/admin/joueurs"      className={mobileLinkClass('/admin/joueurs')}>Procédure mise à jour</Link>}
-                {effectiveIsAdmin &&<Link href="/admin/config"       className={mobileLinkClass('/admin/config')}>Configuration des pools</Link>}
-                {effectiveIsAdmin &&<Link href="/admin/suivi"        className={mobileLinkClass('/admin/suivi')}>Suivi des activités</Link>}
                 {effectiveIsAdmin &&(
-                  <Link href="/admin/feedback" className={mobileLinkClass('/admin/feedback')}>
+                  <Link href="/admin/pool" className={mobileLinkClass('/admin/pool')}>
                     <span className="flex items-center justify-between">
-                      {'Boîte de réception'}
+                      Gestion du pool
                       {unreadCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>}
                     </span>
                   </Link>
                 )}
-                {effectiveIsAdmin &&(
-                  <Link href="/admin/notifications" className={mobileLinkClass('/admin/notifications')}>
-                    <span className="flex items-center justify-between">
-                      Notifications
-                      {unreadNotifCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unreadNotifCount}</span>}
-                    </span>
-                  </Link>
-                )}
+                {effectiveIsAdmin &&<Link href="/admin/init"      className={mobileLinkClass('/admin/init')}>Initialisation</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/effectifs" className={mobileLinkClass('/admin/effectifs')}>{'Gestion des effectifs'}</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/series"    className={mobileLinkClass('/admin/series')}>Pool des séries</Link>}
                 {isAdmin && (
                   <button onClick={togglePoolerView}
                     className="block text-left px-3 py-2 rounded text-sm font-medium text-amber-300 hover:bg-pool-navy-light transition-colors">
