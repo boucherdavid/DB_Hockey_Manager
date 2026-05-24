@@ -53,8 +53,8 @@ function capFmt(n: number | null) {
 function posCategory(pos: string | null): 'F' | 'D' | 'G' {
   if (!pos) return 'F'
   const p = pos.toUpperCase()
-  if (p === 'D') return 'D'
   if (p === 'G') return 'G'
+  if (p === 'D' || p === 'LD' || p === 'RD') return 'D'
   return 'F'
 }
 

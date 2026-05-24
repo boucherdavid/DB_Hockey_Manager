@@ -58,6 +58,10 @@ Je l'utiliserai pour:
 
 ### 2026-05-24
 
+**[Fix] — Gestion effectifs : comptage positions incorrect dans État projeté** (`app/app/gestion-effectifs/GestionEffectifsManager.tsx`) :
+- `posCategory()` vérifiait `p === 'D'` mais la BD stocke `LD` et `RD` (voir schema.sql). Résultat : tous les défenseurs comptaient comme attaquants → "18A 0D 2G" au lieu de "12A 6D 2G".
+- Fix : ajouter `p === 'LD' || p === 'RD'` dans la branche défenseur.
+
 **[Feat] — Refonte du menu admin : 4 pages tabulées** (`app/components/AdminTabBar.tsx`, `app/app/admin/pool/page.tsx`, `app/app/admin/init/page.tsx`, `app/app/admin/effectifs/page.tsx`, `app/app/admin/page.tsx`, `app/components/Navbar.tsx`) :
 - Ancien menu : 12 items éparpillés dans le dropdown Admin.
 - Nouveau menu : 4 pages thématiques avec onglets URL-based (`?tab=X`), inspiré du pattern PoolerPageTabs. Navigation server-side pour éviter de charger les données de tous les onglets en même temps.
