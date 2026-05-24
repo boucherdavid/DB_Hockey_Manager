@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import { fmtPts } from '@/lib/nhl-stats'
 import PlayerLink from '@/components/PlayerLink'
 import type { PlayerContrib } from '@/lib/standings'
@@ -207,16 +207,16 @@ export default function PoolerPageTabs({
                   {sorted.map((p, i) => {
                     const isFirstOfGroup = i === 0 || positionGroup(p.position) !== positionGroup(sorted[i - 1].position)
                     return (
-                      <>
+                      <Fragment key={p.nhlId ?? i}>
                         {isFirstOfGroup && (
-                          <tr key={`g-${i}`} className="bg-gray-100">
+                          <tr className="bg-gray-100">
                             <td colSpan={9} className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                               {GROUP_LABEL[positionGroup(p.position)]}
                             </td>
                           </tr>
                         )}
-                        <PlayerStatsRow key={i} p={p} streaks={streaks} />
-                      </>
+                        <PlayerStatsRow p={p} streaks={streaks} />
+                      </Fragment>
                     )
                   })}
                 </tbody>
