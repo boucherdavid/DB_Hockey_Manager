@@ -338,12 +338,19 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     return acc
   }, {})
 
-  const { data: changeLogData } = await supabase
+  const saison_ = saison as Record<string, unknown> | null
+  let changeLogQuery = supabase
     .from('roster_change_log')
     .select('id, change_type, old_type, new_type, changed_at, is_admin_override, players(first_name, last_name, position)')
     .eq('pooler_id', id)
     .eq('pool_season_id', saison?.id)
     .order('changed_at', { ascending: false })
+  if (saison_?.saison_start_date)
+    changeLogQuery = changeLogQuery.gte('changed_at', saison_.saison_start_date as string)
+  if (saison_?.saison_end_date)
+    changeLogQuery = changeLogQuery.lte('changed_at', `${saison_.saison_end_date as string}T23:59:59Z`)
+
+  const { data: changeLogData } = await changeLogQuery
 
   const changeLog = (changeLogData ?? []) as unknown as {
     id: number

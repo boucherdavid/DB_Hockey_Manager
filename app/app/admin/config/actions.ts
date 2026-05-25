@@ -383,6 +383,7 @@ export async function updateCapAction(
     indicatorStreakCrise?: number
     indicatorFenetreTendance?: number
     saisonStartDate?: string | null
+    saisonEndDate?: string | null
   },
 ): Promise<{ error?: string }> {
   if (!nhlCap || nhlCap < 1_000_000) return { error: 'Cap NHL invalide.' }
@@ -408,6 +409,7 @@ export async function updateCapAction(
   if (opts?.indicatorStreakCrise !== undefined) updates.indicator_streak_crise = opts.indicatorStreakCrise
   if (opts?.indicatorFenetreTendance !== undefined) updates.indicator_fenetre_tendance = opts.indicatorFenetreTendance
   if (opts?.saisonStartDate !== undefined) updates.saison_start_date = opts.saisonStartDate ?? null
+  if (opts?.saisonEndDate !== undefined) updates.saison_end_date = opts.saisonEndDate ?? null
 
   const { error } = await supabase
     .from('pool_seasons')

@@ -27,6 +27,7 @@ type Saison = {
   indicator_streak_crise?: number | null
   indicator_fenetre_tendance?: number | null
   saison_start_date?: string | null
+  saison_end_date?: string | null
 }
 
 const fmt = (n: number) =>
@@ -66,6 +67,7 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
   const [indStreakCrise, setIndStreakCrise] = useState(String(saison.indicator_streak_crise ?? 8))
   const [indFenetre, setIndFenetre] = useState(String(saison.indicator_fenetre_tendance ?? 5))
   const [saisonStartDate, setSaisonStartDate] = useState(saison.saison_start_date ?? '')
+  const [saisonEndDate, setSaisonEndDate] = useState(saison.saison_end_date ?? '')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -106,6 +108,7 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
         indicatorStreakCrise: Math.max(1, parseInt(indStreakCrise) || 8),
         indicatorFenetreTendance: Math.max(1, parseInt(indFenetre) || 5),
         saisonStartDate: saisonStartDate || null,
+        saisonEndDate: saisonEndDate || null,
       },
     )
     setSaving(false)
@@ -328,6 +331,22 @@ export default function ConfigForm({ saison }: { saison: Saison }) {
             <p className="text-xs text-gray-400 mt-1">
               Avant cette date : pré-saison. Les mouvements n&apos;apparaissent pas dans l&apos;historique
               et tous les joueurs reçoivent cette date comme <code>added_at</code>.
+            </p>
+          </div>
+          )}
+          {!isPlayoffSeason && (
+          <div className="px-3 py-3">
+            <p className="text-xs text-gray-500 mb-1">
+              Date de fin de saison <span className="text-gray-400">(optionnel)</span>
+            </p>
+            <input
+              type="date"
+              value={saisonEndDate}
+              onChange={e => setSaisonEndDate(e.target.value)}
+              className={inputCls}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Les mouvements après cette date n&apos;apparaissent pas dans l&apos;historique du pooler.
             </p>
           </div>
           )}
