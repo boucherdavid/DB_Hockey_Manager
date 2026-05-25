@@ -43,7 +43,7 @@ export default async function AdminSuiviPage() {
     // Changements d'alignement (saison régulière)
     supabase
       .from('roster_change_log')
-      .select('id, change_type, old_type, new_type, changed_at, players (first_name, last_name), poolers!roster_change_log_pooler_id_fkey (name)')
+      .select('id, change_type, old_type, new_type, changed_at, is_admin_override, players (first_name, last_name), poolers!roster_change_log_pooler_id_fkey (name)')
       .order('changed_at', { ascending: false })
       .limit(100),
 
@@ -64,9 +64,10 @@ export default async function AdminSuiviPage() {
     const label = CHANGE_LABEL[r.change_type] ?? r.change_type
     const color = CHANGE_COLOR[r.change_type] ?? 'bg-gray-100 text-gray-700'
     const playerName = player ? `${player.last_name}, ${player.first_name}` : '—'
+    const overrideSuffix = (r as any).is_admin_override ? ' · override date' : ''
     const detail = r.old_type && r.new_type
-      ? `${playerName} (${r.old_type} → ${r.new_type})`
-      : playerName
+      ? `${playerName} (${r.old_type} → ${r.new_type})${overrideSuffix}`
+      : `${playerName}${overrideSuffix}`
     events.push({
       id:         `r-${r.id}`,
       at:         r.changed_at,

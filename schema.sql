@@ -49,6 +49,7 @@ CREATE TABLE pool_seasons (
   cap_multiplier DECIMAL(5,4) NOT NULL DEFAULT 1.24,  -- facteur configurable (ex: 1.24 = 124%)
   pool_cap DECIMAL(12,2) GENERATED ALWAYS AS (CEIL(nhl_cap * cap_multiplier / 1000000) * 1000000) STORED,
   is_active BOOLEAN DEFAULT false,
+  saison_start_date DATE,                -- début du comptage; NULL = saison déjà démarrée
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

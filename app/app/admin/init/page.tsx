@@ -8,6 +8,7 @@ import BanqueRecruesManager from '../recrues/BanqueRecruesManager'
 import DraftBoard from '../repechage/DraftBoard'
 import DraftOrderEditor from '../repechage/DraftOrderEditor'
 import PresaisonManager from '../presaison/PresaisonManager'
+import { SaisonSelectNav } from './SaisonSelectNav'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,7 @@ async function fetchAllRookies(
 export default async function AdminInitPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; saisonId?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -52,7 +53,7 @@ export default async function AdminInitPage({
   const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
   if (!me?.is_admin) redirect('/')
 
-  const { tab = 'rosters' } = await searchParams
+  const { tab = 'rosters', saisonId } = await searchParams
   const activeTab = TABS.some(t => t.id === tab) ? tab : 'rosters'
 
   // ── Rosters ───────────────────────────────────────────────────────────────
@@ -116,6 +117,8 @@ export default async function AdminInitPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let saisonRep: any = null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let allSaisonsRep: any[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let picksData: any[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let usedPicksData: any[] = []
@@ -126,8 +129,17 @@ export default async function AdminInitPage({
   let poolersForEditor: any[] = []
   let poolDraftYear = 0
   if (activeTab === 'repechage') {
-    const sr = await supabase.from('pool_seasons').select('id, season').eq('is_active', true).eq('is_playoff', false).single()
-    saisonRep = sr.data
+    const { data: allS } = await supabase
+      .from('pool_seasons')
+      .select('id, season, is_active')
+      .eq('is_playoff', false)
+      .order('season', { ascending: false })
+    allSaisonsRep = allS ?? []
+    const parsedId = saisonId ? parseInt(saisonId, 10) : NaN
+    saisonRep = (!isNaN(parsedId) && allSaisonsRep.find(s => s.id === parsedId))
+      || allSaisonsRep.find(s => s.is_active)
+      || allSaisonsRep[0]
+      || null
     if (saisonRep) {
       poolDraftYear = parseInt(saisonRep.season.split('-')[0], 10)
       const [pk, upk, rk, bk, od] = await Promise.all([
@@ -211,14 +223,23 @@ export default async function AdminInitPage({
       {/* ── Repêchage ── */}
       {activeTab === 'repechage' && (
         <div>
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">{'Repêchage des recrues'}</h1>
-            {saisonRep && (
-              <p className="text-gray-500 text-sm mt-1">Saison {saisonRep.season} — Repêchage {poolDraftYear}</p>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">{'Repêchage des recrues'}</h1>
+              {saisonRep && (
+                <p className="text-gray-500 text-sm mt-1">Repêchage {poolDraftYear}</p>
+              )}
+            </div>
+            {allSaisonsRep.length > 1 && saisonRep && (
+              <SaisonSelectNav
+                saisons={allSaisonsRep}
+                selectedId={saisonRep.id}
+                baseHref="/admin/init?tab=repechage"
+              />
             )}
           </div>
           {!saisonRep
-            ? <p className="text-gray-400">Aucune saison active.</p>
+            ? <p className="text-gray-400">Aucune saison disponible.</p>
             : <>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                   <div className="lg:col-span-1">

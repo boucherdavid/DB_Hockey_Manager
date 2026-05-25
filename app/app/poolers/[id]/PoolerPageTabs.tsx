@@ -15,6 +15,7 @@ type ChangeLogEntry = {
   old_type: string | null
   new_type: string | null
   changed_at: string
+  is_admin_override: boolean | null
   players: { first_name: string; last_name: string; position: string | null } | null
 }
 
@@ -288,6 +289,11 @@ export default function PoolerPageTabs({
                             <span className={`inline-block text-xs font-medium rounded px-2 py-0.5 ${color}`}>
                               {label}
                             </span>
+                            {entry.is_admin_override && (
+                              <span className="ml-1.5 inline-block text-xs font-medium bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">
+                                override
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-2 text-xs text-gray-400 hidden sm:table-cell">
                             {entry.old_type && entry.new_type

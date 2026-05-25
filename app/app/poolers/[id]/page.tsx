@@ -341,7 +341,7 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
 
   const { data: changeLogData } = await supabase
     .from('roster_change_log')
-    .select('id, change_type, old_type, new_type, changed_at, players(first_name, last_name, position)')
+    .select('id, change_type, old_type, new_type, changed_at, is_admin_override, players(first_name, last_name, position)')
     .eq('pooler_id', id)
     .eq('pool_season_id', saison?.id)
     .order('changed_at', { ascending: false })
@@ -352,6 +352,7 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     old_type: string | null
     new_type: string | null
     changed_at: string
+    is_admin_override: boolean | null
     players: { first_name: string; last_name: string; position: string | null } | null
   }[]
 

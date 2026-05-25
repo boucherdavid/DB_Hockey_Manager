@@ -218,21 +218,29 @@ export async function submitBatchAction(input: {
   if (input.actions.length === 0) return { error: 'Aucune action à soumettre' }
 
   const db = createAdminClient()
-  const changedAt = input.forcedDate
-    ? `${input.forcedDate}T12:00:00Z`
-    : new Date().toISOString()
   const changedBy = isAdmin ? null : user.id
 
   // Fetch config
   const { data: saisonConfig } = await db
     .from('pool_seasons')
-    .select('delai_reactivation_jours, max_signatures_al, max_signatures_ltir')
+    .select('delai_reactivation_jours, max_signatures_al, max_signatures_ltir, saison_start_date')
     .eq('id', input.saisonId)
     .single()
 
   const delaiJours    = saisonConfig?.delai_reactivation_jours ?? 7
   const maxAl         = saisonConfig?.max_signatures_al ?? 10
   const maxLtir       = saisonConfig?.max_signatures_ltir ?? 2
+
+  // Pré-saison : si une date de début est définie et qu'on est avant cette date
+  const startDate = saisonConfig?.saison_start_date ? new Date(saisonConfig.saison_start_date) : null
+  const isPreseason = startDate !== null && new Date() < startDate
+  const isAdminOverride = !isPreseason && !!input.forcedDate && isAdmin
+
+  const changedAt = isPreseason
+    ? `${saisonConfig!.saison_start_date}T12:00:00Z`
+    : input.forcedDate
+      ? `${input.forcedDate}T12:00:00Z`
+      : new Date().toISOString()
 
   // Count existing signings
   const { data: existingSigns } = await db
@@ -257,10 +265,12 @@ export async function submitBatchAction(input: {
   }
 
   async function log(playerId: number, changeType: string, oldType: string | null, newType: string | null) {
+    if (isPreseason) return
     await db.from('roster_change_log').insert({
       player_id: playerId, pooler_id: input.poolerId, pool_season_id: input.saisonId,
       change_type: changeType, old_type: oldType, new_type: newType,
       changed_by: changedBy, changed_at: changedAt,
+      is_admin_override: isAdminOverride,
     })
   }
 
@@ -323,11 +333,12 @@ export async function submitBatchAction(input: {
       .eq('pool_season_id', input.saisonId).maybeSingle()
     if (existing) {
       await db.from('pooler_rosters')
-        .update({ is_active: true, player_type: playerType, removed_at: null }).eq('id', existing.id)
+        .update({ is_active: true, player_type: playerType, removed_at: null, added_at: changedAt }).eq('id', existing.id)
     } else {
       await db.from('pooler_rosters').insert({
         pooler_id: input.poolerId, player_id: playerId,
         pool_season_id: input.saisonId, player_type: playerType, is_active: true,
+        added_at: changedAt,
       })
     }
 

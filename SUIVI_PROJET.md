@@ -56,6 +56,24 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-25
+
+**[Feat] — Sélecteur de saison onglet Repêchage + saison_start_date + is_admin_override** :
+
+**Sélecteur de saison — `/admin/init?tab=repechage`** (`app/app/admin/init/page.tsx`, `SaisonSelectNav.tsx`) :
+- L'onglet repêchage pointait toujours sur la saison active. Maintenant un `<select>` dans le header permet de naviguer vers n'importe quelle saison via `?tab=repechage&saisonId=X`.
+- `SaisonSelectNav` : petit composant client qui pousse l'URL via `useRouter().push()`.
+
+**`saison_start_date` + logique pré-saison** (`supabase_migrations/saison_start_date_admin_override.sql`, `gestion-effectifs/actions.ts`, `admin/config/ConfigForm.tsx`, `admin/config/actions.ts`) :
+- Nouvelle colonne `pool_seasons.saison_start_date DATE`. Configurable depuis `/admin/pool?tab=config`.
+- Tant que `NOW() < saison_start_date` : mode pré-saison — `added_at` des joueurs ajoutés = `saison_start_date`, aucune entrée dans `roster_change_log`.
+- Après la date : comportement normal (timestamp réel).
+
+**`is_admin_override` + badge historique** (`roster_change_log`, `poolers/[id]/page.tsx`, `PoolerPageTabs.tsx`, `admin/suivi/page.tsx`, `admin/pool/page.tsx`) :
+- Nouvelle colonne `roster_change_log.is_admin_override BOOLEAN DEFAULT false`.
+- Mis à `true` quand l'admin utilise le toggle "Forcer une date effective".
+- Badge orange `override` visible dans l'onglet Historique du pooler et dans les vues suivi admin.
+
 ### 2026-05-24
 
 **[Fix] — Gestion effectifs : comptage positions incorrect dans État projeté** (`app/app/gestion-effectifs/GestionEffectifsManager.tsx`) :
