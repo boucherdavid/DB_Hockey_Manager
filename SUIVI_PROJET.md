@@ -58,6 +58,13 @@ Je l'utiliserai pour:
 
 ### 2026-05-25
 
+**[Feat] — Filtre début/fin de saison sur l'historique du pooler** (`app/app/poolers/[id]/page.tsx`, `admin/config/ConfigForm.tsx`, `admin/config/actions.ts`, `supabase_migrations/saison_end_date.sql`) :
+- Nouvelle colonne `pool_seasons.saison_end_date DATE`. Configurable depuis `/admin/pool?tab=config`.
+- La requête `roster_change_log` filtre maintenant par `>= saison_start_date` ET `<= saison_end_date` quand ces colonnes sont renseignées.
+- Si une date est `null`, le filtre correspondant n'est pas appliqué (comportement neutre).
+- Migration à rouler en staging et prod : `supabase_migrations/saison_end_date.sql`
+- Commit : `10b082e`
+
 **[Feat] — Réorganisation onglets page pooler : Masse Salariale + Recrues** (`app/app/poolers/[id]/page.tsx`, `PoolerPageTabs.tsx`) :
 - L'onglet "Organisation" (avec sous-onglets internes via `OrganisationToggle`) est remplacé par deux onglets distincts.
 - **Masse Salariale** : barre de cap + picks de repêchage + attaquants / défenseurs / gardiens / réservistes / LTIR.
