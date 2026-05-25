@@ -58,6 +58,13 @@ Je l'utiliserai pour:
 
 ### 2026-05-25
 
+**[Feat] — Réorganisation onglets page pooler : Masse Salariale + Recrues** (`app/app/poolers/[id]/page.tsx`, `PoolerPageTabs.tsx`) :
+- L'onglet "Organisation" (avec sous-onglets internes via `OrganisationToggle`) est remplacé par deux onglets distincts.
+- **Masse Salariale** : barre de cap + picks de repêchage + attaquants / défenseurs / gardiens / réservistes / LTIR.
+- **Recrues** : banque de recrues (séparée par position) + section "Activation obligatoire" si applicable.
+- `OrganisationToggle.tsx` supprimé (plus utilisé).
+- Commit : `7c94f15`
+
 **[Feat] — Sélecteur de saison onglet Repêchage + saison_start_date + is_admin_override** :
 
 **Sélecteur de saison — `/admin/init?tab=repechage`** (`app/app/admin/init/page.tsx`, `SaisonSelectNav.tsx`) :
