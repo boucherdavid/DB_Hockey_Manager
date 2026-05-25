@@ -230,7 +230,7 @@ export default async function AdminInitPage({
                 <p className="text-gray-500 text-sm mt-1">Repêchage {poolDraftYear}</p>
               )}
             </div>
-            {allSaisonsRep.length > 1 && saisonRep && (
+            {allSaisonsRep.length > 0 && saisonRep && (
               <SaisonSelectNav
                 saisons={allSaisonsRep}
                 selectedId={saisonRep.id}
