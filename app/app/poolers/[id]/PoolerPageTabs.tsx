@@ -7,7 +7,7 @@ import type { PlayerContrib } from '@/lib/standings'
 import type { StreakInfo } from '@/lib/streaks'
 import StreakLegend from '@/components/StreakLegend'
 
-type Tab = 'organisation' | 'alignement' | 'historique'
+type Tab = 'masse-salariale' | 'alignement' | 'historique' | 'recrues'
 
 type ChangeLogEntry = {
   id: number
@@ -136,12 +136,14 @@ function PlayerStatsRow({ p, streaks }: { p: PlayerContrib; streaks: Record<numb
 }
 
 export default function PoolerPageTabs({
-  organisationContent,
+  masseSalarialeContent,
+  recruesContent,
   alignementPlayers,
   streaks,
   changeLog,
 }: {
-  organisationContent: React.ReactNode
+  masseSalarialeContent: React.ReactNode
+  recruesContent: React.ReactNode
   alignementPlayers: PlayerContrib[]
   streaks: Record<number, StreakInfo>
   changeLog: ChangeLogEntry[]
@@ -167,8 +169,11 @@ export default function PoolerPageTabs({
         <button className={btnClass('alignement')} onClick={() => setTab('alignement')}>
           Alignement
         </button>
-        <button className={btnClass('organisation')} onClick={() => setTab('organisation')}>
-          Organisation
+        <button className={btnClass('masse-salariale')} onClick={() => setTab('masse-salariale')}>
+          Masse Salariale
+        </button>
+        <button className={btnClass('recrues')} onClick={() => setTab('recrues')}>
+          Recrues
         </button>
         <button className={btnClass('historique')} onClick={() => setTab('historique')}>
           Historique
@@ -178,7 +183,9 @@ export default function PoolerPageTabs({
         </button>
       </div>
 
-      {tab === 'organisation' && organisationContent}
+      {tab === 'masse-salariale' && masseSalarialeContent}
+
+      {tab === 'recrues' && recruesContent}
 
       {tab === 'alignement' && (
         <div className="space-y-4">

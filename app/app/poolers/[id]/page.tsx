@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation'
 import TeamBadge from '@/components/TeamBadge'
 import PoolerSwitcher from '@/components/PoolerSwitcher'
 import PoolerPageTabs from './PoolerPageTabs'
-import OrganisationToggle from './OrganisationToggle'
 import PlayerLink from '@/components/PlayerLink'
 import { buildStandings } from '@/lib/standings'
 import { fetchStreaks, DEFAULT_INDICATOR_CONFIG } from '@/lib/streaks'
@@ -501,41 +500,37 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     </>
   )
 
-  const masseSalarialeRosters = (
-    <div className="bg-white rounded-lg shadow p-5">
-      <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'forward').sort(byCapDesc)} title={`Attaquants (${activeCounts.forward} / 12)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
-      <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'defense').sort(byCapDesc)} title={`Défenseurs (${activeCounts.defense} / 6)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
-      <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'goalie').sort(byCapDesc)} title={`Gardiens (${activeCounts.goalie} / 2)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
-      <RosterTable rows={reservistes} title="Réservistes" season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
-    </div>
+  const masseSalarialeContent = (
+    <>
+      {capAndPicksContent}
+      <div className="bg-white rounded-lg shadow p-5">
+        <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'forward').sort(byCapDesc)} title={`Attaquants (${activeCounts.forward} / 12)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
+        <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'defense').sort(byCapDesc)} title={`Défenseurs (${activeCounts.defense} / 6)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
+        <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'goalie').sort(byCapDesc)} title={`Gardiens (${activeCounts.goalie} / 2)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
+        <RosterTable rows={reservistes} title="Réservistes" season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
+        {ltir.length > 0 && (
+          <RosterTable rows={ltir} title={`Liste de blessés long terme — LTIR (${ltir.length})`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
+        )}
+      </div>
+    </>
   )
 
-  const orgCompleteRosters = (
+  const recruesContent = (
     <div className="bg-white rounded-lg shadow p-5">
-      <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'forward').sort(byCapDesc)} title={`Attaquants (${activeCounts.forward} / 12)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
-      <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'defense').sort(byCapDesc)} title={`Défenseurs (${activeCounts.defense} / 6)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
-      <RosterTable rows={actifs.filter(r => getPlayerBucket(r.players?.position ?? null) === 'goalie').sort(byCapDesc)} title={`Gardiens (${activeCounts.goalie} / 2)`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
-      <RosterTable rows={reservistes} title="Réservistes" season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
-      {ltir.length > 0 && (
-        <RosterTable rows={ltir} title={`Liste de blessés long terme — LTIR (${ltir.length})`} season={saison?.season} nextSeason={nextSeason} salaryCounts={true} />
-      )}
-      <RosterTable rows={[...banqueRecrues].sort(sortByDraftYearAsc)} title="Banque de recrues" season={saison?.season} nextSeason={nextSeason} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
-      {activationObligatoire.length > 0 && (
-        <div className="mt-4 border-l-4 border-red-400 pl-4">
-          <h3 className="font-semibold text-red-600 mb-1">Activation obligatoire ({activationObligatoire.length})</h3>
-          <p className="text-xs text-gray-400 mb-2">La période de protection est terminée. Ces recrues doivent être activées en début de saison.</p>
-          <RosterTable rows={[...activationObligatoire].sort(sortByDraftYearAsc)} title="" season={saison?.season} nextSeason={nextSeason} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
-        </div>
-      )}
+      {banqueRecrues.length === 0 && activationObligatoire.length === 0
+        ? <p className="text-gray-400 text-sm py-4">Aucune recrue dans la banque.</p>
+        : <>
+            <RosterTable rows={[...banqueRecrues].sort(sortByDraftYearAsc)} title="Banque de recrues" season={saison?.season} nextSeason={nextSeason} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
+            {activationObligatoire.length > 0 && (
+              <div className="mt-4 border-l-4 border-red-400 pl-4">
+                <h3 className="font-semibold text-red-600 mb-1">Activation obligatoire ({activationObligatoire.length})</h3>
+                <p className="text-xs text-gray-400 mb-2">La période de protection est terminée. Ces recrues doivent être activées en début de saison.</p>
+                <RosterTable rows={[...activationObligatoire].sort(sortByDraftYearAsc)} title="" season={saison?.season} nextSeason={nextSeason} salaryCounts={false} showDraft={true} saisonFin={saisonFin} splitByPosition={true} />
+              </div>
+            )}
+          </>
+      }
     </div>
-  )
-
-  const organisationContent = (
-    <OrganisationToggle
-      commonContent={capAndPicksContent}
-      masseSalariale={masseSalarialeRosters}
-      orgComplete={orgCompleteRosters}
-    />
   )
 
   const alignementPlayers = saison
@@ -569,7 +564,8 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
         )}
       </div>
       <PoolerPageTabs
-        organisationContent={organisationContent}
+        masseSalarialeContent={masseSalarialeContent}
+        recruesContent={recruesContent}
         alignementPlayers={alignementPlayers}
         streaks={streaks}
         changeLog={changeLog}
