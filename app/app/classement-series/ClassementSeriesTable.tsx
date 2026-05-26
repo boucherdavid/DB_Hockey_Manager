@@ -255,6 +255,11 @@ export default function ClassementSeriesTable({
                                     <StreakBadge nhlId={p.nhlId} streaks={streaks} />
                                   </span>
                                 )}
+                                {!isMultiPeriod && p.periods[0]?.activatedAt && (
+                                  <span className="ml-1.5 text-xs text-gray-400">
+                                    {fmtDate(p.periods[0].activatedAt)}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-2 py-2 text-center text-gray-500 text-xs">{p.teamCode ?? '—'}</td>
                               <td className="px-2 py-2 text-center text-gray-500">{p.positionSlot === 'G' ? '—' : p.goals}</td>

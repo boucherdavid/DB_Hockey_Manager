@@ -56,6 +56,14 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-26
+
+**[Feat] — Date d'ajout visible dans les classements** (`app/lib/standings.ts`, `app/app/classement/ClassementTable.tsx`, `app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :
+- `PlayerContrib` reçoit un nouveau champ `addedAt: string | null` passé depuis `row.added_at`.
+- Dans `ClassementTable` et `PoolerPageTabs` (alignement), la date d'ajout apparaît en gris clair à côté du nom.
+- Dans `ClassementSeriesTable`, la date d'activation (`periods[0].activatedAt`) s'affiche pour les joueurs à période unique ; les joueurs multi-périodes conservent le bouton ↩N.
+- Objectif : vérification visuelle des fenêtres d'activation lors des tests historiques.
+
 ### 2026-05-25
 
 **[Feat] — Type ballotage dans gestion d'effectifs** (`app/app/gestion-effectifs/actions.ts`, `GestionEffectifsManager.tsx`, `poolers/[id]/PoolerPageTabs.tsx`) :

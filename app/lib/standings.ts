@@ -14,6 +14,7 @@ export type PlayerContrib = {
   goalieOtl: number
   goalieShutouts: number
   poolPoints: number
+  addedAt: string | null
 }
 
 export type PoolerStanding = {
@@ -178,6 +179,7 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
       goalieOtl:      earned.goalie_otl,
       goalieShutouts: earned.goalie_shutouts,
       poolPoints:     calcPoints(earned, pts),
+      addedAt:        row.added_at ?? null,
     })
   }
 

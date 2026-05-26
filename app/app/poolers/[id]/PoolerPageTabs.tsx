@@ -75,6 +75,10 @@ function formatDate(iso: string): string {
   }).format(new Date(iso))
 }
 
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short', timeZone: 'America/Toronto' })
+}
+
 const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; label: string; cls: string }> = {
   en_feu:    { emoji: '🔥', label: 'En feu',    cls: 'text-orange-500' },
   en_forme:  { emoji: '✅', label: 'En forme',  cls: 'text-green-500'  },
@@ -110,6 +114,7 @@ function PlayerStatsRow({ p, streaks }: { p: PlayerContrib; streaks: Record<numb
         </PlayerLink>
         <StreakBadge info={p.nhlId ? streaks[p.nhlId] : undefined} />
         {badge && <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">{badge}</span>}
+        {p.addedAt && <span className="ml-1.5 text-xs text-gray-400">{fmtDate(p.addedAt)}</span>}
       </td>
       <td className="px-2 py-2 hidden sm:table-cell text-gray-500 text-center text-xs">{p.teamAbbrev}</td>
       <td className="px-2 py-2 text-center text-gray-500">{p.gamesPlayed || '—'}</td>

@@ -8,6 +8,10 @@ import PlayerLink from '@/components/PlayerLink'
 import type { PoolerStanding, PlayerContrib } from '@/lib/standings'
 
 const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short', timeZone: 'America/Toronto' })
+}
 const GROUP_LABEL = ['Attaquants', 'Défenseurs', 'Gardiens']
 
 type Mode = 'saison'
@@ -58,6 +62,9 @@ function PlayerRow({ p }: { p: PlayerContrib }) {
         </PlayerLink>
         {badge && (
           <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">{badge}</span>
+        )}
+        {p.addedAt && (
+          <span className="ml-1.5 text-xs text-gray-400">{fmtDate(p.addedAt)}</span>
         )}
       </td>
       <td className="px-2 py-2 hidden sm:table-cell text-gray-500 text-center text-xs">{p.teamAbbrev}</td>
