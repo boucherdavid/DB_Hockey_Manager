@@ -46,9 +46,11 @@ def fetch_schedule_for_date(date_str: str) -> list[dict]:
     r = requests.get(url, timeout=10)
     r.raise_for_status()
     games = []
-    for week in r.json().get('gameWeek', []):
-        for game in week.get('games', []):
-            if game.get('gameDate') == date_str and game.get('gameType') == GAME_TYPE:
+    for day in r.json().get('gameWeek', []):
+        if day.get('date') != date_str:
+            continue
+        for game in day.get('games', []):
+            if int(game.get('gameType', 0)) == GAME_TYPE:
                 games.append(game)
     return games
 
