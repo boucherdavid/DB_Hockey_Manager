@@ -108,8 +108,9 @@ function projectRoster(roster: RosterForPooler, cart: CartItem[]): RosterForPool
           map.set(fakeId--, { ...item.newPlayerEntry, id: fakeId, playerType: 'actif' })
         break
       case 'sign':
+      case 'ballotage':
         if (item.newPlayerEntry)
-          map.set(fakeId--, { ...item.newPlayerEntry, id: fakeId, playerType: item.newPlayerType ?? 'actif' })
+          map.set(fakeId--, { ...item.newPlayerEntry, id: fakeId, playerType: item.newPlayerType ?? 'reserviste' })
         break
       case 'release':
         if (item.releaseEntry) map.delete(item.releaseEntry.id)
@@ -258,6 +259,7 @@ const ACTION_DEFS: { type: ActionType; label: string; description: string; admin
   { type: 'swap',            label: 'Ajustement',        description: 'Actif ↔ réserviste' },
   { type: 'activate_rookie', label: 'Activation recrue', description: 'Recrue → actif' },
   { type: 'sign',            label: 'Signature',         description: 'Ajouter un agent libre' },
+  { type: 'ballotage',      label: 'Ballotage',         description: 'Réclamer un joueur au ballotage', adminOnly: true },
   { type: 'release',         label: 'Libération',        description: 'Retirer un joueur' },
   { type: 'ltir',            label: 'LTIR',              description: 'Actif → LTIR', adminOnly: true },
   { type: 'return_ltir',     label: 'Retour LTIR',       description: 'LTIR → actif', adminOnly: true },
@@ -414,6 +416,8 @@ export default function GestionEffectifsManager({
         return !!(addLtirId && addNewPlayer && canAddLtirSign)
       case 'sign':
         return !!(addNewPlayer && canAddSign)
+      case 'ballotage':
+        return !!addNewPlayer
       case 'release':
         return !!addReleaseId
       default:
@@ -467,6 +471,10 @@ export default function GestionEffectifsManager({
       case 'sign': {
         if (!addNewPlayer) return null
         return { localId, type: 'sign', label: `Signature : ${addNewPlayer.lastName}, ${addNewPlayer.firstName} (${addNewPlayerType})`, newPlayerEntry: makeNewEntry(addNewPlayerType), newPlayerId: addNewPlayer.id, newPlayerType: addNewPlayerType }
+      }
+      case 'ballotage': {
+        if (!addNewPlayer) return null
+        return { localId, type: 'ballotage', label: `Ballotage : ${addNewPlayer.lastName}, ${addNewPlayer.firstName} (${addNewPlayerType})`, newPlayerEntry: makeNewEntry(addNewPlayerType), newPlayerId: addNewPlayer.id, newPlayerType: addNewPlayerType }
       }
       case 'release': {
         const e = findEntry(addReleaseId)
@@ -560,9 +568,10 @@ export default function GestionEffectifsManager({
           </div>
         )
       case 'sign':
+      case 'ballotage':
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <PlayerSearch key={searchKey} label="Joueur à signer" season={season} onSelect={setAddNewPlayer} />
+            <PlayerSearch key={searchKey} label={addType === 'ballotage' ? 'Joueur réclamé au ballotage' : 'Joueur à signer'} season={season} onSelect={setAddNewPlayer} />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rôle</label>
               <select value={addNewPlayerType} onChange={e => setAddNewPlayerType(e.target.value as 'actif' | 'reserviste')}

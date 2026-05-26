@@ -15,6 +15,7 @@ export type ActionType =
   | 'ltir_sign'
   | 'sign'
   | 'release'
+  | 'ballotage'
 
 export type RosterEntry = {
   id: number
@@ -312,9 +313,9 @@ export async function submitBatchAction(input: {
     await log(e.player_id, fromType === 'ltir' ? 'retour_ltir' : 'activation', fromType, 'actif')
   }
 
-  async function addNewPlayer(playerId: number, playerType: 'actif' | 'reserviste', signingType: 'al' | 'ltir') {
-    // Validate budget (non-admins seulement)
-    if (!isAdmin) {
+  async function addNewPlayer(playerId: number, playerType: 'actif' | 'reserviste', signingType: 'al' | 'ltir' | 'ballotage') {
+    // Validate budget (non-admins seulement, ballotage exempt)
+    if (!isAdmin && signingType !== 'ballotage') {
       if (signingType === 'ltir') {
         // Budget LTIR dispo ou débord sur AL ?
         const ltirRoom = maxLtir - ltirUsed
@@ -344,7 +345,9 @@ export async function submitBatchAction(input: {
 
     // Choisir le bon budget et type de log
     let logType: string
-    if (signingType === 'ltir' && ltirUsed < maxLtir) {
+    if (signingType === 'ballotage') {
+      logType = 'ballotage'
+    } else if (signingType === 'ltir' && ltirUsed < maxLtir) {
       logType = 'signature_ltir'
       ltirUsed++
     } else {
@@ -392,6 +395,11 @@ export async function submitBatchAction(input: {
         case 'sign':
           if (!action.newPlayerId || !action.newPlayerType) throw new Error('Joueur manquant (signature)')
           await addNewPlayer(action.newPlayerId, action.newPlayerType, 'al')
+          break
+
+        case 'ballotage':
+          if (!action.newPlayerId || !action.newPlayerType) throw new Error('Joueur manquant (ballotage)')
+          await addNewPlayer(action.newPlayerId, action.newPlayerType, 'ballotage')
           break
 
         case 'release': {

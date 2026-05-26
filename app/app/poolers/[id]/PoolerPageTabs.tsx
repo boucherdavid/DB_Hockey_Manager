@@ -32,6 +32,7 @@ const CHANGE_LABEL: Record<string, string> = {
   retour_ltir:         'Retour LTIR',
   changement_type:     'Changement de type',
   signature_agent_libre: 'Signature agent libre',
+  ballotage:             'Ballotage',
 }
 
 const CHANGE_COLOR: Record<string, string> = {
@@ -44,6 +45,7 @@ const CHANGE_COLOR: Record<string, string> = {
   retour_ltir:         'bg-teal-100 text-teal-700',
   changement_type:     'bg-gray-100 text-gray-600',
   signature_agent_libre: 'bg-indigo-100 text-indigo-700',
+  ballotage:             'bg-cyan-100 text-cyan-700',
 }
 
 function positionGroup(pos: string): number {
