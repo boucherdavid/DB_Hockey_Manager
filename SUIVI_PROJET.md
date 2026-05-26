@@ -58,6 +58,12 @@ Je l'utiliserai pour:
 
 ### 2026-05-25
 
+**[Feat] — Type ballotage dans gestion d'effectifs** (`app/app/gestion-effectifs/actions.ts`, `GestionEffectifsManager.tsx`, `poolers/[id]/PoolerPageTabs.tsx`) :
+- Nouvelle action `ballotage` dans l'outil de mouvements (admin-only) : ajoute un joueur avec `change_type = 'ballotage'` dans le log.
+- Exempt de la validation de budget AL/LTIR (mécanisme distinct).
+- Badge cyan `Ballotage` dans l'onglet Historique du pooler.
+- Commit : `2c0f708`
+
 **[Feat] — Filtre début/fin de saison sur l'historique du pooler** (`app/app/poolers/[id]/page.tsx`, `admin/config/ConfigForm.tsx`, `admin/config/actions.ts`, `supabase_migrations/saison_end_date.sql`) :
 - Nouvelle colonne `pool_seasons.saison_end_date DATE`. Configurable depuis `/admin/pool?tab=config`.
 - La requête `roster_change_log` filtre maintenant par `>= saison_start_date` ET `<= saison_end_date` quand ces colonnes sont renseignées.
