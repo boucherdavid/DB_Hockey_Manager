@@ -58,6 +58,14 @@ Je l'utiliserai pour:
 
 ### 2026-05-27
 
+**[Style] — Révision responsive mobile de toutes les pages de consultation** (`app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/classement/ClassementTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`, `app/app/joueurs/JoueursTable.tsx`, `app/app/statistiques/StatsTable.tsx`) :
+- Date d'activation déplacée de l'inline vers une deuxième ligne (`<div className="text-xs text-gray-400 mt-0.5">`) dans les 3 tableaux de joueurs — plus lisible sur mobile.
+- `ClassementSeriesTable` tableau de détail : colonnes Éq., V, DP, BL masquées < sm (aligné sur le même patron que `ClassementTable`).
+- `JoueursTable` : colonnes Âge et Expérience masquées < md ; colonnes saisons futures (2026-27 à 2029-30) masquées < lg — seule la saison en cours reste visible sur mobile.
+- `StatsTable` : en-tête convertie en `flex-col sm:flex-row` pour éviter l'écrasement des boutons Saison/Séries sur petits écrans.
+- Audit complet des autres pages : transactions (cartes), calendrier (cartes), résultats (compact), repêchage (overflow-x-auto suffisant), aide (texte) — aucun changement requis.
+- Commit : `9c16446`
+
 **[Fix] — OTL gardien non détecté dans les séries + heure d'activation dans les classements** (`python_script/import_playoff_stats.py`, `app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/classement/ClassementTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :
 - **Bug OTL** : En séries, la NHL retourne `decision='L'` (pas `'O'`) pour une défaite en prolongation. Le pipeline comparait `== 'O'` → `goalie_otl = 0` pour tous les matchs en prolongation en séries. Fix : si `decision == 'L'` ET `toi > 60:00`, c'est une défaite en prolongation.
 - Dobes avait 4 défaites en prolongation manquantes (21 avr, 1 mai, 23 mai, 25 mai). Backfill requis sur ces dates.
