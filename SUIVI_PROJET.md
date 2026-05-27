@@ -58,6 +58,15 @@ Je l'utiliserai pour:
 
 ### 2026-05-27
 
+**[Perf] — Optimisation pipeline : game-log → boxscore** (`python_script/import_playoff_stats.py`, `backfill_playoff_game_logs.py`, `backfill_regular_game_logs.py`) :
+- Remplacé l'approche 1 appel/joueur (632 appels/date) par 1 appel/match via `/v1/gamecenter/{id}/boxscore`.
+- Import quotidien : ~3-5 appels par nuit au lieu de 632.
+- Backfill scripts : `--start` / `--end` pour itérer sur une plage de dates, aucun argument joueur requis.
+- Backfill des séries 2026 relancé avec le nouveau script : 37 dates, 2706 lignes, 0 erreur, ~2 minutes (vs plusieurs heures avec l'ancien script).
+- Correction OTL playoffs (`decision='L'` + `toi > 3600`) intégrée dans les 3 scripts.
+- `backfill_regular_game_logs.py` : `--season` obligatoire (ex: `--season 2025-26`), prêt pour la saison régulière.
+- Commit : `f37f696`
+
 **[Style] — Révision responsive mobile de toutes les pages de consultation** (`app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/classement/ClassementTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`, `app/app/joueurs/JoueursTable.tsx`, `app/app/statistiques/StatsTable.tsx`) :
 - Date d'activation déplacée de l'inline vers une deuxième ligne (`<div className="text-xs text-gray-400 mt-0.5">`) dans les 3 tableaux de joueurs — plus lisible sur mobile.
 - `ClassementSeriesTable` tableau de détail : colonnes Éq., V, DP, BL masquées < sm (aligné sur le même patron que `ClassementTable`).
