@@ -216,12 +216,12 @@ export default function ClassementSeriesTable({
                     <thead className="bg-gray-50 text-gray-400 text-xs uppercase tracking-wide">
                       <tr>
                         <th className="px-4 py-2 text-left">Joueur</th>
-                        <th className="px-2 py-2">Éq.</th>
+                        <th className="px-2 py-2 hidden sm:table-cell">Éq.</th>
                         <th className="px-2 py-2">B</th>
                         <th className="px-2 py-2">A</th>
-                        <th className="px-2 py-2">V</th>
-                        <th className="px-2 py-2">DP</th>
-                        <th className="px-2 py-2">BL</th>
+                        <th className="px-2 py-2 hidden sm:table-cell">V</th>
+                        <th className="px-2 py-2 hidden sm:table-cell">DP</th>
+                        <th className="px-2 py-2 hidden sm:table-cell">BL</th>
                         <th className="px-2 py-2 text-blue-500">Pts</th>
                       </tr>
                     </thead>
@@ -264,17 +264,17 @@ export default function ClassementSeriesTable({
                                   </span>
                                 )}
                                 {!isMultiPeriod && p.periods[0]?.activatedAt && (
-                                  <span className="ml-1.5 text-xs text-gray-400">
+                                  <div className="text-xs text-gray-400 mt-0.5">
                                     {fmtDateTime(p.periods[0].activatedAt)}
-                                  </span>
+                                  </div>
                                 )}
                               </td>
-                              <td className="px-2 py-2 text-center text-gray-500 text-xs">{p.teamCode ?? '—'}</td>
+                              <td className="px-2 py-2 text-center text-gray-500 text-xs hidden sm:table-cell">{p.teamCode ?? '—'}</td>
                               <td className="px-2 py-2 text-center text-gray-500">{p.goals || '—'}</td>
                               <td className="px-2 py-2 text-center text-gray-500">{p.assists || '—'}</td>
-                              <td className="px-2 py-2 text-center text-gray-500">{p.goalieWins || '—'}</td>
-                              <td className="px-2 py-2 text-center text-gray-500">{p.goalieOtl || '—'}</td>
-                              <td className="px-2 py-2 text-center text-gray-500">{p.goalieShutouts || '—'}</td>
+                              <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{p.goalieWins || '—'}</td>
+                              <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{p.goalieOtl || '—'}</td>
+                              <td className="px-2 py-2 text-center text-gray-500 hidden sm:table-cell">{p.goalieShutouts || '—'}</td>
                               <td className={`px-2 py-2 text-center font-bold ${p.isActive ? 'text-blue-600' : 'text-gray-400'}`}>
                                 {fmtPts(p.points)}
                               </td>

@@ -240,10 +240,10 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
               <th className="text-left px-4 py-3 font-medium text-gray-600">Joueur</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">{'\u00c9quipe'}</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Pos</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{'\u00c2ge'}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{'Exp\u00e9rience'}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">{'\u00c2ge'}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">{'Exp\u00e9rience'}</th>
               {SEASONS.map((season) => (
-                <th key={season} className="text-right px-4 py-3 font-medium text-gray-600">{season}</th>
+                <th key={season} className={`text-right px-4 py-3 font-medium text-gray-600${season !== CURRENT_SEASON ? ' hidden lg:table-cell' : ''}`}>{season}</th>
               ))}
             </tr>
           </thead>
@@ -314,8 +314,8 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                       <TeamBadge code={player.teams?.code} />
                     </td>
                     <td className="px-4 py-3 text-gray-600">{player.position ?? DASH}</td>
-                    <td className="px-4 py-3 text-gray-600">{player.age ?? DASH}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-gray-600 hidden md:table-cell">{player.age ?? DASH}</td>
+                    <td className="px-4 py-3 hidden md:table-cell">
                       {player.status === 'ELC'
                         ? <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Recrue</span>
                         : <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">{'V\u00e9t\u00e9ran'}</span>
@@ -324,7 +324,7 @@ export default function JoueursTable({ players }: { players: PlayerRow[] }) {
                     {SEASONS.map((season) => {
                       const contract = getContract(season)
                       return (
-                        <td key={season} className="px-4 py-3 text-right">
+                        <td key={season} className={`px-4 py-3 text-right${season !== CURRENT_SEASON ? ' hidden lg:table-cell' : ''}`}>
                           {contract ? (
                             <span>
                               {contract.contract_status && contract.contract_status !== player.status && (

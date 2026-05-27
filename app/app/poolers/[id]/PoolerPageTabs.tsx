@@ -118,7 +118,7 @@ function PlayerStatsRow({ p, streaks }: { p: PlayerContrib; streaks: Record<numb
         </PlayerLink>
         <StreakBadge info={p.nhlId ? streaks[p.nhlId] : undefined} />
         {badge && <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">{badge}</span>}
-        {p.addedAt && <span className="ml-1.5 text-xs text-gray-400">{fmtDate(p.addedAt)}</span>}
+        {p.addedAt && <div className="text-xs text-gray-400 mt-0.5">{fmtDate(p.addedAt)}</div>}
       </td>
       <td className="px-2 py-2 hidden sm:table-cell text-gray-500 text-center text-xs">{p.teamAbbrev}</td>
       <td className="px-2 py-2 text-center text-gray-500">{p.gamesPlayed || '—'}</td>
