@@ -1,34 +1,31 @@
 """
-Backfill des game-logs de saison régulière.
-Récupère tous les matchs joués par les joueurs du pool (pooler_rosters)
-et les insère dans player_game_logs (game_type=2).
+Backfill des game-logs pour la saison régulière (game_type=2).
+Approche boxscore : 1 appel par match au lieu de 1 appel par joueur.
 
-Ciblé sur les joueurs du pool uniquement — beaucoup moins d'appels API
-que de fetcher toute la ligue.
+Itère sur une plage de dates et traite chaque match via son boxscore.
+Les dates sans match de saison régulière sont sautées rapidement.
 
-Usage:
-    python backfill_regular_game_logs.py [--season 2025-26]
+Usage :
+    python backfill_regular_game_logs.py --season 2025-26 --start 2025-10-04
+    python backfill_regular_game_logs.py --season 2025-26 --start 2025-10-04 --end 2026-04-18
+    python backfill_regular_game_logs.py --season 2025-26 --start 2025-10-04 --env .env.staging
 
-Par défaut, utilise la première saison régulière trouvée dans la DB.
-Pointer .env vers le projet staging avant de lancer.
-
-Prérequis:
-    - .env avec SUPABASE_URL + SUPABASE_SERVICE_KEY (staging)
-    - Table player_game_logs déjà créée (migration player_game_logs.sql)
+Prérequis :
+    - Variables SUPABASE_URL et SUPABASE_SERVICE_KEY dans .env
 """
 
+import argparse
 import os
 import sys
 import time
-import argparse
 import requests
+from datetime import datetime, timezone, timedelta, date
 
 from dotenv import load_dotenv
 from supabase import create_client
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-# Chargement anticipé pour que --env soit disponible avant parse_args
 _pre = argparse.ArgumentParser(add_help=False)
 _pre.add_argument('--env', default='.env')
 _pre_args, _ = _pre.parse_known_args()
@@ -37,7 +34,7 @@ load_dotenv(_pre_args.env)
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
 NHL_WEB      = 'https://api-web.nhle.com'
-GAME_TYPE    = 2   # 2 = saison régulière
+GAME_TYPE    = 2   # saison régulière
 
 
 def to_nhl_season(season: str) -> int:
@@ -46,75 +43,129 @@ def to_nhl_season(season: str) -> int:
     return start * 10000 + (start + 1)
 
 
-def fetch_player_game_log(nhl_id: int, nhl_season: int, retries: int = 3) -> list[dict]:
-    url = f'{NHL_WEB}/v1/player/{nhl_id}/game-log/{nhl_season}/{GAME_TYPE}'
-    for attempt in range(retries):
-        try:
-            r = requests.get(url, timeout=15)
-            r.raise_for_status()
-            return r.json().get('gameLog', [])
-        except Exception as e:
-            if attempt < retries - 1:
-                wait = 5 * (attempt + 1)
-                print(f'  Retry {attempt + 1}/{retries - 1} nhl_id={nhl_id} (attente {wait}s)...')
-                time.sleep(wait)
-            else:
-                raise
-    return []
+def get_yesterday_et() -> str:
+    et_offset = timedelta(hours=-4)
+    now_et = datetime.now(timezone.utc) + et_offset
+    return (now_et - timedelta(days=1)).strftime('%Y-%m-%d')
 
 
-def fetch_schedule_start_times(date_str: str) -> dict[int, str]:
-    """Retourne {gameId: startTimeUTC} pour tous les matchs d'une date."""
+def date_range(start: str, end: str) -> list[str]:
+    d1 = date.fromisoformat(start)
+    d2 = date.fromisoformat(end)
+    days = []
+    current = d1
+    while current <= d2:
+        days.append(current.isoformat())
+        current += timedelta(days=1)
+    return days
+
+
+def _toi_seconds(toi: str) -> int:
+    try:
+        parts = toi.split(':')
+        return int(parts[0]) * 60 + int(parts[1])
+    except Exception:
+        return 0
+
+
+def fetch_schedule_games(date_str: str, game_type: int) -> list[dict]:
     url = f'{NHL_WEB}/v1/schedule/{date_str}'
     r = requests.get(url, timeout=10)
     r.raise_for_status()
-    result: dict[int, str] = {}
-    for week in r.json().get('gameWeek', []):
-        for game in week.get('games', []):
-            gid = game.get('id')
-            st  = game.get('startTimeUTC')
-            if gid and st:
-                result[gid] = st
-    return result
+    games = []
+    for day in r.json().get('gameWeek', []):
+        if day.get('date') != date_str:
+            continue
+        for g in day.get('games', []):
+            if int(g.get('gameType', 0)) == game_type:
+                games.append({'id': g['id'], 'startTimeUTC': g.get('startTimeUTC', '')})
+    return games
 
 
-def parse_game_log_row(player_id: int, nhl_id: int, nhl_season: int, g: dict, start_time: str) -> dict:
-    goals   = int(g.get('goals',   0) or 0)
-    assists = int(g.get('assists', 0) or 0)
+def fetch_boxscore(game_id: int) -> dict:
+    url = f'{NHL_WEB}/v1/gamecenter/{game_id}/boxscore'
+    r = requests.get(url, timeout=10)
+    r.raise_for_status()
+    return r.json()
 
-    if 'wins' in g:
-        wins = int(g.get('wins', 0) or 0)
-    else:
-        wins = 1 if g.get('decision') == 'W' else 0
 
-    if 'otLosses' in g:
-        otl = int(g.get('otLosses', 0) or 0)
-    else:
-        otl = 1 if g.get('decision') == 'O' else 0
+def parse_boxscore(
+    boxscore: dict,
+    nhl_to_db: dict[int, int],
+    game_date: str,
+    start_time: str,
+    season: int,
+    game_type: int,
+) -> list[dict]:
+    rows = []
+    is_playoff = (game_type == 3)
 
-    shutouts = int(g.get('shutouts', 0) or 0)
+    for side in ('homeTeam', 'awayTeam'):
+        team = boxscore.get('playerByGameStats', {}).get(side, {})
 
-    return {
-        'player_id':       player_id,
-        'nhl_id':          nhl_id,
-        'game_date':       g['gameDate'],
-        'game_start_time': start_time,
-        'season':          nhl_season,
-        'game_type':       GAME_TYPE,
-        'goals':           goals,
-        'assists':         assists,
-        'goalie_wins':     wins,
-        'goalie_otl':      otl,
-        'goalie_shutouts': shutouts,
-    }
+        for slot in ('forwards', 'defense'):
+            for p in team.get(slot, []):
+                nhl_id = p.get('playerId')
+                if not nhl_id or nhl_id not in nhl_to_db:
+                    continue
+                rows.append({
+                    'player_id':       nhl_to_db[nhl_id],
+                    'nhl_id':          nhl_id,
+                    'game_date':       game_date,
+                    'game_start_time': start_time,
+                    'season':          season,
+                    'game_type':       game_type,
+                    'goals':           int(p.get('goals', 0) or 0),
+                    'assists':         int(p.get('assists', 0) or 0),
+                    'goalie_wins':     0,
+                    'goalie_otl':      0,
+                    'goalie_shutouts': 0,
+                })
+
+        for g in team.get('goalies', []):
+            nhl_id = g.get('playerId')
+            if not nhl_id or nhl_id not in nhl_to_db:
+                continue
+            decision = g.get('decision')
+            toi_secs = _toi_seconds(g.get('toi', '0:00'))
+            goals_ag = int(g.get('goalsAgainst', 0) or 0)
+
+            wins = 1 if decision == 'W' else 0
+            # Saison régulière : défaite en prolongation/tirs = decision 'O'
+            if is_playoff:
+                otl = 1 if (decision == 'L' and toi_secs > 3600) else 0
+            else:
+                otl = 1 if decision == 'O' else 0
+            shutouts = 1 if (goals_ag == 0 and decision is not None and toi_secs >= 3600) else 0
+
+            rows.append({
+                'player_id':       nhl_to_db[nhl_id],
+                'nhl_id':          nhl_id,
+                'game_date':       game_date,
+                'game_start_time': start_time,
+                'season':          season,
+                'game_type':       game_type,
+                'goals':           int(g.get('goals', 0) or 0),
+                'assists':         int(g.get('assists', 0) or 0),
+                'goalie_wins':     wins,
+                'goalie_otl':      otl,
+                'goalie_shutouts': shutouts,
+            })
+
+    return rows
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--env',      default='.env',  help="Fichier d'environnement (ex: .env.staging)")
-    parser.add_argument('--season',   help="Saison pool (ex: 2025-26). Par défaut: première trouvée.")
-    parser.add_argument('--nhl-ids',  help="Comma-separated nhl_ids à traiter uniquement (ex: 8476460,8478398)")
+    parser = argparse.ArgumentParser(description="Backfill game-logs saison régulière via boxscore.")
+    parser.add_argument('--env',    default='.env', help="Fichier d'environnement")
+    parser.add_argument('--season', required=True, metavar='YYYY-YY', help="Saison pool (ex: 2025-26)")
+    parser.add_argument('--start',  required=True, metavar='YYYY-MM-DD', help="Première date à traiter")
+    parser.add_argument('--end',    metavar='YYYY-MM-DD', help="Dernière date (défaut : hier ET)")
     args = parser.parse_args()
+
+    end_date = args.end or get_yesterday_et()
+    dates    = date_range(args.start, end_date)
+    nhl_season = to_nhl_season(args.season)
 
     if not SUPABASE_URL or not SUPABASE_KEY:
         print('Variables SUPABASE_URL et SUPABASE_SERVICE_KEY requises.')
@@ -122,125 +173,82 @@ def main() -> None:
 
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    # Trouver la saison cible
+    # Vérifier que la saison pool existe
     seasons_resp = client.table('pool_seasons').select('id, season').eq('is_playoff', False).execute()
-    seasons = seasons_resp.data or []
-    if not seasons:
-        print('Aucune saison régulière trouvée.')
+    season_row = next((s for s in (seasons_resp.data or []) if s['season'] == args.season), None)
+    if not season_row:
+        available = [s['season'] for s in (seasons_resp.data or [])]
+        print(f'Saison {args.season} introuvable. Disponibles : {available}')
         sys.exit(1)
 
-    if args.season:
-        target = next((s for s in seasons if s['season'] == args.season), None)
-        if not target:
-            print(f'Saison {args.season} introuvable. Disponibles: {[s["season"] for s in seasons]}')
-            sys.exit(1)
-    else:
-        target = seasons[0]
+    print(f'Backfill saison régulière : {args.start} → {end_date} ({len(dates)} dates)')
+    print(f'Saison pool : {args.season} (id={season_row["id"]}) → NHL season {nhl_season}\n')
 
-    pool_season_id = target['id']
-    nhl_season     = to_nhl_season(target['season'])
-    print(f'Saison pool : {target["season"]} (id={pool_season_id}) → NHL season {nhl_season}')
-    print(f'game_type   : {GAME_TYPE} (saison régulière)\n')
-
-    # Tous les joueurs avec un nhl_id — pagination pour dépasser la limite 1000 Supabase
+    # nhl_id → player_id (DB) — pagination pour dépasser 1000 lignes
     all_players: list[dict] = []
-    p_offset = 0
-    P_PAGE = 1000
+    offset = 0
     while True:
-        resp = client.table('players').select('id, nhl_id').range(p_offset, p_offset + P_PAGE - 1).execute()
+        resp = client.table('players').select('id, nhl_id').range(offset, offset + 999).execute()
         chunk = resp.data or []
         all_players.extend(chunk)
-        if len(chunk) < P_PAGE:
+        if len(chunk) < 1000:
             break
-        p_offset += P_PAGE
+        offset += 1000
 
-    player_map: dict[int, int] = {
-        r['id']: r['nhl_id']
+    nhl_to_db: dict[int, int] = {
+        r['nhl_id']: r['id']
         for r in all_players
         if r.get('nhl_id')
     }
+    print(f'{len(nhl_to_db)} joueurs dans la DB.\n')
 
-    # Filtre optionnel par nhl_id
-    if args.nhl_ids:
-        target_ids = {int(x.strip()) for x in args.nhl_ids.split(',')}
-        player_map = {pid: nid for pid, nid in player_map.items() if nid in target_ids}
-        print(f'Mode ciblé : {len(player_map)} joueur(s) pour nhl_ids={target_ids}')
+    total_rows = 0
+    total_errors = 0
+    dates_with_games = 0
 
-    print(f'{len(player_map)} joueurs à backfiller (toute la table players).\n')
-
-    schedule_cache: dict[str, dict[int, str]] = {}
-    game_start_cache: dict[int, str] = {}
-    rows: list[dict] = []
-    errors = 0
-    skipped = 0
-
-    for i, (player_id, nhl_id) in enumerate(player_map.items(), 1):
-        if i % 20 == 0:
-            print(f'  [{i}/{len(player_map)}] en cours...')
+    for d in dates:
         try:
-            game_log = fetch_player_game_log(nhl_id, nhl_season)
+            games = fetch_schedule_games(d, GAME_TYPE)
         except Exception as e:
-            print(f'  Erreur nhl_id={nhl_id}: {e}')
-            errors += 1
-            time.sleep(0.3)
+            print(f'{d} — Erreur schedule : {e}')
+            time.sleep(1)
             continue
 
-        if not game_log:
-            skipped += 1
-            time.sleep(0.05)
+        if not games:
             continue
 
-        for g in game_log:
-            game_id   = g.get('gameId')
-            game_date = g.get('gameDate')
-            if not game_id or not game_date:
+        dates_with_games += 1
+        print(f'{d} — {len(games)} match(s)')
+        date_rows: list[dict] = []
+
+        for game in games:
+            try:
+                boxscore = fetch_boxscore(game['id'])
+            except Exception as e:
+                print(f'  Erreur boxscore {game["id"]}: {e}')
+                total_errors += 1
+                time.sleep(1)
                 continue
+            date_rows.extend(parse_boxscore(
+                boxscore, nhl_to_db,
+                d, game['startTimeUTC'],
+                nhl_season, GAME_TYPE,
+            ))
+            time.sleep(0.2)
 
-            if game_id not in game_start_cache:
-                if game_date not in schedule_cache:
-                    try:
-                        schedule_cache[game_date] = fetch_schedule_start_times(game_date)
-                        time.sleep(0.1)
-                    except Exception:
-                        schedule_cache[game_date] = {}
-                game_start_cache[game_id] = schedule_cache[game_date].get(game_id, '')
+        if not date_rows:
+            continue
 
-            start_time = game_start_cache.get(game_id, '')
-            if not start_time:
-                # Fallback : midi UTC pour cette date (suffisant pour les fenêtres d'activation journalières)
-                start_time = f'{game_date}T12:00:00Z'
+        # Upsert par batch de 500
+        for i in range(0, len(date_rows), 500):
+            client.table('player_game_logs').upsert(
+                date_rows[i:i + 500],
+                on_conflict='player_id,game_date,season,game_type'
+            ).execute()
+        total_rows += len(date_rows)
+        print(f'  ✓ {len(date_rows)} lignes upsertées.')
 
-            rows.append(parse_game_log_row(player_id, nhl_id, nhl_season, g, start_time))
-
-        time.sleep(0.1)
-
-    print(f'\n{len(rows)} lignes à insérer ({errors} erreurs API, {skipped} sans matchs)...')
-
-    if not rows:
-        print('Aucune ligne à insérer.')
-        return
-
-    BATCH = 200
-    inserted = 0
-    db_errors = 0
-    for i in range(0, len(rows), BATCH):
-        batch = rows[i:i + BATCH]
-        resp = client.table('player_game_logs').upsert(
-            batch, on_conflict='player_id,game_date,season,game_type'
-        ).execute()
-        if hasattr(resp, 'data') and resp.data is not None:
-            inserted += len(batch)
-        else:
-            db_errors += 1
-            print(f'  ⚠ Erreur DB batch {i//BATCH + 1}: {getattr(resp, "error", resp)}')
-            # Afficher les player_ids du batch pour diagnostic
-            pids = {r['player_id'] for r in batch}
-            print(f'    player_ids affectés: {pids}')
-        if (i // BATCH + 1) % 5 == 0 or i + BATCH >= len(rows):
-            print(f'  {i + len(batch)}/{len(rows)} traitées ({db_errors} erreur(s) DB)')
-
-    print(f'\n✓ Backfill terminé — {inserted} lignes dans player_game_logs (game_type=2, saison={nhl_season}).')
-    print(f'  {errors} erreur(s) API ignorées, {db_errors} erreur(s) DB.')
+    print(f'\nBackfill terminé — {dates_with_games} dates avec matchs, {total_rows} lignes ({total_errors} erreur(s)).')
 
 
 if __name__ == '__main__':
