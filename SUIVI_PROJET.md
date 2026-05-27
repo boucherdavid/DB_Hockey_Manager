@@ -75,6 +75,13 @@ Je l'utiliserai pour:
 - Audit complet des autres pages : transactions (cartes), calendrier (cartes), résultats (compact), repêchage (overflow-x-auto suffisant), aide (texte) — aucun changement requis.
 - Commit : `9c16446`
 
+**[Fix] — Buts/passes gardiens absents du boxscore NHL** (`python_script/import_playoff_stats.py`, `backfill_playoff_game_logs.py`, `backfill_regular_game_logs.py`) :
+- Le boxscore NHL (`/v1/gamecenter/{id}/boxscore`) n'inclut PAS les champs `goals`/`assists` dans la section `goalies[]` — champs absents de la réponse API.
+- Fix : après traitement du boxscore, `parse_boxscore` retourne maintenant un tuple `(rows, goalie_nhl_ids)`. Pour chaque gardien trouvé, on appelle `/v1/player/{id}/game-log/{season}/{game_type}` et on corrige `goals`/`assists` dans les rows correspondantes via un index `(nhl_id, game_date)`.
+- Appliqué aux 3 scripts : `import_playoff_stats.py`, `backfill_playoff_game_logs.py`, `backfill_regular_game_logs.py`.
+- Coût additionnel : ~2-4 appels/nuit pour les gardiens actifs dans le pool — négligeable.
+- Backfill séries à re-rouler sur `--start 2026-04-19` pour corriger les gardiens (ex: Dobes A=1 manquant).
+
 **[Fix] — OTL gardien non détecté dans les séries + heure d'activation dans les classements** (`python_script/import_playoff_stats.py`, `app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/classement/ClassementTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :
 - **Bug OTL** : En séries, la NHL retourne `decision='L'` (pas `'O'`) pour une défaite en prolongation. Le pipeline comparait `== 'O'` → `goalie_otl = 0` pour tous les matchs en prolongation en séries. Fix : si `decision == 'L'` ET `toi > 60:00`, c'est une défaite en prolongation.
 - Dobes avait 4 défaites en prolongation manquantes (21 avr, 1 mai, 23 mai, 25 mai). Backfill requis sur ces dates.

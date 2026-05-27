@@ -89,6 +89,13 @@ def fetch_boxscore(game_id: int) -> dict:
     return r.json()
 
 
+def fetch_player_game_log(nhl_id: int, season: int, game_type: int) -> list[dict]:
+    url = f'{NHL_WEB}/v1/player/{nhl_id}/game-log/{season}/{game_type}'
+    r = requests.get(url, timeout=10)
+    r.raise_for_status()
+    return r.json().get('gameLog', [])
+
+
 def parse_boxscore(
     boxscore: dict,
     nhl_to_db: dict[int, int],
@@ -96,8 +103,11 @@ def parse_boxscore(
     start_time: str,
     season: int,
     game_type: int,
-) -> list[dict]:
-    rows = []
+) -> tuple[list[dict], set[int]]:
+    """Retourne (rows, goalie_nhl_ids).
+    Les buts/passes des gardiens sont absents du boxscore — enrichir via game-log."""
+    rows: list[dict] = []
+    goalie_nhl_ids: set[int] = set()
     is_playoff = (game_type == 3)
 
     for side in ('homeTeam', 'awayTeam'):
@@ -126,12 +136,12 @@ def parse_boxscore(
             nhl_id = g.get('playerId')
             if not nhl_id or nhl_id not in nhl_to_db:
                 continue
+            goalie_nhl_ids.add(nhl_id)
             decision = g.get('decision')
             toi_secs = _toi_seconds(g.get('toi', '0:00'))
             goals_ag = int(g.get('goalsAgainst', 0) or 0)
 
             wins = 1 if decision == 'W' else 0
-            # Saison régulière : défaite en prolongation/tirs = decision 'O'
             if is_playoff:
                 otl = 1 if (decision == 'L' and toi_secs > 3600) else 0
             else:
@@ -145,14 +155,39 @@ def parse_boxscore(
                 'game_start_time': start_time,
                 'season':          season,
                 'game_type':       game_type,
-                'goals':           int(g.get('goals', 0) or 0),
-                'assists':         int(g.get('assists', 0) or 0),
+                'goals':           0,
+                'assists':         0,
                 'goalie_wins':     wins,
                 'goalie_otl':      otl,
                 'goalie_shutouts': shutouts,
             })
 
-    return rows
+    return rows, goalie_nhl_ids
+
+
+def enrich_goalie_stats(
+    rows: list[dict],
+    goalie_nhl_ids: set[int],
+    season: int,
+    game_type: int,
+) -> None:
+    """Corrige les buts/passes des gardiens via leur game-log individuel."""
+    index: dict[tuple[int, str], dict] = {
+        (row['nhl_id'], row['game_date']): row
+        for row in rows
+        if row['nhl_id'] in goalie_nhl_ids
+    }
+    for nhl_id in goalie_nhl_ids:
+        try:
+            game_log = fetch_player_game_log(nhl_id, season, game_type)
+            for g in game_log:
+                key = (nhl_id, g.get('gameDate', ''))
+                if key in index:
+                    index[key]['goals']   = int(g.get('goals', 0) or 0)
+                    index[key]['assists'] = int(g.get('assists', 0) or 0)
+            time.sleep(0.2)
+        except Exception as e:
+            print(f'  Avertissement game-log gardien nhl_id={nhl_id}: {e}')
 
 
 def main() -> None:
@@ -202,7 +237,8 @@ def main() -> None:
     }
     print(f'{len(nhl_to_db)} joueurs dans la DB.\n')
 
-    total_rows = 0
+    all_rows: list[dict] = []
+    all_goalie_nhl_ids: set[int] = set()
     total_errors = 0
     dates_with_games = 0
 
@@ -219,7 +255,6 @@ def main() -> None:
 
         dates_with_games += 1
         print(f'{d} — {len(games)} match(s)')
-        date_rows: list[dict] = []
 
         for game in games:
             try:
@@ -229,26 +264,31 @@ def main() -> None:
                 total_errors += 1
                 time.sleep(1)
                 continue
-            date_rows.extend(parse_boxscore(
+            game_rows, game_goalies = parse_boxscore(
                 boxscore, nhl_to_db,
                 d, game['startTimeUTC'],
                 nhl_season, GAME_TYPE,
-            ))
+            )
+            all_rows.extend(game_rows)
+            all_goalie_nhl_ids.update(game_goalies)
             time.sleep(0.2)
 
-        if not date_rows:
-            continue
+    if all_goalie_nhl_ids:
+        print(f'\nEnrichissement buts/passes : {len(all_goalie_nhl_ids)} gardien(s)...')
+        enrich_goalie_stats(all_rows, all_goalie_nhl_ids, nhl_season, GAME_TYPE)
 
-        # Upsert par batch de 500
-        for i in range(0, len(date_rows), 500):
-            client.table('player_game_logs').upsert(
-                date_rows[i:i + 500],
-                on_conflict='player_id,game_date,season,game_type'
-            ).execute()
-        total_rows += len(date_rows)
-        print(f'  ✓ {len(date_rows)} lignes upsertées.')
+    if not all_rows:
+        print('Aucune ligne à insérer.')
+        return
 
-    print(f'\nBackfill terminé — {dates_with_games} dates avec matchs, {total_rows} lignes ({total_errors} erreur(s)).')
+    print(f'\n{len(all_rows)} lignes à upsert...')
+    for i in range(0, len(all_rows), 500):
+        client.table('player_game_logs').upsert(
+            all_rows[i:i + 500],
+            on_conflict='player_id,game_date,season,game_type'
+        ).execute()
+
+    print(f'\nBackfill terminé — {dates_with_games} dates avec matchs, {len(all_rows)} lignes ({total_errors} erreur(s)).')
 
 
 if __name__ == '__main__':
