@@ -1,4 +1,4 @@
-name: Mise à jour stats pool des séries
+name: Mise à jour stats saison régulière
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -17,8 +17,8 @@ on:
     - cron: '0 6 * * *'
 
 jobs:
-  update-playoff-stats:
-    name: Snapshot live_cache — joueurs actifs pool séries
+  update-regular-stats:
+    name: Import game-logs saison régulière
     runs-on: ubuntu-latest
 
     steps:
@@ -35,13 +35,13 @@ jobs:
       - name: Installer les dépendances
         run: pip install -r python_script/requirements.txt
 
-      - name: Mettre à jour les stats playoffs
+      - name: Mettre à jour les stats saison régulière
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           if [ -n "${{ github.event.inputs.date }}" ]; then
-            python python_script/import_playoff_stats.py --date "${{ github.event.inputs.date }}"
+            python python_script/import_regular_stats.py --date "${{ github.event.inputs.date }}"
           else
-            python python_script/import_playoff_stats.py
+            python python_script/import_regular_stats.py
           fi

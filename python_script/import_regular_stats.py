@@ -1,11 +1,11 @@
 """
-Mise à jour quotidienne des game-logs pour le pool des séries.
+Mise à jour quotidienne des game-logs pour la saison régulière.
 Approche boxscore : 1 appel par match au lieu de 1 appel par joueur.
-Typiquement 2-5 appels API par nuit au lieu de 632.
 Les buts/passes des gardiens sont récupérés via le game-log individuel
 (absents du boxscore).
 
 Exécuté par GitHub Action chaque nuit (schedule : 0 6 * * * UTC = 2h AM ET).
+Sort sans erreur si aucune saison régulière n'est active (pendant les séries ou l'été).
 """
 
 import argparse
@@ -24,8 +24,13 @@ load_dotenv()
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
 NHL_WEB      = 'https://api-web.nhle.com'
-NHL_SEASON   = 20252026
-GAME_TYPE    = 3   # 3 = playoffs
+GAME_TYPE    = 2   # 2 = saison régulière
+
+
+def to_nhl_season(season: str) -> int:
+    """'2025-26' → 20252026"""
+    start = int(season.split('-')[0])
+    return start * 10000 + (start + 1)
 
 
 def get_yesterday_et() -> str:
@@ -82,7 +87,6 @@ def parse_boxscore(
     Les buts/passes des gardiens sont absents du boxscore — enrichir via game-log."""
     rows: list[dict] = []
     goalie_nhl_ids: set[int] = set()
-    is_playoff = (game_type == 3)
 
     for side in ('homeTeam', 'awayTeam'):
         team = boxscore.get('playerByGameStats', {}).get(side, {})
@@ -115,14 +119,11 @@ def parse_boxscore(
             toi_secs = _toi_seconds(g.get('toi', '0:00'))
             goals_ag = int(g.get('goalsAgainst', 0) or 0)
 
-            wins = 1 if decision == 'W' else 0
-            if is_playoff:
-                otl = 1 if (decision == 'L' and toi_secs > 3600) else 0
-            else:
-                otl = 1 if decision == 'O' else 0
+            wins     = 1 if decision == 'W' else 0
+            otl      = 1 if decision == 'O' else 0   # saison régulière : 'O' pour OTL
             shutouts = 1 if (goals_ag == 0 and decision is not None and toi_secs >= 3600) else 0
 
-            # goals/assists = 0 pour l'instant, enrichis après via game-log
+            # goals/assists = 0 pour l'instant, enrichis après via game-log individuel
             rows.append({
                 'player_id':       nhl_to_db[nhl_id],
                 'nhl_id':          nhl_id,
@@ -167,7 +168,7 @@ def enrich_goalie_stats(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Import game-logs playoff pour le pool.")
+    parser = argparse.ArgumentParser(description="Import game-logs saison régulière pour le pool.")
     parser.add_argument('--date', metavar='YYYY-MM-DD', help="Date à traiter (défaut : hier ET)")
     args = parser.parse_args()
 
@@ -179,22 +180,26 @@ def main() -> None:
     target_date = args.date or get_yesterday_et()
     print(f'Date cible : {target_date}')
 
+    # Chercher la saison régulière active
     resp = (
         client.table('pool_seasons')
         .select('id, season')
         .eq('is_active', True)
-        .eq('is_playoff', True)
+        .eq('is_playoff', False)
         .maybe_single()
         .execute()
     )
     if not resp.data:
-        print('Aucune saison de séries active — rien à faire.')
+        print('Aucune saison régulière active — rien à faire.')
         return
-    print(f'Saison : {resp.data["season"]} (id={resp.data["id"]})')
+
+    season_str = resp.data['season']        # ex: '2026-27'
+    nhl_season = to_nhl_season(season_str)  # ex: 20262027
+    print(f'Saison : {season_str} (id={resp.data["id"]}) → NHL season {nhl_season}')
 
     games = fetch_schedule_games(target_date, GAME_TYPE)
     if not games:
-        print(f'Aucun match de séries le {target_date} — rien à faire.')
+        print(f'Aucun match de saison régulière le {target_date} — rien à faire.')
         return
     print(f'{len(games)} match(s) : {[g["id"] for g in games]}')
 
@@ -230,7 +235,7 @@ def main() -> None:
         game_rows, game_goalies = parse_boxscore(
             boxscore, nhl_to_db,
             target_date, game['startTimeUTC'],
-            NHL_SEASON, GAME_TYPE,
+            nhl_season, GAME_TYPE,
         )
         rows.extend(game_rows)
         goalie_nhl_ids.update(game_goalies)
@@ -238,7 +243,7 @@ def main() -> None:
 
     if goalie_nhl_ids:
         print(f'Enrichissement buts/passes : {len(goalie_nhl_ids)} gardien(s)...')
-        enrich_goalie_stats(rows, goalie_nhl_ids, NHL_SEASON, GAME_TYPE)
+        enrich_goalie_stats(rows, goalie_nhl_ids, nhl_season, GAME_TYPE)
 
     if not rows:
         print('Aucun game-log à insérer pour cette date.')
