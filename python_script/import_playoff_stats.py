@@ -13,6 +13,7 @@ Fin de saison : vider player_game_logs pour la saison terminée une fois les
 standings finaux archivés dans playoff_pool_standings_cache.
 """
 
+import argparse
 import os
 import sys
 import time
@@ -62,6 +63,15 @@ def fetch_player_game_log(nhl_id: int) -> list[dict]:
     return r.json().get('gameLog', [])
 
 
+def _toi_seconds(toi: str) -> int:
+    """Convert 'MM:SS' string to total seconds."""
+    try:
+        parts = toi.split(':')
+        return int(parts[0]) * 60 + int(parts[1])
+    except Exception:
+        return 0
+
+
 def parse_game_log_row(player_id: int, nhl_id: int, g: dict, start_time: str) -> dict:
     goals   = int(g.get('goals',   0) or 0)
     assists = int(g.get('assists', 0) or 0)
@@ -73,8 +83,14 @@ def parse_game_log_row(player_id: int, nhl_id: int, g: dict, start_time: str) ->
 
     if 'otLosses' in g:
         otl = int(g.get('otLosses', 0) or 0)
+    elif g.get('decision') == 'O':
+        otl = 1
+    elif g.get('decision') == 'L':
+        # En séries, les défaites en prolongation utilisent decision='L' (pas 'O').
+        # Détection via TOI > 60 minutes.
+        otl = 1 if _toi_seconds(g.get('toi', '')) > 3600 else 0
     else:
-        otl = 1 if g.get('decision') == 'O' else 0
+        otl = 0
 
     shutouts = int(g.get('shutouts', 0) or 0)
 
@@ -94,13 +110,17 @@ def parse_game_log_row(player_id: int, nhl_id: int, g: dict, start_time: str) ->
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Import game-logs playoff pour le pool.")
+    parser.add_argument('--date', metavar='YYYY-MM-DD', help="Date à traiter (défaut : hier en heure de l'Est)")
+    args = parser.parse_args()
+
     if not SUPABASE_URL or not SUPABASE_KEY:
         print('Variables SUPABASE_URL et SUPABASE_SERVICE_KEY requises.')
         sys.exit(1)
 
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    target_date = get_yesterday_et()
+    target_date = args.date if args.date else get_yesterday_et()
     print(f'Date cible : {target_date}')
 
     # Saison de séries active

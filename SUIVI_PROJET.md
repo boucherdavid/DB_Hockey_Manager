@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-27
+
+**[Fix] — OTL gardien non détecté dans les séries + heure d'activation dans les classements** (`python_script/import_playoff_stats.py`, `app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/classement/ClassementTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :
+- **Bug OTL** : En séries, la NHL retourne `decision='L'` (pas `'O'`) pour une défaite en prolongation. Le pipeline comparait `== 'O'` → `goalie_otl = 0` pour tous les matchs en prolongation en séries. Fix : si `decision == 'L'` ET `toi > 60:00`, c'est une défaite en prolongation.
+- Dobes avait 4 défaites en prolongation manquantes (21 avr, 1 mai, 23 mai, 25 mai). Backfill requis sur ces dates.
+- **Argument `--date`** ajouté au script (`python import_playoff_stats.py --date YYYY-MM-DD`) pour faciliter les relances manuelles.
+- **Heure d'activation** : les dates d'activation affichées dans les classements (séries, saison, page pooler) montrent maintenant `JJ mmm, HH h MM` au lieu de `JJ mmm` — vérification visuelle du timing d'activation.
+- **Buts/passes gardiens** : dans le tableau des séries, B et A étaient forcés à `—` pour les gardiens mais comptaient quand même dans les points → remplacé par `|| '—'` (affiche la valeur si non-nulle).
+
 ### 2026-05-26
 
 **[Feat] — Date d'ajout visible dans les classements** (`app/lib/standings.ts`, `app/app/classement/ClassementTable.tsx`, `app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :

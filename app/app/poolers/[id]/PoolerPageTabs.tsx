@@ -76,7 +76,11 @@ function formatDate(iso: string): string {
 }
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short', timeZone: 'America/Toronto' })
+  return new Date(iso).toLocaleString('fr-CA', {
+    day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'America/Toronto',
+  })
 }
 
 const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; label: string; cls: string }> = {

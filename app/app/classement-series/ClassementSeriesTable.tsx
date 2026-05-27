@@ -33,6 +33,14 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short', timeZone: 'America/Toronto' })
 }
 
+function fmtDateTime(iso: string) {
+  return new Date(iso).toLocaleString('fr-CA', {
+    day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'America/Toronto',
+  })
+}
+
 type PeriodPopupProps = {
   playerName: string
   positionSlot: 'F' | 'D' | 'G'
@@ -257,13 +265,13 @@ export default function ClassementSeriesTable({
                                 )}
                                 {!isMultiPeriod && p.periods[0]?.activatedAt && (
                                   <span className="ml-1.5 text-xs text-gray-400">
-                                    {fmtDate(p.periods[0].activatedAt)}
+                                    {fmtDateTime(p.periods[0].activatedAt)}
                                   </span>
                                 )}
                               </td>
                               <td className="px-2 py-2 text-center text-gray-500 text-xs">{p.teamCode ?? '—'}</td>
-                              <td className="px-2 py-2 text-center text-gray-500">{p.positionSlot === 'G' ? '—' : p.goals}</td>
-                              <td className="px-2 py-2 text-center text-gray-500">{p.positionSlot === 'G' ? '—' : p.assists}</td>
+                              <td className="px-2 py-2 text-center text-gray-500">{p.goals || '—'}</td>
+                              <td className="px-2 py-2 text-center text-gray-500">{p.assists || '—'}</td>
                               <td className="px-2 py-2 text-center text-gray-500">{p.goalieWins || '—'}</td>
                               <td className="px-2 py-2 text-center text-gray-500">{p.goalieOtl || '—'}</td>
                               <td className="px-2 py-2 text-center text-gray-500">{p.goalieShutouts || '—'}</td>

@@ -10,7 +10,11 @@ import type { PoolerStanding, PlayerContrib } from '@/lib/standings'
 const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short', timeZone: 'America/Toronto' })
+  return new Date(iso).toLocaleString('fr-CA', {
+    day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'America/Toronto',
+  })
 }
 const GROUP_LABEL = ['Attaquants', 'Défenseurs', 'Gardiens']
 
