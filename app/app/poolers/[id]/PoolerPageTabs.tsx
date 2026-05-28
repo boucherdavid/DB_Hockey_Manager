@@ -3,7 +3,7 @@
 import { useState, Fragment } from 'react'
 import { fmtPts } from '@/lib/nhl-stats'
 import PlayerLink from '@/components/PlayerLink'
-import type { PlayerContrib } from '@/lib/standings'
+import type { PlayerContrib, PeriodContrib } from '@/lib/standings'
 import type { StreakInfo } from '@/lib/streaks'
 import StreakLegend from '@/components/StreakLegend'
 
@@ -104,7 +104,59 @@ function StreakBadge({ info }: { info: StreakInfo | undefined }) {
   )
 }
 
-function PlayerStatsRow({ p, streaks }: { p: PlayerContrib; streaks: Record<number, StreakInfo> }) {
+function PeriodPopup({ playerName, isGoalie, periods, totalPoints, onClose }: {
+  playerName: string
+  isGoalie: boolean
+  periods: PeriodContrib[]
+  totalPoints: number
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-xs"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <span className="font-semibold text-gray-800 text-sm">{playerName}</span>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none ml-2" aria-label="Fermer">✕</button>
+        </div>
+        <div className="px-4 py-3 space-y-3">
+          {periods.map((p, i) => (
+            <div key={i} className="space-y-0.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-500">
+                  Période {i + 1}
+                  {p.removedAt === null && <span className="ml-1.5 text-green-600 font-semibold">actif</span>}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {fmtDate(p.addedAt)} → {p.removedAt ? fmtDate(p.removedAt) : '…'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-50 rounded px-3 py-1.5">
+                <span className="text-sm text-gray-600">
+                  {isGoalie
+                    ? `${p.goalie_wins}V  ${p.goalie_otl}DP  ${p.goalie_shutouts}BL`
+                    : `${p.goals}B  ${p.assists}A`}
+                </span>
+                <span className="text-sm font-bold text-blue-600">{fmtPts(p.points)} pts</span>
+              </div>
+            </div>
+          ))}
+          <div className="border-t pt-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-700">Total</span>
+            <span className="text-sm font-bold text-blue-700">{fmtPts(totalPoints)} pts</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PlayerStatsRow({ p, streaks, onPeriodClick }: { p: PlayerContrib; streaks: Record<number, StreakInfo>; onPeriodClick?: (p: PlayerContrib) => void }) {
   const isGoalie = p.position === 'G'
   const isActif = p.playerType === 'actif'
   const badge = TYPE_BADGE[p.playerType]
@@ -118,7 +170,18 @@ function PlayerStatsRow({ p, streaks }: { p: PlayerContrib; streaks: Record<numb
         </PlayerLink>
         <StreakBadge info={p.nhlId ? streaks[p.nhlId] : undefined} />
         {badge && <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">{badge}</span>}
-        {p.addedAt && <div className="text-xs text-gray-400 mt-0.5">{fmtDate(p.addedAt)}</div>}
+        {p.periods.length > 1 ? (
+          <button
+            type="button"
+            onClick={() => onPeriodClick?.(p)}
+            className="ml-2 text-xs text-blue-500 hover:text-blue-700 font-medium"
+            title="Voir le détail par période"
+          >
+            ↩{p.periods.length}
+          </button>
+        ) : (
+          p.addedAt && <div className="text-xs text-gray-400 mt-0.5">{fmtDate(p.addedAt)}</div>
+        )}
       </td>
       <td className="px-2 py-2 hidden sm:table-cell text-gray-500 text-center text-xs">{p.teamAbbrev}</td>
       <td className="px-2 py-2 text-center text-gray-500">{p.gamesPlayed || '—'}</td>
@@ -160,6 +223,7 @@ export default function PoolerPageTabs({
   changeLog: ChangeLogEntry[]
 }) {
   const [tab, setTab] = useState<Tab>('alignement')
+  const [periodPopup, setPeriodPopup] = useState<PlayerContrib | null>(null)
 
   const btnClass = (t: Tab) =>
     `px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -176,6 +240,15 @@ export default function PoolerPageTabs({
 
   return (
     <div>
+      {periodPopup && (
+        <PeriodPopup
+          playerName={`${periodPopup.lastName}, ${periodPopup.firstName}`}
+          isGoalie={periodPopup.position === 'G'}
+          periods={periodPopup.periods}
+          totalPoints={periodPopup.poolPoints}
+          onClose={() => setPeriodPopup(null)}
+        />
+      )}
       <div className="flex border-b border-gray-200 mb-6">
         <button className={btnClass('alignement')} onClick={() => setTab('alignement')}>
           Alignement
@@ -234,7 +307,7 @@ export default function PoolerPageTabs({
                             </td>
                           </tr>
                         )}
-                        <PlayerStatsRow p={p} streaks={streaks} />
+                        <PlayerStatsRow p={p} streaks={streaks} onPeriodClick={setPeriodPopup} />
                       </Fragment>
                     )
                   })}

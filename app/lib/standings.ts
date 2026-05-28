@@ -1,5 +1,17 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
+export type PeriodContrib = {
+  goals: number
+  assists: number
+  goalie_wins: number
+  goalie_otl: number
+  goalie_shutouts: number
+  gamesPlayed: number
+  points: number
+  addedAt: string        // ISO — début de la période
+  removedAt: string | null  // null = période ouverte (joueur toujours actif)
+}
+
 export type PlayerContrib = {
   nhlId: number | null
   firstName: string
@@ -15,6 +27,7 @@ export type PlayerContrib = {
   goalieShutouts: number
   poolPoints: number
   addedAt: string | null
+  periods: PeriodContrib[]  // une entrée par fenêtre d'activation (>1 si trade + re-acquisition)
 }
 
 export type PoolerStanding = {
@@ -129,57 +142,97 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
 
   const poolerMap = new Map<string, { name: string; players: PlayerContrib[] }>()
 
+  // Grouper les roster rows par (pooler.id, player.id)
+  // Un joueur échangé puis re-acquis a plusieurs rows → plusieurs périodes
+  type GroupEntry = {
+    pooler: { id: string; name: string }
+    player: { id: number; first_name: string; last_name: string; position: string; nhl_id: number | null; teams: { code: string } | null }
+    rows: { player_type: string; added_at: string | null; removed_at: string | null }[]
+  }
+  const groups = new Map<string, GroupEntry>()
+
   for (const row of (rosterRows ?? []) as any[]) {
     const pooler = row.poolers as { id: string; name: string } | null
-    const player = row.players as {
-      id: number
-      first_name: string
-      last_name: string
-      position: string
-      nhl_id: number | null
-      teams: { code: string } | null
-    } | null
+    const player = row.players as GroupEntry['player'] | null
     if (!pooler || !player) continue
 
     if (!poolerMap.has(pooler.id)) poolerMap.set(pooler.id, { name: pooler.name, players: [] })
 
-    const addedAt  = row.added_at  ? new Date(row.added_at)  : null
-    const removedAt = row.removed_at ? new Date(row.removed_at) : null
+    const key = `${pooler.id}::${player.id}`
+    if (!groups.has(key)) groups.set(key, { pooler, player, rows: [] })
+    groups.get(key)!.rows.push({ player_type: row.player_type, added_at: row.added_at, removed_at: row.removed_at })
+  }
 
-    // Sommer les game logs dans la fenêtre d'activation de ce joueur
+  for (const { pooler, player, rows } of groups.values()) {
+    // Trier par date d'ajout croissante
+    rows.sort((a, b) => (a.added_at ?? '').localeCompare(b.added_at ?? ''))
+
     const logs = logsByPlayer.get(player.id) ?? []
-    const earned: StatBlock = { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0 }
-    let gamesPlayed = 0
+    const periods: PeriodContrib[] = []
 
-    for (const gl of logs) {
-      const gameTime = new Date(gl.game_start_time)
-      // Règle : le match doit avoir commencé APRÈS l'activation et AVANT (ou pendant) la désactivation
-      if (!addedAt || gameTime <= addedAt) continue
-      if (removedAt && gameTime > removedAt) continue
+    for (const row of rows) {
+      const addedAt  = row.added_at  ? new Date(row.added_at)  : null
+      const removedAt = row.removed_at ? new Date(row.removed_at) : null
 
-      earned.goals           += gl.goals
-      earned.assists         += gl.assists
-      earned.goalie_wins     += gl.goalie_wins
-      earned.goalie_otl      += gl.goalie_otl
-      earned.goalie_shutouts += gl.goalie_shutouts
-      gamesPlayed++
+      const earned: StatBlock = { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0 }
+      let gamesPlayed = 0
+
+      for (const gl of logs) {
+        const gameTime = new Date(gl.game_start_time)
+        if (!addedAt || gameTime <= addedAt) continue
+        if (removedAt && gameTime > removedAt) continue
+        earned.goals           += gl.goals
+        earned.assists         += gl.assists
+        earned.goalie_wins     += gl.goalie_wins
+        earned.goalie_otl      += gl.goalie_otl
+        earned.goalie_shutouts += gl.goalie_shutouts
+        gamesPlayed++
+      }
+
+      periods.push({
+        goals:           earned.goals,
+        assists:         earned.assists,
+        goalie_wins:     earned.goalie_wins,
+        goalie_otl:      earned.goalie_otl,
+        goalie_shutouts: earned.goalie_shutouts,
+        gamesPlayed,
+        points:          calcPoints(earned, pts),
+        addedAt:         row.added_at ?? '',
+        removedAt:       row.removed_at ?? null,
+      })
     }
+
+    // Totaux : somme de toutes les périodes
+    const total: StatBlock = periods.reduce(
+      (acc, p) => ({
+        goals:           acc.goals           + p.goals,
+        assists:         acc.assists         + p.assists,
+        goalie_wins:     acc.goalie_wins     + p.goalie_wins,
+        goalie_otl:      acc.goalie_otl      + p.goalie_otl,
+        goalie_shutouts: acc.goalie_shutouts + p.goalie_shutouts,
+      }),
+      { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0 },
+    )
+
+    // player_type = la période la plus récente (dernière row)
+    const currentRow = rows[rows.length - 1]
 
     poolerMap.get(pooler.id)!.players.push({
       nhlId:          player.nhl_id,
       firstName:      player.first_name,
       lastName:       player.last_name,
       position:       player.position,
-      playerType:     row.player_type,
+      playerType:     currentRow.player_type,
       teamAbbrev:     player.teams?.code ?? '—',
-      gamesPlayed,
-      goals:          earned.goals,
-      assists:        earned.assists,
-      goalieWins:     earned.goalie_wins,
-      goalieOtl:      earned.goalie_otl,
-      goalieShutouts: earned.goalie_shutouts,
-      poolPoints:     calcPoints(earned, pts),
-      addedAt:        row.added_at ?? null,
+      gamesPlayed:    periods.reduce((s, p) => s + p.gamesPlayed, 0),
+      goals:          total.goals,
+      assists:        total.assists,
+      goalieWins:     total.goalie_wins,
+      goalieOtl:      total.goalie_otl,
+      goalieShutouts: total.goalie_shutouts,
+      poolPoints:     periods.reduce((s, p) => s + p.points, 0),
+      addedAt:        rows[0].added_at ?? null,  // première activation
+      periods,
     })
   }
 

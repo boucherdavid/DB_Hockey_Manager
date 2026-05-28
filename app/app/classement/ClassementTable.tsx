@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { fmtPts } from '@/lib/nhl-stats'
 import SummaryTable from '@/components/SummaryTable'
 import PlayerLink from '@/components/PlayerLink'
-import type { PoolerStanding, PlayerContrib } from '@/lib/standings'
+import type { PoolerStanding, PlayerContrib, PeriodContrib } from '@/lib/standings'
 
 const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
 
@@ -17,6 +17,69 @@ function fmtDate(iso: string) {
   })
 }
 const GROUP_LABEL = ['Attaquants', 'Défenseurs', 'Gardiens']
+
+type PeriodPopupProps = {
+  playerName: string
+  isGoalie: boolean
+  periods: PeriodContrib[]
+  totalPoints: number
+  onClose: () => void
+}
+
+function PeriodPopup({ playerName, isGoalie, periods, totalPoints, onClose }: PeriodPopupProps) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-xs"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <span className="font-semibold text-gray-800 text-sm">{playerName}</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-lg leading-none ml-2"
+            aria-label="Fermer"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="px-4 py-3 space-y-3">
+          {periods.map((p, i) => (
+            <div key={i} className="space-y-0.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-500">
+                  Période {i + 1}
+                  {p.removedAt === null && (
+                    <span className="ml-1.5 text-green-600 font-semibold">actif</span>
+                  )}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {fmtDate(p.addedAt)} → {p.removedAt ? fmtDate(p.removedAt) : '…'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-50 rounded px-3 py-1.5">
+                <span className="text-sm text-gray-600">
+                  {isGoalie
+                    ? `${p.goalie_wins}V  ${p.goalie_otl}DP  ${p.goalie_shutouts}BL`
+                    : `${p.goals}B  ${p.assists}A`}
+                </span>
+                <span className="text-sm font-bold text-blue-600">{fmtPts(p.points)} pts</span>
+              </div>
+            </div>
+          ))}
+          <div className="border-t pt-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-700">Total</span>
+            <span className="text-sm font-bold text-blue-700">{fmtPts(totalPoints)} pts</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 type Mode = 'saison'
 // Futurs modes : 'mensuel' | 'journee' | 'serie'
@@ -51,10 +114,11 @@ function groupAndSort(players: PlayerContrib[]): PlayerContrib[] {
   return groups.flat()
 }
 
-function PlayerRow({ p }: { p: PlayerContrib }) {
+function PlayerRow({ p, onPeriodClick }: { p: PlayerContrib; onPeriodClick?: (p: PlayerContrib) => void }) {
   const isGoalie = p.position === 'G'
   const isActif = p.playerType === 'actif'
   const badge = TYPE_BADGE[p.playerType]
+  const isMultiPeriod = p.periods.length > 1
 
   return (
     <tr className={isActif ? 'hover:bg-gray-50' : 'hover:bg-gray-50 opacity-60'}>
@@ -67,8 +131,17 @@ function PlayerRow({ p }: { p: PlayerContrib }) {
         {badge && (
           <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">{badge}</span>
         )}
-        {p.addedAt && (
-          <div className="text-xs text-gray-400 mt-0.5">{fmtDate(p.addedAt)}</div>
+        {isMultiPeriod ? (
+          <button
+            type="button"
+            onClick={() => onPeriodClick?.(p)}
+            className="ml-2 text-xs text-blue-500 hover:text-blue-700 font-medium"
+            title="Voir le détail par période"
+          >
+            ↩{p.periods.length}
+          </button>
+        ) : (
+          p.addedAt && <div className="text-xs text-gray-400 mt-0.5">{fmtDate(p.addedAt)}</div>
         )}
       </td>
       <td className="px-2 py-2 hidden sm:table-cell text-gray-500 text-center text-xs">{p.teamAbbrev}</td>
@@ -100,9 +173,19 @@ function PlayerRow({ p }: { p: PlayerContrib }) {
 export default function ClassementTable({ standings }: { standings: PoolerStanding[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [_mode] = useState<Mode>('saison')
+  const [periodPopup, setPeriodPopup] = useState<PlayerContrib | null>(null)
 
   return (
     <div>
+      {periodPopup && (
+        <PeriodPopup
+          playerName={`${periodPopup.lastName}, ${periodPopup.firstName}`}
+          isGoalie={periodPopup.position === 'G'}
+          periods={periodPopup.periods}
+          totalPoints={periodPopup.poolPoints}
+          onClose={() => setPeriodPopup(null)}
+        />
+      )}
       <SummaryTable standings={standings} />
 
       <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-6">Détail par pooler</h2>
@@ -163,7 +246,7 @@ export default function ClassementTable({ standings }: { standings: PoolerStandi
                                 </td>
                               </tr>
                             )}
-                            <PlayerRow key={j} p={p} />
+                            <PlayerRow key={j} p={p} onPeriodClick={setPeriodPopup} />
                           </>
                         )
                       })}
