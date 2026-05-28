@@ -56,6 +56,14 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-28
+
+**[Feat] — Popup multi-périodes saison régulière** (`app/lib/standings.ts`, `app/app/classement/ClassementTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :
+- `standings.ts` : nouveau type `PeriodContrib` (stats + dates par fenêtre d'activation). `PlayerContrib` gagne un champ `periods: PeriodContrib[]`. `buildStandings` regroupe maintenant les lignes `pooler_rosters` par (pooler, joueur) au lieu de créer une entrée par ligne — un joueur échangé puis re-acquis donne une entrée unique avec N périodes.
+- `ClassementTable.tsx` : composant `PeriodPopup` (design identique au popup séries). Bouton `↩N` affiché à côté du nom quand `periods.length > 1`. Clic ouvre le popup avec stats/pts par période + total. Joueurs à période unique : comportement inchangé (date affichée sous le nom).
+- `PoolerPageTabs.tsx` : même pattern dans l'onglet Alignement.
+- Commit : `bd5aa9c`
+
 ### 2026-05-27 (suite)
 
 **[Feat] — Pipeline game-logs saison régulière : script quotidien + workflow + backfill prod** (`python_script/import_regular_stats.py`, `.github/workflows/regular_stats.yml`, `python_script/import_playoff_stats.py`, `.github/workflows/playoff_stats.yml`) :
