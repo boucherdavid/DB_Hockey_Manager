@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-05-07
+Derniere mise a jour: 2026-05-27
 
 ## Role du fichier
 
@@ -55,6 +55,17 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-05-27 (suite)
+
+**[Feat] — Pipeline game-logs saison régulière : script quotidien + workflow + backfill prod** (`python_script/import_regular_stats.py`, `.github/workflows/regular_stats.yml`, `python_script/import_playoff_stats.py`, `.github/workflows/playoff_stats.yml`) :
+- Nouveau script `import_regular_stats.py` : miroir de `import_playoff_stats.py` pour game_type=2. Lit la saison active depuis `pool_seasons` (is_active=True, is_playoff=False), calcule le NHL season dynamiquement (`'2025-26' → 20252026`). OTL saison régulière : `decision == 'O'` (vs playoffs : `decision == 'L' + toi > 3600`). Pagination sur la table `players` (patch contre bug >1000 lignes).
+- Fix pagination dans `import_playoff_stats.py` : même bug corrigé que dans le backfill (1 seule requête sans range → max 1000 joueurs, joueurs à ID élevé ignorés silencieusement).
+- Nouveau workflow `regular_stats.yml` : tourne à 6h UTC quotidiennement. Sort proprement si aucune saison régulière active. Supporte `--date YYYY-MM-DD` via `workflow_dispatch` (utile pour relancer une date manquante).
+- `playoff_stats.yml` mis à jour : ajout de `workflow_dispatch.inputs.date` pour passer `--date` au script (même commodité).
+- **Backfill 2025-26 en production** : `backfill_regular_game_logs.py --season 2025-26 --start 2025-10-04 --end 2026-04-18` → 167 dates avec matchs, 94 gardiens enrichis, **50 705 lignes** insérées, 0 erreur.
+- Vérification : `player_game_logs` en prod = 50 705 lignes game_type=2 + 2 835 lignes game_type=3. ✓
+- Commit : `41c231c`
 
 ### 2026-05-27
 
