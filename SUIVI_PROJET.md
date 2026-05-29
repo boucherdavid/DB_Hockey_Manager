@@ -56,6 +56,18 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-29
+
+**[Refactor] — NHL_SEASON dynamique : lit pool_seasons au lieu du hardcode** (`app/lib/nhl-stats.ts`, `app/lib/streaks.ts`, `app/lib/daily-recap.ts`, `app/lib/nhl-snapshot.ts`, `app/app/statistiques/page.tsx`) :
+- Problème : `NHL_SEASON = '20252026'` hardcodé dans 3 endroits distincts. Chaque début de saison nécessitait une mise à jour manuelle dans le code.
+- `nhl-stats.ts` : `buildUrl`, `fetchNhlSkaters`, `fetchNhlGoalies`, `fetchNhlSkatersByNhlId`, `fetchNhlGoaliesByNhlId` acceptent maintenant un paramètre optionnel `nhlSeason` (fallback sur la constante).
+- `streaks.ts` : `fetchGameLog`, `fetchStreak`, `fetchStreaks` acceptent `nhlSeason` optionnel, propagé jusqu'au call NHL API.
+- `daily-recap.ts` : `fetchPlayerStats` accepte `nhlSeason`. Les deux fonctions principales (`fetchRegularRecapForDate`, `fetchPlayoffRecapForDate`) requêtent maintenant `pool_seasons.season` via leur `poolSeasonId` et calculent dynamiquement l'ID NHL (`'2025-26' → '20252026'`, `'2026-PO' → '20252026'`).
+- `nhl-snapshot.ts` : suppression du doublon `NHL_SEASON_ID = 20252026` — remplacé par `parseInt(NHL_SEASON, 10)` importé de `nhl-stats.ts`. `fetchPlayerStatsAsOfDate`, `fetchPlayerStatsSafe`, `fetchPlayerStatsById` acceptent `nhlSeasonId` optionnel.
+- `statistiques/page.tsx` : suppression du doublon local `const NHL_SEASON = '20252026'` — remplacé par import + nouvelle fonction `fetchActiveNhlSeasonId(isPlayoff)` qui lit `pool_seasons.season`. La page principal lit la saison en premier, puis la passe à `fetchSkaters`, `fetchGoalies` et `fetchStreaksForStats`.
+- Résultat : à partir de la saison 2026-27, zéro modification de code requise — les pages lisent automatiquement la saison active.
+- Commit : `e47beb6`
+
 ### 2026-05-28
 
 **[Feat] — Popup multi-périodes saison régulière** (`app/lib/standings.ts`, `app/app/classement/ClassementTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :
