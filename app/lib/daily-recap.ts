@@ -6,6 +6,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { NHL_SEASON } from '@/lib/nhl-stats'
 
+/** "2025-26" → 20252026, "2026-PO" → 20252026 */
+function toNhlSeasonId(season: string): string {
+  if (season.endsWith('-PO')) {
+    const endYear = parseInt(season.replace('-PO', ''), 10)
+    return String((endYear - 1) * 10000 + endYear)
+  }
+  const start = parseInt(season.split('-')[0], 10)
+  return String(start * 10000 + (start + 1))
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type RecapPlayer = {
@@ -82,10 +92,11 @@ async function fetchPlayerStats(
   dateStr: string,
   isGoalie: boolean,
   cfg: Record<string, number>,
+  nhlSeason = NHL_SEASON,
 ): Promise<{ goals: number; assists: number; wins: number; otl: number; so: number; pts: number }> {
   try {
     const res = await fetch(
-      `https://api-web.nhle.com/v1/player/${nhlId}/game-log/${NHL_SEASON}/${gameType}`,
+      `https://api-web.nhle.com/v1/player/${nhlId}/game-log/${nhlSeason}/${gameType}`,
       { next: { revalidate: 3600 } },
     )
     if (!res.ok) return { goals: 0, assists: 0, wins: 0, otl: 0, so: 0, pts: 0 }
@@ -131,7 +142,8 @@ export async function fetchPlayoffRecapForDate(
   try {
     const playingTeams = await fetchPlayingTeams(dateStr)
 
-    const [{ data: rosters }, { data: poolerRows }, { data: scoringRows }] = await Promise.all([
+    const [{ data: seasonRow }, { data: rosters }, { data: poolerRows }, { data: scoringRows }] = await Promise.all([
+      supabase.from('pool_seasons').select('season').eq('id', poolSeasonId).single(),
       supabase
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .from('playoff_pool_rosters').select('pooler_id, position_slot, players(nhl_id, position, first_name, last_name, teams(code))' as any)
@@ -140,6 +152,7 @@ export async function fetchPlayoffRecapForDate(
       supabase.from('scoring_config').select('stat_key, points, points_playoffs'),
     ])
 
+    const nhlSeason = seasonRow?.season ? toNhlSeasonId(seasonRow.season) : NHL_SEASON
     const cfg: Record<string, number> = {}
     for (const row of scoringRows ?? []) cfg[row.stat_key] = row.points_playoffs ?? row.points
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,7 +183,7 @@ export async function fetchPlayoffRecapForDate(
 
       const results = await Promise.all(
         [...playerMap.entries()].map(async ([nhlId, info]) => ({
-          info, ...await fetchPlayerStats(nhlId, 3, dateStr, info.isGoalie, cfg),
+          info, ...await fetchPlayerStats(nhlId, 3, dateStr, info.isGoalie, cfg, nhlSeason),
         })),
       )
 
@@ -205,7 +218,8 @@ export async function fetchRegularRecapForDate(
   try {
     const playingTeams = await fetchPlayingTeams(dateStr)
 
-    const [{ data: rosters }, { data: poolerRows }, { data: scoringRows }] = await Promise.all([
+    const [{ data: seasonRow }, { data: rosters }, { data: poolerRows }, { data: scoringRows }] = await Promise.all([
+      supabase.from('pool_seasons').select('season').eq('id', poolSeasonId).single(),
       supabase
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .from('pooler_rosters').select('pooler_id, players(nhl_id, position, first_name, last_name, teams(code))' as any)
@@ -214,6 +228,7 @@ export async function fetchRegularRecapForDate(
       supabase.from('scoring_config').select('stat_key, points'),
     ])
 
+    const nhlSeason = seasonRow?.season ? toNhlSeasonId(seasonRow.season) : NHL_SEASON
     const cfg: Record<string, number> = {}
     for (const row of scoringRows ?? []) cfg[row.stat_key] = row.points
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -245,7 +260,7 @@ export async function fetchRegularRecapForDate(
 
       const results = await Promise.all(
         [...playerMap.entries()].map(async ([nhlId, info]) => ({
-          info, ...await fetchPlayerStats(nhlId, 2, dateStr, info.isGoalie, cfg),
+          info, ...await fetchPlayerStats(nhlId, 2, dateStr, info.isGoalie, cfg, nhlSeason),
         })),
       )
 

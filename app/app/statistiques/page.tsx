@@ -5,8 +5,35 @@ import { fetchStreaks, DEFAULT_INDICATOR_CONFIG, type StreakInfo } from '@/lib/s
 export const metadata = { title: 'Statistiques LNH' }
 export const dynamic = 'force-dynamic'
 
-const NHL_SEASON = '20252026'
+import { NHL_SEASON } from '@/lib/nhl-stats'
 const REST = 'https://api.nhle.com/stats/rest/en'
+
+/** "2025-26" → "20252026", "2026-PO" → "20252026" */
+function toNhlSeasonId(season: string): string {
+  if (season.endsWith('-PO')) {
+    const endYear = parseInt(season.replace('-PO', ''), 10)
+    return String((endYear - 1) * 10000 + endYear)
+  }
+  const start = parseInt(season.split('-')[0], 10)
+  return String(start * 10000 + (start + 1))
+}
+
+/** Lit la saison active depuis pool_seasons et retourne l'ID NHL (ex: "20252026"). Fallback sur NHL_SEASON. */
+async function fetchActiveNhlSeasonId(isPlayoff: boolean): Promise<string> {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('pool_seasons')
+      .select('season')
+      .eq('is_active', true)
+      .eq('is_playoff', isPlayoff)
+      .single()
+    if (data?.season) return toNhlSeasonId(data.season)
+    return NHL_SEASON
+  } catch {
+    return NHL_SEASON
+  }
+}
 
 export type SkaterStat = {
   id: number
@@ -56,8 +83,8 @@ function splitName(full: string): { firstName: string; lastName: string } {
 
 // isAggregate=false → une ligne par joueur par équipe → on garde le code équipe
 // puis on agrège manuellement pour les joueurs échangés en cours de saison
-function buildUrl(type: 'skater' | 'goalie', gameType: number): string {
-  const cayenne = `gameTypeId=${gameType} and seasonId<=${NHL_SEASON} and seasonId>=${NHL_SEASON}`
+function buildUrl(type: 'skater' | 'goalie', gameType: number, nhlSeason = NHL_SEASON): string {
+  const cayenne = `gameTypeId=${gameType} and seasonId<=${nhlSeason} and seasonId>=${nhlSeason}`
   return (
     `${REST}/${type}/summary` +
     `?isAggregate=false&isGame=false` +
@@ -69,9 +96,9 @@ function buildUrl(type: 'skater' | 'goalie', gameType: number): string {
 
 type Row = Record<string, unknown>
 
-async function fetchSkaters(gameType: number): Promise<SkaterStat[]> {
+async function fetchSkaters(gameType: number, nhlSeason = NHL_SEASON): Promise<SkaterStat[]> {
   try {
-    const res = await fetch(buildUrl('skater', gameType), { next: { revalidate: 86400 } })
+    const res = await fetch(buildUrl('skater', gameType, nhlSeason), { next: { revalidate: 86400 } })
     if (!res.ok) return []
     const rows = ((await res.json()).data as Row[]) ?? []
 
@@ -122,9 +149,9 @@ async function fetchSkaters(gameType: number): Promise<SkaterStat[]> {
   }
 }
 
-async function fetchGoalies(gameType: number): Promise<GoalieStat[]> {
+async function fetchGoalies(gameType: number, nhlSeason = NHL_SEASON): Promise<GoalieStat[]> {
   try {
-    const res = await fetch(buildUrl('goalie', gameType), { next: { revalidate: 86400 } })
+    const res = await fetch(buildUrl('goalie', gameType, nhlSeason), { next: { revalidate: 86400 } })
     if (!res.ok) return []
     const rows = ((await res.json()).data as Row[]) ?? []
 
@@ -275,7 +302,7 @@ async function fetchPlayoffPicksMap(): Promise<Record<string, string[]>> {
 
 type PlayerNhlRow = { nhl_id: number | null; position: string }
 
-async function fetchStreaksForStats(gameType: number): Promise<Record<number, StreakInfo>> {
+async function fetchStreaksForStats(gameType: number, nhlSeason = NHL_SEASON): Promise<Record<number, StreakInfo>> {
   try {
     const supabase = await createClient()
 
@@ -307,7 +334,7 @@ async function fetchStreaksForStats(gameType: number): Promise<Record<number, St
         .filter(Boolean)
         .map(p => ({ nhlId: p!.nhl_id, isGoalie: p!.position === 'G' }))
 
-      const map = await fetchStreaks(players, 2, config, 5)
+      const map = await fetchStreaks(players, 2, config, 5, nhlSeason)
       const result: Record<number, StreakInfo> = {}
       map.forEach((v, k) => { result[k] = v })
       return result
@@ -359,15 +386,18 @@ export default async function StatistiquesPage({
   const { saison } = await searchParams
   const gameType = saison === 'series' ? 3 : 2
 
+  // Saison NHL active (lue depuis pool_seasons — évite de hardcoder 20252026)
+  const nhlSeason = await fetchActiveNhlSeasonId(gameType === 3)
+
   const [skaters, goalies, takenNames, rookieNames, currentTeamMap, playoffPicksMap, streaksMap] = await Promise.all([
-    fetchSkaters(gameType),
-    fetchGoalies(gameType),
+    fetchSkaters(gameType, nhlSeason),
+    fetchGoalies(gameType, nhlSeason),
     fetchTakenNames(),
     fetchRookieNames(),
     fetchCurrentTeamMap(),
     gameType === 3 ? fetchPlayoffPicksMap() : Promise.resolve({} as Record<string, string[]>),
     Promise.race([
-      fetchStreaksForStats(gameType),
+      fetchStreaksForStats(gameType, nhlSeason),
       new Promise<Record<number, StreakInfo>>(resolve => setTimeout(() => resolve({}), 5000)),
     ]),
   ])

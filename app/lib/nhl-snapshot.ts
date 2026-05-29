@@ -3,10 +3,12 @@
  * Utilisé pour la prise de snapshots lors des activations/désactivations.
  */
 
+import { NHL_SEASON } from '@/lib/nhl-stats'
+
 const NHL_WEB = 'https://api-web.nhle.com'
 
-// Doit correspondre à NHL_SEASON dans nhl-stats.ts
-const NHL_SEASON_ID = 20252026
+/** "20252026" (string) → 20252026 (number). Utilisé comme fallback depuis nhl-stats. */
+const NHL_SEASON_ID = parseInt(NHL_SEASON, 10)
 
 export type SnapshotStats = {
   goals: number
@@ -33,10 +35,11 @@ export async function fetchPlayerStatsAsOfDate(
   nhlId: number,
   gameType: 2 | 3,
   deadline: Date,
+  nhlSeasonId = NHL_SEASON_ID,
 ): Promise<SnapshotStats> {
   try {
     const res = await fetch(
-      `${NHL_WEB}/v1/player/${nhlId}/game-log/${NHL_SEASON_ID}/${gameType}`,
+      `${NHL_WEB}/v1/player/${nhlId}/game-log/${nhlSeasonId}/${gameType}`,
       { cache: 'no-store' },
     )
     if (!res.ok) return EMPTY_STATS
@@ -70,10 +73,11 @@ export async function fetchPlayerStatsAsOfDate(
 export async function fetchPlayerStatsSafe(
   nhlId: number,
   gameType: 2 | 3,
+  nhlSeasonId = NHL_SEASON_ID,
 ): Promise<SnapshotStats> {
-  const stats = await fetchPlayerStatsById(nhlId, gameType)
+  const stats = await fetchPlayerStatsById(nhlId, gameType, nhlSeasonId)
   if (stats !== null) return stats
-  return fetchPlayerStatsAsOfDate(nhlId, gameType, new Date())
+  return fetchPlayerStatsAsOfDate(nhlId, gameType, new Date(), nhlSeasonId)
 }
 
 /**
@@ -84,6 +88,7 @@ export async function fetchPlayerStatsSafe(
 export async function fetchPlayerStatsById(
   nhlId: number,
   gameType = 2,
+  nhlSeasonId = NHL_SEASON_ID,
 ): Promise<SnapshotStats | null> {
   try {
     const res = await fetch(`${NHL_WEB}/v1/player/${nhlId}/landing`, {
@@ -96,7 +101,7 @@ export async function fetchPlayerStatsById(
     const seasonTotals: Record<string, unknown>[] = data.seasonTotals ?? []
 
     const current = seasonTotals.find(
-      s => Number(s.season) === NHL_SEASON_ID && Number(s.gameTypeId) === gameType,
+      s => Number(s.season) === nhlSeasonId && Number(s.gameTypeId) === gameType,
     )
 
     // Aucune entrée pour ce gameType → null (pas des zéros "certains").

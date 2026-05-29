@@ -31,10 +31,10 @@ export const DEFAULT_INDICATOR_CONFIG: IndicatorConfig = {
   fenetreTendance: 5,
 }
 
-async function fetchGameLog(nhlId: number, gameType: 2 | 3): Promise<unknown[]> {
+async function fetchGameLog(nhlId: number, gameType: 2 | 3, nhlSeason = NHL_SEASON): Promise<unknown[]> {
   try {
     const res = await fetch(
-      `https://api-web.nhle.com/v1/player/${nhlId}/game-log/${NHL_SEASON}/${gameType}`,
+      `https://api-web.nhle.com/v1/player/${nhlId}/game-log/${nhlSeason}/${gameType}`,
       { next: { revalidate: 1800 } },
     )
     if (!res.ok) return []
@@ -106,8 +106,9 @@ export async function fetchStreak(
   isGoalie: boolean,
   gameType: 2 | 3,
   config: IndicatorConfig = DEFAULT_INDICATOR_CONFIG,
+  nhlSeason = NHL_SEASON,
 ): Promise<StreakInfo> {
-  const log = await fetchGameLog(nhlId, gameType)
+  const log = await fetchGameLog(nhlId, gameType, nhlSeason)
   return computeIndicator(log, isGoalie, config)
 }
 
@@ -116,6 +117,7 @@ export async function fetchStreaks(
   gameType: 2 | 3,
   config: IndicatorConfig = DEFAULT_INDICATOR_CONFIG,
   batchSize?: number,
+  nhlSeason = NHL_SEASON,
 ): Promise<Map<number, StreakInfo>> {
   const valid = players.filter((p): p is { nhlId: number; isGoalie: boolean } => p.nhlId !== null)
 
@@ -124,10 +126,10 @@ export async function fetchStreaks(
     results = []
     for (let i = 0; i < valid.length; i += batchSize) {
       const batch = valid.slice(i, i + batchSize)
-      results.push(...await Promise.all(batch.map(p => fetchStreak(p.nhlId, p.isGoalie, gameType, config))))
+      results.push(...await Promise.all(batch.map(p => fetchStreak(p.nhlId, p.isGoalie, gameType, config, nhlSeason))))
     }
   } else {
-    results = await Promise.all(valid.map(p => fetchStreak(p.nhlId, p.isGoalie, gameType, config)))
+    results = await Promise.all(valid.map(p => fetchStreak(p.nhlId, p.isGoalie, gameType, config, nhlSeason)))
   }
 
   const map = new Map<number, StreakInfo>()

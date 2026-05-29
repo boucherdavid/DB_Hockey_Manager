@@ -43,8 +43,8 @@ function splitName(full: string): { firstName: string; lastName: string } {
 
 type Row = Record<string, unknown>
 
-function buildUrl(type: 'skater' | 'goalie', gameType: number): string {
-  const cayenne = `gameTypeId=${gameType} and seasonId<=${NHL_SEASON} and seasonId>=${NHL_SEASON}`
+function buildUrl(type: 'skater' | 'goalie', gameType: number, nhlSeason = NHL_SEASON): string {
+  const cayenne = `gameTypeId=${gameType} and seasonId<=${nhlSeason} and seasonId>=${nhlSeason}`
   return (
     `${NHL_REST}/${type}/summary` +
     `?isAggregate=false&isGame=false` +
@@ -54,9 +54,9 @@ function buildUrl(type: 'skater' | 'goalie', gameType: number): string {
   )
 }
 
-async function fetchRawSkaters(gameType: number): Promise<Row[]> {
+async function fetchRawSkaters(gameType: number, nhlSeason = NHL_SEASON): Promise<Row[]> {
   try {
-    const res = await fetch(buildUrl('skater', gameType), { cache: 'no-store' })
+    const res = await fetch(buildUrl('skater', gameType, nhlSeason), { cache: 'no-store' })
     if (!res.ok) return []
     return ((await res.json()).data as Row[]) ?? []
   } catch {
@@ -64,9 +64,9 @@ async function fetchRawSkaters(gameType: number): Promise<Row[]> {
   }
 }
 
-async function fetchRawGoalies(gameType: number): Promise<Row[]> {
+async function fetchRawGoalies(gameType: number, nhlSeason = NHL_SEASON): Promise<Row[]> {
   try {
-    const res = await fetch(buildUrl('goalie', gameType), { cache: 'no-store' })
+    const res = await fetch(buildUrl('goalie', gameType, nhlSeason), { cache: 'no-store' })
     if (!res.ok) return []
     return ((await res.json()).data as Row[]) ?? []
   } catch {
@@ -130,8 +130,8 @@ function groupGoalieRows(rows: Row[]): NhlGoalieStat[] {
 }
 
 /** Retourne une map normName → stats pour tous les patineurs de la saison. */
-export async function fetchNhlSkaters(gameType = 2): Promise<Map<string, NhlSkaterStat>> {
-  const rows = await fetchRawSkaters(gameType)
+export async function fetchNhlSkaters(gameType = 2, nhlSeason = NHL_SEASON): Promise<Map<string, NhlSkaterStat>> {
+  const rows = await fetchRawSkaters(gameType, nhlSeason)
   const result = new Map<string, NhlSkaterStat>()
   for (const stat of groupSkaterRows(rows)) {
     result.set(normName(`${stat.firstName} ${stat.lastName}`), stat)
@@ -140,8 +140,8 @@ export async function fetchNhlSkaters(gameType = 2): Promise<Map<string, NhlSkat
 }
 
 /** Retourne une map nhl_id → stats pour tous les patineurs de la saison. */
-export async function fetchNhlSkatersByNhlId(gameType = 2): Promise<Map<number, NhlSkaterStat>> {
-  const rows = await fetchRawSkaters(gameType)
+export async function fetchNhlSkatersByNhlId(gameType = 2, nhlSeason = NHL_SEASON): Promise<Map<number, NhlSkaterStat>> {
+  const rows = await fetchRawSkaters(gameType, nhlSeason)
   const result = new Map<number, NhlSkaterStat>()
   for (const stat of groupSkaterRows(rows)) {
     result.set(stat.playerId, stat)
@@ -150,8 +150,8 @@ export async function fetchNhlSkatersByNhlId(gameType = 2): Promise<Map<number, 
 }
 
 /** Retourne une map normName → stats pour tous les gardiens de la saison. */
-export async function fetchNhlGoalies(gameType = 2): Promise<Map<string, NhlGoalieStat>> {
-  const rows = await fetchRawGoalies(gameType)
+export async function fetchNhlGoalies(gameType = 2, nhlSeason = NHL_SEASON): Promise<Map<string, NhlGoalieStat>> {
+  const rows = await fetchRawGoalies(gameType, nhlSeason)
   const result = new Map<string, NhlGoalieStat>()
   for (const stat of groupGoalieRows(rows)) {
     result.set(normName(`${stat.firstName} ${stat.lastName}`), stat)
@@ -160,8 +160,8 @@ export async function fetchNhlGoalies(gameType = 2): Promise<Map<string, NhlGoal
 }
 
 /** Retourne une map nhl_id → stats pour tous les gardiens de la saison. */
-export async function fetchNhlGoaliesByNhlId(gameType = 2): Promise<Map<number, NhlGoalieStat>> {
-  const rows = await fetchRawGoalies(gameType)
+export async function fetchNhlGoaliesByNhlId(gameType = 2, nhlSeason = NHL_SEASON): Promise<Map<number, NhlGoalieStat>> {
+  const rows = await fetchRawGoalies(gameType, nhlSeason)
   const result = new Map<number, NhlGoalieStat>()
   for (const stat of groupGoalieRows(rows)) {
     result.set(stat.playerId, stat)
