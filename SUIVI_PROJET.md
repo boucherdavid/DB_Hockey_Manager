@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-05-30
+
+**[Fix] — Marner absent du picker pool des séries + backfill game logs + amélioration backfill_nhl_ids** (`.github/workflows/import.yml`, `python_script/backfill_nhl_ids.py`) :
+- **Cause racine** : Mitch Marner est enregistré sous "Mitchell Marner" dans notre BD mais l'API NHL le connaît sous "Mitch Marner" → mismatch de surnom → `nhl_id = null` → filtré par `getAvailablePlayoffPlayersAction` (filtre `.filter(p => p.nhlId !== null)`).
+- **Fix immédiat** : `nhl_id = 8478483` mis à jour directement en BD. Backfill des game logs playoffs (`backfill_playoff_game_logs.py --start 2026-04-19 --end 2026-05-29`) → 2857 lignes importées, incluant ses 7G + 14A (21 pts, leader des séries).
+- **Fix pipeline** : `backfill_nhl_ids.py` amélioré avec fallback par préfixe de prénom (≥4 chars) + filtre équipe/position pour éviter les faux positifs. Corrige les cas Mitchell/Mitch, Joshua/Josh, Christopher/Chris, Matthew/Matt, William/Will, etc. Le filtre équipe résout aussi les ambiguïtés (Brandon vs Christopher Tanev). 7 autres joueurs avec nickname mismatch corrects.
+- **Prévention** : `backfill_nhl_ids.py` ajouté au GitHub Actions (`import.yml`) — tourne désormais à chaque import hebdomadaire.
+- Commit : (voir hash)
+
 ### 2026-05-29
 
 **[Feat] — Indicateurs de séquence spécifiques gardiens** (`app/lib/streaks.ts`, `app/components/StreakLegend.tsx`, `app/app/statistiques/StatsTable.tsx`, `app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :

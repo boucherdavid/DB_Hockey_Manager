@@ -46,11 +46,39 @@ def build_url(player_type: str) -> str:
     )
 
 
-def fetch_nhl_id_map() -> dict[str, int]:
-    """Retourne un dict normName → nhl_id pour tous les patineurs et gardiens."""
-    id_map: dict[str, int] = {}
+NhlEntry = dict  # {nhl_id, key, teams: set[str], pos_group: str}
 
-    for player_type, name_field in [('skater', 'skaterFullName'), ('goalie', 'goalieFullName')]:
+
+def pos_group_from_api(code: str) -> str:
+    """C/LW/RW → F, D → D, G → G."""
+    c = (code or '').upper()
+    if c == 'D': return 'D'
+    if c == 'G': return 'G'
+    return 'F'
+
+
+def pos_group_from_db(position: str | None) -> str | None:
+    """'RW,C' ou 'D' ou 'G' → 'F'/'D'/'G', None si inconnu."""
+    if not position:
+        return None
+    first = position.split(',')[0].strip().upper()
+    if first in ('D', 'LD', 'RD'): return 'D'
+    if first == 'G': return 'G'
+    return 'F'
+
+
+def fetch_nhl_id_map() -> tuple[dict[str, int], dict[int, NhlEntry]]:
+    """Retourne (id_map, detail_map).
+    id_map  : normName → nhl_id (correspondance exacte)
+    detail_map : nhl_id → {nhl_id, key, teams, pos_group}
+    """
+    id_map: dict[str, int] = {}
+    detail_map: dict[int, NhlEntry] = {}
+
+    for player_type, name_field, pos_field in [
+        ('skater', 'skaterFullName', 'positionCode'),
+        ('goalie', 'goalieFullName',  'positionCode'),
+    ]:
         url = build_url(player_type)
         try:
             r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=30)
@@ -74,12 +102,25 @@ def fetch_nhl_id_map() -> dict[str, int]:
             fn = parts[0] if parts else ''
             ln = parts[1] if len(parts) > 1 else ''
             key = normaliser(f'{fn} {ln}')
-            if key:
-                id_map[key] = pid
+            if not key:
+                continue
+            id_map[key] = pid
+
+            # Agréger les équipes de toutes les lignes (joueur multi-équipes)
+            teams: set[str] = set()
+            for entry in entries:
+                abbrevs = str(entry.get('teamAbbrevs', '') or '')
+                for t in abbrevs.replace('/', ',').split(','):
+                    t = t.strip().upper()
+                    if t:
+                        teams.add(t)
+
+            pos_g = pos_group_from_api(str(main.get(pos_field, '') or ''))
+            detail_map[pid] = {'nhl_id': pid, 'key': key, 'teams': teams, 'pos_group': pos_g}
 
         print(f'[INFO] {player_type.capitalize()}s chargés depuis NHL API : {len(by_id)}')
 
-    return id_map
+    return id_map, detail_map
 
 
 def main():
@@ -122,14 +163,20 @@ def main():
         ids_en_pool = {r['player_id'] for r in rosters}
         print(f'[INFO] {len(ids_en_pool)} joueur(s) dans un roster pool actif')
 
-    # Joueurs sans nhl_id
+    # Charger la map équipe id → code (pour le fallback par équipe)
+    teams_map = {
+        t['id']: t['code']
+        for t in supabase.table('teams').select('id, code').execute().data
+    }
+
+    # Joueurs sans nhl_id (avec team_id et position pour le fallback)
     print(f'\n[INFO] Recherche des joueurs sans nhl_id (saison {SEASON_LABEL})...')
     offset = 0
     tous = []
     while True:
         batch = (
             supabase.table('players')
-            .select('id, first_name, last_name')
+            .select('id, first_name, last_name, team_id, position')
             .is_('nhl_id', 'null')
             .range(offset, offset + 999)
             .execute()
@@ -149,17 +196,60 @@ def main():
 
     # Charger la map NHL en 2 appels
     print('[INFO] Chargement des IDs depuis l\'API stats NHL...')
-    id_map = fetch_nhl_id_map()
+    id_map, detail_map = fetch_nhl_id_map()
     print(f'[INFO] {len(id_map)} joueurs trouvés dans l\'API NHL\n')
 
-    trouvés = []   # (id, nhl_id, first_name, last_name)
+    trouvés = []   # (id, nhl_id, first_name, last_name, via_fallback)
     échecs  = []   # (id, first_name, last_name)
+
+    # Index inversé : last_name_normalisé → [nhl_id, ...]
+    # Utilisé pour le fallback surnom (Mitch/Mitchell, Alex/Alexander, etc.)
+    lastname_index: dict[str, list[int]] = {}
+    for key, pid in id_map.items():
+        parts = key.split(' ', 1)
+        if len(parts) == 2:
+            lastname_index.setdefault(parts[1], []).append(pid)
 
     for j in joueurs:
         key = normaliser(f"{j['first_name']} {j['last_name']}")
         nhl_id = id_map.get(key)
         if nhl_id:
-            trouvés.append((j['id'], nhl_id, j['first_name'], j['last_name']))
+            trouvés.append((j['id'], nhl_id, j['first_name'], j['last_name'], False))
+            continue
+
+        # Fallback : même nom de famille + premier prénom est un préfixe de l'autre (≥4 chars)
+        # + même équipe + même groupe de position (F/D/G)
+        # Couvre : Mitch→Mitchell, Alex→Alexander, Mike→Michael, etc.
+        ln_key = normaliser(j['last_name'])
+        fn_key = normaliser(j['first_name'])
+        db_team = teams_map.get(j.get('team_id'), '')
+        db_pos  = pos_group_from_db(j.get('position'))
+
+        candidates = lastname_index.get(ln_key, [])
+        match = None
+        for cand_id in candidates:
+            detail = detail_map.get(cand_id)
+            if not detail:
+                continue
+            cand_fn = detail['key'].split(' ', 1)[0]
+            prefix_len = min(len(fn_key), len(cand_fn))
+            if prefix_len < 4:
+                continue
+            if not (fn_key.startswith(cand_fn[:prefix_len]) or cand_fn.startswith(fn_key[:prefix_len])):
+                continue
+            # Filtre équipe : au moins une équipe commune (joueur multi-équipes inclus)
+            if db_team and detail['teams'] and db_team.upper() not in detail['teams']:
+                continue
+            # Filtre position (seulement si les deux sont connus)
+            if db_pos and detail['pos_group'] and db_pos != detail['pos_group']:
+                continue
+            if match is None:
+                match = cand_id
+            else:
+                match = None  # ambiguïté → ignorer
+                break
+        if match:
+            trouvés.append((j['id'], match, j['first_name'], j['last_name'], True))
         else:
             échecs.append((j['id'], j['first_name'], j['last_name']))
 
@@ -171,8 +261,9 @@ def main():
         print('\n[DRY-RUN] Aucune modification en BD.')
         if trouvés:
             print('\nMises à jour qui seraient appliquées :')
-            for pid, nid, fn, ln in trouvés[:20]:
-                print(f'  id={pid}  {fn} {ln}  →  nhl_id={nid}')
+            for pid, nid, fn, ln, fallback in trouvés[:20]:
+                tag = ' [surnom]' if fallback else ''
+                print(f'  id={pid}  {fn} {ln}  →  nhl_id={nid}{tag}')
             if len(trouvés) > 20:
                 print(f'  ... et {len(trouvés) - 20} autres')
         if échecs:
@@ -189,7 +280,7 @@ def main():
         nb_ok = 0
         for i in range(0, len(trouvés), BATCH_SIZE):
             batch = trouvés[i:i+BATCH_SIZE]
-            for pid, nid, fn, ln in batch:
+            for pid, nid, fn, ln, fallback in batch:
                 try:
                     supabase.table('players').update({'nhl_id': nid}).eq('id', pid).execute()
                     nb_ok += 1
