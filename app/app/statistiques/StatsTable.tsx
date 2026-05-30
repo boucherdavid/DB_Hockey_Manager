@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import type { SkaterStat, GoalieStat } from './page'
 import TeamBadge from '@/components/TeamBadge'
 import PlayerLink from '@/components/PlayerLink'
-import type { StreakInfo } from '@/lib/streaks'
+import type { StreakInfo, GoalieBadgeType } from '@/lib/streaks'
 import StreakLegend from '@/components/StreakLegend'
 
 const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; label: string }> = {
@@ -17,12 +17,24 @@ const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; labe
   en_baisse: { emoji: '📉', label: 'En baisse' },
 }
 
+const GOALIE_BADGE_META: Record<NonNullable<GoalieBadgeType>, { emoji: string; label: (v?: number) => string }> = {
+  wins_streak: { emoji: '🏆', label: (v) => `${v} victoires consécutives` },
+  sv_elite:    { emoji: '🛡️', label: (v) => `Sv% récent : ${v?.toFixed(1)}%` },
+  gaa_basse:   { emoji: '🎯', label: (v) => `GAA récente : ${v?.toFixed(2)}` },
+}
+
 function StreakBadge({ info }: { info: StreakInfo | undefined }) {
   if (!info?.badge) return null
   const meta = BADGE_META[info.badge]
   const hasCount = info.badge === 'en_feu' || info.badge === 'en_forme' || info.badge === 'en_panne' || info.badge === 'en_crise'
   const title = hasCount ? `${meta.label} — ${info.count} matchs consécutifs` : meta.label
   return <span className="text-sm" title={title}>{meta.emoji}</span>
+}
+
+function GoalieBadge({ info }: { info: StreakInfo | undefined }) {
+  if (!info?.goalieBadge) return null
+  const meta = GOALIE_BADGE_META[info.goalieBadge]
+  return <span className="text-sm ml-0.5" title={meta.label(info.goalieValue)}>{meta.emoji}</span>
 }
 
 type Tab = 'skaters' | 'goalies'
@@ -381,6 +393,7 @@ export default function StatsTable({
                           </PlayerLink>
                           {gameMode === 'regular' && isRookie(g.firstName, g.lastName) && <RookieBadge />}
                           <StreakBadge info={streaksMap[g.id]} />
+                          <GoalieBadge info={streaksMap[g.id]} />
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-gray-600">

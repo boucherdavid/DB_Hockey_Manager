@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { fmtPts } from '@/lib/nhl-stats'
 import type { PlayoffPoolStanding, PeriodInfo } from '@/app/gestion-series/playoff-pool-actions'
-import type { StreakInfo } from '@/lib/streaks'
+import type { StreakInfo, GoalieBadgeType } from '@/lib/streaks'
 import StreakLegend from '@/components/StreakLegend'
 
 const RANK_COLOR = ['text-yellow-500', 'text-gray-400', 'text-amber-600']
@@ -17,6 +17,12 @@ const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; labe
   en_baisse: { emoji: '📉', label: 'En baisse' },
 }
 
+const GOALIE_BADGE_META: Record<NonNullable<GoalieBadgeType>, { emoji: string; label: (v?: number) => string }> = {
+  wins_streak: { emoji: '🏆', label: (v) => `${v} victoires consécutives` },
+  sv_elite:    { emoji: '🛡️', label: (v) => `Sv% récent : ${v?.toFixed(1)}%` },
+  gaa_basse:   { emoji: '🎯', label: (v) => `GAA récente : ${v?.toFixed(2)}` },
+}
+
 const slotLabel: Record<'F' | 'D' | 'G', string> = { F: 'Attaquants', D: 'Défenseurs', G: 'Gardiens' }
 
 function StreakBadge({ nhlId, streaks }: { nhlId: number | null; streaks: Record<number, StreakInfo> }) {
@@ -27,6 +33,14 @@ function StreakBadge({ nhlId, streaks }: { nhlId: number | null; streaks: Record
   const hasCount = info.badge === 'en_feu' || info.badge === 'en_forme' || info.badge === 'en_panne' || info.badge === 'en_crise'
   const title = hasCount ? `${meta.label} — ${info.count} matchs consécutifs` : meta.label
   return <span className="text-sm" title={title}>{meta.emoji}</span>
+}
+
+function GoalieBadge({ nhlId, streaks }: { nhlId: number | null; streaks: Record<number, StreakInfo> }) {
+  if (!nhlId) return null
+  const info = streaks[nhlId]
+  if (!info?.goalieBadge) return null
+  const meta = GOALIE_BADGE_META[info.goalieBadge]
+  return <span className="text-sm ml-0.5" title={meta.label(info.goalieValue)}>{meta.emoji}</span>
 }
 
 function fmtDate(iso: string) {
@@ -261,6 +275,7 @@ export default function ClassementSeriesTable({
                                 {p.isActive && (
                                   <span className="ml-1.5">
                                     <StreakBadge nhlId={p.nhlId} streaks={streaks} />
+                                    <GoalieBadge nhlId={p.nhlId} streaks={streaks} />
                                   </span>
                                 )}
                                 {!isMultiPeriod && p.periods[0]?.activatedAt && (

@@ -4,7 +4,7 @@ import { useState, Fragment } from 'react'
 import { fmtPts } from '@/lib/nhl-stats'
 import PlayerLink from '@/components/PlayerLink'
 import type { PlayerContrib, PeriodContrib } from '@/lib/standings'
-import type { StreakInfo } from '@/lib/streaks'
+import type { StreakInfo, GoalieBadgeType } from '@/lib/streaks'
 import StreakLegend from '@/components/StreakLegend'
 
 type Tab = 'masse-salariale' | 'alignement' | 'historique' | 'recrues'
@@ -92,6 +92,12 @@ const BADGE_META: Record<NonNullable<StreakInfo['badge']>, { emoji: string; labe
   en_baisse: { emoji: '📉', label: 'En baisse', cls: 'text-amber-500'  },
 }
 
+const GOALIE_BADGE_META: Record<NonNullable<GoalieBadgeType>, { emoji: string; label: (v?: number) => string }> = {
+  wins_streak: { emoji: '🏆', label: (v) => `${v} victoires consécutives` },
+  sv_elite:    { emoji: '🛡️', label: (v) => `Sv% récent : ${v?.toFixed(1)}%` },
+  gaa_basse:   { emoji: '🎯', label: (v) => `GAA récente : ${v?.toFixed(2)}` },
+}
+
 function StreakBadge({ info }: { info: StreakInfo | undefined }) {
   if (!info || !info.badge) return null
   const meta = BADGE_META[info.badge]
@@ -102,6 +108,12 @@ function StreakBadge({ info }: { info: StreakInfo | undefined }) {
       {meta.emoji}
     </span>
   )
+}
+
+function GoalieBadge({ info }: { info: StreakInfo | undefined }) {
+  if (!info?.goalieBadge) return null
+  const meta = GOALIE_BADGE_META[info.goalieBadge]
+  return <span className="ml-0.5 text-sm" title={meta.label(info.goalieValue)}>{meta.emoji}</span>
 }
 
 function PeriodPopup({ playerName, isGoalie, periods, totalPoints, onClose }: {
@@ -169,6 +181,7 @@ function PlayerStatsRow({ p, streaks, onPeriodClick }: { p: PlayerContrib; strea
           </span>
         </PlayerLink>
         <StreakBadge info={p.nhlId ? streaks[p.nhlId] : undefined} />
+        <GoalieBadge info={p.nhlId ? streaks[p.nhlId] : undefined} />
         {badge && <span className="ml-2 text-xs bg-gray-100 text-gray-400 rounded px-1">{badge}</span>}
         {p.periods.length > 1 ? (
           <button
