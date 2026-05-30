@@ -58,6 +58,16 @@ Je l'utiliserai pour:
 
 ### 2026-05-29
 
+**[Feat] — Indicateurs de séquence spécifiques gardiens** (`app/lib/streaks.ts`, `app/components/StreakLegend.tsx`, `app/app/statistiques/StatsTable.tsx`, `app/app/classement-series/ClassementSeriesTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :
+- Nouveau type `GoalieBadgeType` : `'wins_streak' | 'sv_elite' | 'gaa_basse' | null`.
+- `StreakInfo` gagne deux champs optionnels : `goalieBadge?` et `goalieValue?` (valeur numérique pour le tooltip).
+- `IndicatorConfig` gagne 4 nouveaux champs : `goalieWinsStreak` (déf. 3), `goalieSvPctThreshold` (déf. 0.930), `goalieGaaThreshold` (déf. 2.50), `goalieMinGames` (déf. 3).
+- Nouvelle fonction `computeGoalieBadge` : analyse uniquement les départs (`gamesStarted === 1`). Priorité : victoires consécutives > sv% récent > GAA récente. Fenêtre = `fenetreTendance` derniers départs.
+- `fetchStreak` appelle `computeGoalieBadge` uniquement quand `isGoalie=true` et l'injecte dans le résultat.
+- Les badges s'ajoutent en parallèle aux badges existants (🔥/🧊 basés sur pts pool) : un gardien peut afficher jusqu'à 2 badges.
+- Composant `GoalieBadge` ajouté dans les 3 vues ; `StreakLegend` gagne une section "Gardiens — indicateurs additionnels" avec 🏆/🛡️/🎯.
+- Commit : `c9d3b7c`
+
 **[Refactor] — NHL_SEASON dynamique : lit pool_seasons au lieu du hardcode** (`app/lib/nhl-stats.ts`, `app/lib/streaks.ts`, `app/lib/daily-recap.ts`, `app/lib/nhl-snapshot.ts`, `app/app/statistiques/page.tsx`) :
 - Problème : `NHL_SEASON = '20252026'` hardcodé dans 3 endroits distincts. Chaque début de saison nécessitait une mise à jour manuelle dans le code.
 - `nhl-stats.ts` : `buildUrl`, `fetchNhlSkaters`, `fetchNhlGoalies`, `fetchNhlSkatersByNhlId`, `fetchNhlGoaliesByNhlId` acceptent maintenant un paramètre optionnel `nhlSeason` (fallback sur la constante).
