@@ -27,17 +27,54 @@ load_dotenv()
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
 NHL_REST     = 'https://api.nhle.com/stats/rest/en'
-NHL_SEASON   = '20252026'
-SEASON_LABEL = '2025-26'
 DRY_RUN      = '--dry-run' in sys.argv
+
+
+def get_active_season(supabase) -> tuple[str, str]:
+    """Retourne (season_label, nhl_season_id) depuis pool_seasons.
+
+    Priorité : saison régulière active → sinon la plus récente saison régulière.
+    season_label : '2025-26'   nhl_season_id : '20252026'
+    """
+    # Saison régulière active
+    row = (
+        supabase.table('pool_seasons')
+        .select('season')
+        .eq('is_active', True)
+        .eq('is_playoff', False)
+        .maybe_single()
+        .execute()
+        .data
+    )
+    # Sinon : saison régulière la plus récente (utile pendant les séries)
+    if not row:
+        row = (
+            supabase.table('pool_seasons')
+            .select('season')
+            .eq('is_playoff', False)
+            .order('season', desc=True)
+            .limit(1)
+            .maybe_single()
+            .execute()
+            .data
+        )
+    if not row:
+        raise RuntimeError('Aucune saison régulière trouvée dans pool_seasons.')
+
+    label = row['season']  # ex: '2025-26'
+    parts = label.split('-')
+    start = int(parts[0])
+    end   = start + 1
+    nhl_id = f'{start}{end}'
+    return label, nhl_id
 
 
 def normaliser(nom: str) -> str:
     return unidecode(str(nom)).lower().strip().replace('-', ' ')
 
 
-def build_url(player_type: str) -> str:
-    cayenne = f'gameTypeId=2 and seasonId<={NHL_SEASON} and seasonId>={NHL_SEASON}'
+def build_url(player_type: str, nhl_season: str) -> str:
+    cayenne = f'gameTypeId=2 and seasonId<={nhl_season} and seasonId>={nhl_season}'
     return (
         f'{NHL_REST}/{player_type}/summary'
         f'?isAggregate=false&isGame=false&start=0&limit=-1'
@@ -67,7 +104,7 @@ def pos_group_from_db(position: str | None) -> str | None:
     return 'F'
 
 
-def fetch_nhl_id_map() -> tuple[dict[str, int], dict[int, NhlEntry]]:
+def fetch_nhl_id_map(nhl_season: str) -> tuple[dict[str, int], dict[int, NhlEntry]]:
     """Retourne (id_map, detail_map).
     id_map  : normName → nhl_id (correspondance exacte)
     detail_map : nhl_id → {nhl_id, key, teams, pos_group}
@@ -79,7 +116,7 @@ def fetch_nhl_id_map() -> tuple[dict[str, int], dict[int, NhlEntry]]:
         ('skater', 'skaterFullName', 'positionCode'),
         ('goalie', 'goalieFullName',  'positionCode'),
     ]:
-        url = build_url(player_type)
+        url = build_url(player_type, nhl_season)
         try:
             r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=30)
             r.raise_for_status()
@@ -127,6 +164,9 @@ def main():
     print('[INFO] Connexion à Supabase...')
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+    season_label, nhl_season = get_active_season(supabase)
+    print(f'[INFO] Saison active : {season_label} (NHL API : {nhl_season})')
+
     # Joueurs avec contrat actif cette saison (paginé pour dépasser la limite de 1000 lignes)
     ids_avec_contrat: set = set()
     offset_c = 0
@@ -135,7 +175,7 @@ def main():
             supabase
             .table('player_contracts')
             .select('player_id')
-            .eq('season', SEASON_LABEL)
+            .eq('season', season_label)
             .gt('cap_number', 0)
             .range(offset_c, offset_c + 999)
             .execute()
@@ -170,7 +210,7 @@ def main():
     }
 
     # Joueurs sans nhl_id (avec team_id et position pour le fallback)
-    print(f'\n[INFO] Recherche des joueurs sans nhl_id (saison {SEASON_LABEL})...')
+    print(f'\n[INFO] Recherche des joueurs sans nhl_id (saison {season_label})...')
     offset = 0
     tous = []
     while True:
@@ -188,7 +228,7 @@ def main():
         offset += 1000
 
     joueurs = [j for j in tous if j['id'] in ids_avec_contrat or j['id'] in ids_en_pool]
-    print(f'[INFO] {len(joueurs)} joueur(s) sans nhl_id (contrat {SEASON_LABEL} ou en pool actif)\n')
+    print(f'[INFO] {len(joueurs)} joueur(s) sans nhl_id (contrat {season_label} ou en pool actif)\n')
 
     if not joueurs:
         print('[INFO] Rien à faire.')
@@ -196,7 +236,7 @@ def main():
 
     # Charger la map NHL en 2 appels
     print('[INFO] Chargement des IDs depuis l\'API stats NHL...')
-    id_map, detail_map = fetch_nhl_id_map()
+    id_map, detail_map = fetch_nhl_id_map(nhl_season)
     print(f'[INFO] {len(id_map)} joueurs trouvés dans l\'API NHL\n')
 
     trouvés = []   # (id, nhl_id, first_name, last_name, via_fallback)
