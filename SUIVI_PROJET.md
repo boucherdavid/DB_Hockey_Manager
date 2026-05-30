@@ -63,7 +63,13 @@ Je l'utiliserai pour:
 - **Fix immédiat** : `nhl_id = 8478483` mis à jour directement en BD. Backfill des game logs playoffs (`backfill_playoff_game_logs.py --start 2026-04-19 --end 2026-05-29`) → 2857 lignes importées, incluant ses 7G + 14A (21 pts, leader des séries).
 - **Fix pipeline** : `backfill_nhl_ids.py` amélioré avec fallback par préfixe de prénom (≥4 chars) + filtre équipe/position pour éviter les faux positifs. Corrige les cas Mitchell/Mitch, Joshua/Josh, Christopher/Chris, Matthew/Matt, William/Will, etc. Le filtre équipe résout aussi les ambiguïtés (Brandon vs Christopher Tanev). 7 autres joueurs avec nickname mismatch corrects.
 - **Prévention** : `backfill_nhl_ids.py` ajouté au GitHub Actions (`import.yml`) — tourne désormais à chaque import hebdomadaire.
-- Commit : (voir hash)
+- Commit : `970fe68`
+
+**[Refactor] — backfill_nhl_ids.py : saison dynamique depuis pool_seasons** (`python_script/backfill_nhl_ids.py`) :
+- `NHL_SEASON` et `SEASON_LABEL` n'étaient plus hardcodés (`'20252026'` / `'2025-26'`).
+- Nouvelle fonction `get_active_season(supabase)` : lit `pool_seasons` (saison régulière active en priorité, sinon la plus récente). Convertit `'2025-26'` → `'20252026'` pour l'API NHL.
+- Zéro modification de code requise à chaque début de saison.
+- Commit : `6326270`
 
 ### 2026-05-29
 
