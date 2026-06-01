@@ -210,8 +210,18 @@ def main() -> None:
     }
     print(f'{len(nhl_to_db)} joueurs dans la DB.\n')
 
+    # Dates déjà importées en BD — pour sauter les journées déjà traitées
+    existing_resp = client.table('player_game_logs') \
+        .select('game_date') \
+        .eq('season', NHL_SEASON) \
+        .eq('game_type', GAME_TYPE) \
+        .execute()
+    existing_dates = {r['game_date'] for r in (existing_resp.data or [])}
+    print(f'{len(existing_dates)} date(s) déjà en BD — seront ignorées.\n')
+
     total_errors = 0
     total_rows = 0
+    skipped = 0
 
     for d in dates:
         try:
@@ -219,6 +229,10 @@ def main() -> None:
         except Exception as e:
             print(f'{d} — Erreur schedule : {e}')
             time.sleep(1)
+            continue
+
+        if d in existing_dates:
+            skipped += 1
             continue
 
         if not games:
@@ -258,7 +272,7 @@ def main() -> None:
             total_rows += len(day_rows)
             print(f'  ✓ {len(day_rows)} lignes sauvegardées')
 
-    print(f'✓ Backfill terminé — {total_rows} lignes ({total_errors} erreur(s)).')
+    print(f'✓ Backfill terminé — {total_rows} lignes importées, {skipped} date(s) ignorées (déjà en BD), {total_errors} erreur(s).')
 
 
 if __name__ == '__main__':
