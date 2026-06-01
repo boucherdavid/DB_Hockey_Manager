@@ -237,10 +237,9 @@ def main() -> None:
     }
     print(f'{len(nhl_to_db)} joueurs dans la DB.\n')
 
-    all_rows: list[dict] = []
-    all_goalie_nhl_ids: set[int] = set()
     total_errors = 0
     dates_with_games = 0
+    total_rows = 0
 
     for d in dates:
         try:
@@ -254,6 +253,9 @@ def main() -> None:
             continue
 
         dates_with_games += 1
+        day_rows: list[dict] = []
+        day_goalie_nhl_ids: set[int] = set()
+
         print(f'{d} — {len(games)} match(s)')
 
         for game in games:
@@ -269,26 +271,23 @@ def main() -> None:
                 d, game['startTimeUTC'],
                 nhl_season, GAME_TYPE,
             )
-            all_rows.extend(game_rows)
-            all_goalie_nhl_ids.update(game_goalies)
+            day_rows.extend(game_rows)
+            day_goalie_nhl_ids.update(game_goalies)
             time.sleep(0.2)
 
-    if all_goalie_nhl_ids:
-        print(f'\nEnrichissement buts/passes : {len(all_goalie_nhl_ids)} gardien(s)...')
-        enrich_goalie_stats(all_rows, all_goalie_nhl_ids, nhl_season, GAME_TYPE)
+        if day_goalie_nhl_ids:
+            enrich_goalie_stats(day_rows, day_goalie_nhl_ids, nhl_season, GAME_TYPE)
 
-    if not all_rows:
-        print('Aucune ligne à insérer.')
-        return
+        if day_rows:
+            for i in range(0, len(day_rows), 500):
+                client.table('player_game_logs').upsert(
+                    day_rows[i:i + 500],
+                    on_conflict='player_id,game_date,season,game_type'
+                ).execute()
+            total_rows += len(day_rows)
+            print(f'  ✓ {len(day_rows)} lignes sauvegardées')
 
-    print(f'\n{len(all_rows)} lignes à upsert...')
-    for i in range(0, len(all_rows), 500):
-        client.table('player_game_logs').upsert(
-            all_rows[i:i + 500],
-            on_conflict='player_id,game_date,season,game_type'
-        ).execute()
-
-    print(f'\nBackfill terminé — {dates_with_games} dates avec matchs, {len(all_rows)} lignes ({total_errors} erreur(s)).')
+    print(f'\nBackfill terminé — {dates_with_games} dates avec matchs, {total_rows} lignes ({total_errors} erreur(s)).')
 
 
 if __name__ == '__main__':
