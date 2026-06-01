@@ -264,13 +264,17 @@ def main() -> None:
             enrich_goalie_stats(day_rows, day_goalie_nhl_ids, NHL_SEASON, GAME_TYPE)
 
         if day_rows:
-            for i in range(0, len(day_rows), 500):
-                client.table('player_game_logs').upsert(
-                    day_rows[i:i + 500],
-                    on_conflict='player_id,game_date,season,game_type'
-                ).execute()
-            total_rows += len(day_rows)
-            print(f'  ✓ {len(day_rows)} lignes sauvegardées')
+            try:
+                for i in range(0, len(day_rows), 500):
+                    client.table('player_game_logs').upsert(
+                        day_rows[i:i + 500],
+                        on_conflict='player_id,game_date,season,game_type'
+                    ).execute()
+                total_rows += len(day_rows)
+                print(f'  ✓ {len(day_rows)} lignes sauvegardées')
+            except Exception as e:
+                print(f'  ✗ Erreur upsert {d} (sera réessayée au prochain run) : {e}')
+                total_errors += 1
 
     print(f'✓ Backfill terminé — {total_rows} lignes importées, {skipped} date(s) ignorées (déjà en BD), {total_errors} erreur(s).')
 

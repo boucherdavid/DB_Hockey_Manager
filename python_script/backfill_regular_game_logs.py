@@ -293,13 +293,17 @@ def main() -> None:
             enrich_goalie_stats(day_rows, day_goalie_nhl_ids, nhl_season, GAME_TYPE)
 
         if day_rows:
-            for i in range(0, len(day_rows), 500):
-                client.table('player_game_logs').upsert(
-                    day_rows[i:i + 500],
-                    on_conflict='player_id,game_date,season,game_type'
-                ).execute()
-            total_rows += len(day_rows)
-            print(f'  ✓ {len(day_rows)} lignes sauvegardées')
+            try:
+                for i in range(0, len(day_rows), 500):
+                    client.table('player_game_logs').upsert(
+                        day_rows[i:i + 500],
+                        on_conflict='player_id,game_date,season,game_type'
+                    ).execute()
+                total_rows += len(day_rows)
+                print(f'  ✓ {len(day_rows)} lignes sauvegardées')
+            except Exception as e:
+                print(f'  ✗ Erreur upsert {d} (sera réessayée au prochain run) : {e}')
+                total_errors += 1
 
     print(f'\nBackfill terminé — {dates_with_games} dates importées, {skipped} ignorées (déjà en BD), {total_rows} lignes ({total_errors} erreur(s)).')
 
