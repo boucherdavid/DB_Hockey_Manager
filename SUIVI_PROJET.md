@@ -61,7 +61,7 @@ Je l'utiliserai pour:
 **[Chantier MIGRATION SÉRIES — complété] — Calendrier migré vers nouveau système** (`app/app/calendrier/page.tsx`) :
 - Remplacé `playoff_seasons` → `pool_seasons (is_playoff=true)` et `playoff_rosters` → `playoff_pool_rosters`
 - Plus aucune référence aux vieilles tables dans l'app Next.js
-- Chantier MIGRATION SÉRIES considéré complété (vieilles tables `playoff_seasons` / `playoff_rosters` peuvent être droppées en BD quand confirmé)
+- Chantier MIGRATION SÉRIES complété — vieilles tables `playoff_seasons` et `playoff_rosters` droppées en BD (2026-06-01)
 - Roadmap et feedback memory mis à jour pour refléter l'état réel du projet
 - Commit : (voir hash)
 
