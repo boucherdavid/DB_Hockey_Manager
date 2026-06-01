@@ -56,8 +56,9 @@ TABLES = [
     'playoff_participating_teams',
     'playoff_eliminations',
     'playoff_pool_rosters',
-    # Note : player_game_logs est EXCLU — données NHL API, pas prod.
-    # Relancer backfill_regular_game_logs.py et backfill_playoff_game_logs.py après setup.
+    # player_game_logs est EXCLU du wipe (SKIP_WIPE) et de la copie prod→staging.
+    # Les logs existants en staging sont préservés entre les setups.
+    # Pour les rafraîchir : backfill_regular_game_logs.py et backfill_playoff_game_logs.py
 ]
 
 # Tables exclues du wipe (données NHL API conservées entre les setups)
@@ -195,5 +196,5 @@ print()
 print("Ensuite :")
 print("  1. .\\start_staging.ps1")
 print("  2. Connecte-toi avec prenom@staging.test / Staging2026!")
-print("  (player_game_logs préservés — pas besoin de re-backfiller)")
+print("  (player_game_logs préservés — relancer backfill_regular/playoff_game_logs.py si rafraîchissement souhaité)")
 print()
