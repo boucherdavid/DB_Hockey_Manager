@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-01
+
+**[Chantier MIGRATION SÉRIES — complété] — Calendrier migré vers nouveau système** (`app/app/calendrier/page.tsx`) :
+- Remplacé `playoff_seasons` → `pool_seasons (is_playoff=true)` et `playoff_rosters` → `playoff_pool_rosters`
+- Plus aucune référence aux vieilles tables dans l'app Next.js
+- Chantier MIGRATION SÉRIES considéré complété (vieilles tables `playoff_seasons` / `playoff_rosters` peuvent être droppées en BD quand confirmé)
+- Roadmap et feedback memory mis à jour pour refléter l'état réel du projet
+- Commit : (voir hash)
+
 ### 2026-05-30
 
 **[Fix] — Marner absent du picker pool des séries + backfill game logs + amélioration backfill_nhl_ids** (`.github/workflows/import.yml`, `python_script/backfill_nhl_ids.py`) :

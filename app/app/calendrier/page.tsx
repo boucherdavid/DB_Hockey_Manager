@@ -112,7 +112,7 @@ export default async function CalendrierPage({
   if (user) {
     const [{ data: activeSeason }, { data: playoffSeason }] = await Promise.all([
       supabase.from('pool_seasons').select('id').eq('is_active', true).eq('is_playoff', false).single(),
-      supabase.from('playoff_seasons').select('id').eq('is_active', true).maybeSingle(),
+      supabase.from('pool_seasons').select('id').eq('is_active', true).eq('is_playoff', true).maybeSingle(),
     ])
 
     hasPlayoffSeason = !!playoffSeason
@@ -129,10 +129,10 @@ export default async function CalendrierPage({
         : Promise.resolve({ data: null }),
       playoffSeason
         ? supabase
-            .from('playoff_rosters')
+            .from('playoff_pool_rosters')
             .select('players (first_name, last_name, position, teams (code))')
             .eq('pooler_id', user.id)
-            .eq('playoff_season_id', playoffSeason.id)
+            .eq('pool_season_id', playoffSeason.id)
             .eq('is_active', true)
         : Promise.resolve({ data: null }),
     ])
