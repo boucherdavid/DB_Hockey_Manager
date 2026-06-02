@@ -56,6 +56,17 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-02
+
+**[Refactor] — Réorganisation complète de la configuration admin en 5 onglets séparés** (`app/app/admin/config/`, `app/app/admin/pool/page.tsx`, `app/app/admin/presaison/`) :
+- `ConfigForm.tsx` supprimé → remplacé par `SeasonConfigForm.tsx` (saison régulière) et `PlayoffConfigForm.tsx` (séries), sans aucune logique conditionnelle `is_playoff`
+- `ScoringConfig.tsx` supprimé → remplacé par `ScoringConfigSaison.tsx` (colonne `points` uniquement) et `ScoringConfigSeries.tsx` (colonne `points_playoffs` avec toggle "Distinct")
+- `ConfigTabsClient.tsx` créé : 5 onglets — Saisons | Pool Saison | Pool Séries | Pointage Saison | Pointage Séries
+- `InitTabs.tsx` supprimé → contenu (PicksEditor + RookieOverrideManager) déplacé vers `/admin/presaison` via `PresaisonTabs.tsx` (3 onglets)
+- `/admin/pool?tab=config` et `/admin/config` utilisent tous deux le nouveau `ConfigTabsClient`
+- Motivation : l'onglet Configuration était confus car tout était mélangé; le pool des séries est incertain pour le futur donc séparation totale
+- Commit : `a1b53f4`
+
 ### 2026-06-01
 
 **[Chantier MIGRATION SÉRIES — complété] — Calendrier migré vers nouveau système** (`app/app/calendrier/page.tsx`) :
