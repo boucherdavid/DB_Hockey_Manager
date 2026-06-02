@@ -5,11 +5,7 @@ import { redirect } from 'next/navigation'
 import { AdminTabBar } from '@/components/AdminTabBar'
 import AddPoolerForm from '../poolers/AddPoolerForm'
 import PoolerActions from '../poolers/PoolerActions'
-import ConfigForm from '../config/ConfigForm'
-import SeasonsManager from '../config/SeasonsManager'
-import InitTabs from '../config/InitTabs'
-import ScoringConfig from '../config/ScoringConfig'
-import { type Pick, type Pooler } from '../config/PicksEditor'
+import ConfigTabsClient from '../config/ConfigTabsClient'
 import FeedbackAdminView from '../feedback/FeedbackAdminView'
 import SuiviTable from '../suivi/SuiviTable'
 import type { Event } from '../suivi/SuiviTable'
@@ -98,41 +94,19 @@ export default async function AdminPoolPage({
   let saisonsConfig: any[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let scoringRows: any[] = []
-  let picks: Pick[] = []
-  let poolerList: Pooler[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let activeRegSaison: any = null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let activePlayoffSaison: any = null
   if (activeTab === 'config') {
     const [sr, scr] = await Promise.all([
-      supabase.from('pool_seasons').select('id, season, nhl_cap, cap_multiplier, pool_cap, is_active, is_playoff, next_nhl_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir, gestion_effectifs_ouvert, playoff_submission_deadline, playoff_max_changes, playoff_max_elim_changes, playoff_max_f, playoff_max_d, playoff_max_g, indicator_streak_chaud, indicator_streak_forme, indicator_streak_froid, indicator_streak_crise, indicator_fenetre_tendance, saison_start_date').order('season', { ascending: false }),
+      supabase.from('pool_seasons').select('id, season, nhl_cap, cap_multiplier, pool_cap, is_active, is_playoff, next_nhl_cap, delai_reactivation_jours, max_signatures_al, max_signatures_ltir, gestion_effectifs_ouvert, playoff_submission_deadline, playoff_max_changes, playoff_max_elim_changes, playoff_max_f, playoff_max_d, playoff_max_g, indicator_streak_chaud, indicator_streak_forme, indicator_streak_froid, indicator_streak_crise, indicator_fenetre_tendance, saison_start_date, saison_end_date').order('season', { ascending: false }),
       supabase.from('scoring_config').select('id, stat_key, label, points, points_playoffs, scope').order('id'),
     ])
     saisonsConfig = sr.data ?? []
     scoringRows = scr.data ?? []
-    activeRegSaison    = saisonsConfig.find(s => s.is_active && !s.is_playoff) ?? null
-    activePlayoffSaison = saisonsConfig.find(s => s.is_active && s.is_playoff) ?? null
-    const [pr, pkr] = await Promise.all([
-      supabase.from('poolers').select('id, name').order('name'),
-      activeRegSaison
-        ? supabase.from('pool_draft_picks').select('id, round, original_owner_id, current_owner_id, is_used').eq('pool_season_id', activeRegSaison.id).order('round')
-        : Promise.resolve({ data: [] as { id: number; round: number; original_owner_id: string; current_owner_id: string; is_used: boolean }[] }),
-    ])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pMap = new Map((pr.data ?? []).map((p: any) => [p.id, p.name]))
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    picks = ((pkr.data ?? []) as any[]).map(p => ({
-      id: p.id,
-      round: p.round,
-      original_owner_id: p.original_owner_id,
-      original_owner_name: pMap.get(p.original_owner_id) ?? '?',
-      current_owner_id: p.current_owner_id,
-      current_owner_name: pMap.get(p.current_owner_id) ?? '?',
-      is_used: p.is_used,
-    }))
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    poolerList = (pr.data ?? []).map((p: any) => ({ id: p.id, name: p.name }))
+    activeRegSaison     = saisonsConfig.find((s: { is_active: boolean; is_playoff: boolean }) => s.is_active && !s.is_playoff) ?? null
+    activePlayoffSaison = saisonsConfig.find((s: { is_active: boolean; is_playoff: boolean }) => s.is_active && s.is_playoff) ?? null
   }
 
   // ── Communication ─────────────────────────────────────────────────────────
@@ -262,25 +236,14 @@ export default async function AdminPoolPage({
 
       {/* ── Config ── */}
       {activeTab === 'config' && (
-        <div className="space-y-8">
-          <h1 className="text-2xl font-bold text-gray-800">Configuration du pool</h1>
-          <SeasonsManager saisons={saisonsConfig} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            <div className="space-y-6">
-              <h2 className="text-base font-semibold text-gray-700 border-b pb-2">Pool Saison</h2>
-              {activeRegSaison
-                ? <ConfigForm saison={activeRegSaison} />
-                : <div className="bg-white rounded-lg shadow p-6 text-gray-400 text-sm">Aucune saison régulière active.</div>}
-            </div>
-            <div className="space-y-6">
-              <h2 className="text-base font-semibold text-gray-700 border-b pb-2">Pool Séries</h2>
-              {activePlayoffSaison
-                ? <ConfigForm saison={activePlayoffSaison} />
-                : <div className="bg-white rounded-lg shadow p-6 text-gray-400 text-sm">Aucune saison séries active.</div>}
-            </div>
-          </div>
-          {scoringRows.length > 0 && <ScoringConfig rows={scoringRows} />}
-          {activeRegSaison && <InitTabs picks={picks} poolers={poolerList} saison={activeRegSaison} />}
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold text-gray-800 mb-6">Configuration du pool</h1>
+          <ConfigTabsClient
+            saisons={saisonsConfig}
+            activeRegSaison={activeRegSaison}
+            activePlayoffSaison={activePlayoffSaison}
+            scoringRows={scoringRows}
+          />
         </div>
       )}
 
