@@ -545,15 +545,15 @@ export default async function PoolerPage({ params }: { params: Promise<{ id: str
     : []
 
   const indicatorConfig = {
-    streakChaud:           (saison as any)?.indicator_streak_chaud     ?? DEFAULT_INDICATOR_CONFIG.streakChaud,
-    streakForme:           (saison as any)?.indicator_streak_forme     ?? DEFAULT_INDICATOR_CONFIG.streakForme,
-    streakFroid:           (saison as any)?.indicator_streak_froid     ?? DEFAULT_INDICATOR_CONFIG.streakFroid,
-    streakCrise:           (saison as any)?.indicator_streak_crise     ?? DEFAULT_INDICATOR_CONFIG.streakCrise,
-    fenetreTendance:       (saison as any)?.indicator_fenetre_tendance ?? DEFAULT_INDICATOR_CONFIG.fenetreTendance,
-    goalieWinsStreak:      DEFAULT_INDICATOR_CONFIG.goalieWinsStreak,
-    goalieSvPctThreshold:  DEFAULT_INDICATOR_CONFIG.goalieSvPctThreshold,
-    goalieGaaThreshold:    DEFAULT_INDICATOR_CONFIG.goalieGaaThreshold,
-    goalieMinGames:        DEFAULT_INDICATOR_CONFIG.goalieMinGames,
+    streakChaud:           (saison as any)?.indicator_streak_chaud          ?? DEFAULT_INDICATOR_CONFIG.streakChaud,
+    streakForme:           (saison as any)?.indicator_streak_forme          ?? DEFAULT_INDICATOR_CONFIG.streakForme,
+    streakFroid:           (saison as any)?.indicator_streak_froid          ?? DEFAULT_INDICATOR_CONFIG.streakFroid,
+    streakCrise:           (saison as any)?.indicator_streak_crise          ?? DEFAULT_INDICATOR_CONFIG.streakCrise,
+    fenetreTendance:       (saison as any)?.indicator_fenetre_tendance      ?? DEFAULT_INDICATOR_CONFIG.fenetreTendance,
+    goalieWinsStreak:      (saison as any)?.indicator_goalie_wins_streak    ?? DEFAULT_INDICATOR_CONFIG.goalieWinsStreak,
+    goalieSvPctThreshold:  (saison as any)?.indicator_goalie_sv_pct         ?? DEFAULT_INDICATOR_CONFIG.goalieSvPctThreshold,
+    goalieGaaThreshold:    (saison as any)?.indicator_goalie_gaa            ?? DEFAULT_INDICATOR_CONFIG.goalieGaaThreshold,
+    goalieMinGames:        (saison as any)?.indicator_goalie_min_games      ?? DEFAULT_INDICATOR_CONFIG.goalieMinGames,
   }
   const streaksMap = await fetchStreaks(
     alignementPlayers.map(p => ({ nhlId: p.nhlId, isGoalie: p.position === 'G' })),

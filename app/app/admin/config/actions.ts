@@ -382,6 +382,10 @@ export async function updateCapAction(
     indicatorStreakFroid?: number
     indicatorStreakCrise?: number
     indicatorFenetreTendance?: number
+    indicatorGoalieWinsStreak?: number
+    indicatorGoalieSvPct?: number
+    indicatorGoalieGaa?: number
+    indicatorGoalieMinGames?: number
     saisonStartDate?: string | null
     saisonEndDate?: string | null
   },
@@ -408,6 +412,10 @@ export async function updateCapAction(
   if (opts?.indicatorStreakFroid !== undefined) updates.indicator_streak_froid = opts.indicatorStreakFroid
   if (opts?.indicatorStreakCrise !== undefined) updates.indicator_streak_crise = opts.indicatorStreakCrise
   if (opts?.indicatorFenetreTendance !== undefined) updates.indicator_fenetre_tendance = opts.indicatorFenetreTendance
+  if (opts?.indicatorGoalieWinsStreak !== undefined) updates.indicator_goalie_wins_streak = opts.indicatorGoalieWinsStreak
+  if (opts?.indicatorGoalieSvPct !== undefined) updates.indicator_goalie_sv_pct = opts.indicatorGoalieSvPct
+  if (opts?.indicatorGoalieGaa !== undefined) updates.indicator_goalie_gaa = opts.indicatorGoalieGaa
+  if (opts?.indicatorGoalieMinGames !== undefined) updates.indicator_goalie_min_games = opts.indicatorGoalieMinGames
   if (opts?.saisonStartDate !== undefined) updates.saison_start_date = opts.saisonStartDate ?? null
   if (opts?.saisonEndDate !== undefined) updates.saison_end_date = opts.saisonEndDate ?? null
 

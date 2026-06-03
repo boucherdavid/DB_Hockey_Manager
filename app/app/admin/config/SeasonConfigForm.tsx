@@ -20,6 +20,10 @@ type Saison = {
   indicator_streak_froid?: number | null
   indicator_streak_crise?: number | null
   indicator_fenetre_tendance?: number | null
+  indicator_goalie_wins_streak?: number | null
+  indicator_goalie_sv_pct?: number | null
+  indicator_goalie_gaa?: number | null
+  indicator_goalie_min_games?: number | null
   saison_start_date?: string | null
   saison_end_date?: string | null
 }
@@ -45,6 +49,14 @@ export default function SeasonConfigForm({ saison }: { saison: Saison }) {
   const [indStreakFroid, setIndStreakFroid] = useState(String(saison.indicator_streak_froid ?? 5))
   const [indStreakCrise, setIndStreakCrise] = useState(String(saison.indicator_streak_crise ?? 8))
   const [indFenetre, setIndFenetre] = useState(String(saison.indicator_fenetre_tendance ?? 5))
+  const [indGoalieWins, setIndGoalieWins] = useState(String(saison.indicator_goalie_wins_streak ?? 3))
+  const [indGoalieSvPct, setIndGoalieSvPct] = useState(
+    saison.indicator_goalie_sv_pct != null
+      ? String(Math.round(saison.indicator_goalie_sv_pct * 1000) / 10)
+      : '93.0'
+  )
+  const [indGoalieGaa, setIndGoalieGaa] = useState(String(saison.indicator_goalie_gaa ?? 2.50))
+  const [indGoalieMinGames, setIndGoalieMinGames] = useState(String(saison.indicator_goalie_min_games ?? 3))
   const [saisonStartDate, setSaisonStartDate] = useState(saison.saison_start_date ?? '')
   const [saisonEndDate, setSaisonEndDate] = useState(saison.saison_end_date ?? '')
   const [saving, setSaving] = useState(false)
@@ -80,6 +92,10 @@ export default function SeasonConfigForm({ saison }: { saison: Saison }) {
         indicatorStreakFroid: Math.max(1, parseInt(indStreakFroid) || 5),
         indicatorStreakCrise: Math.max(1, parseInt(indStreakCrise) || 8),
         indicatorFenetreTendance: Math.max(1, parseInt(indFenetre) || 5),
+        indicatorGoalieWinsStreak: Math.max(1, parseInt(indGoalieWins) || 3),
+        indicatorGoalieSvPct: Math.min(1, Math.max(0, parseFloat(indGoalieSvPct) / 100) || 0.930),
+        indicatorGoalieGaa: Math.max(0, parseFloat(indGoalieGaa) || 2.50),
+        indicatorGoalieMinGames: Math.max(1, parseInt(indGoalieMinGames) || 3),
         saisonStartDate: saisonStartDate || null,
         saisonEndDate: saisonEndDate || null,
       },
@@ -249,6 +265,40 @@ export default function SeasonConfigForm({ saison }: { saison: Saison }) {
             <input type="number" min={1} max={20} step={1} value={indFenetre}
               onChange={e => setIndFenetre(e.target.value)} className={inputCls} />
             <p className="text-xs text-gray-400 mt-1">Fenêtre pour comparer période récente vs précédente.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Indicateurs de performance — Gardiens */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-slate-100 px-4 py-3 border-b">
+          <span className="text-sm font-semibold text-gray-700">Indicateurs de performance — Gardiens</span>
+          <p className="text-xs text-gray-400 mt-0.5">Seuils pour les badges spécifiques aux gardiens (victoires consécutives, sv%, GAA).</p>
+        </div>
+        <div className="px-4 py-4 grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs text-gray-500 mb-1">🏒 Victoires consécutives</p>
+            <input type="number" min={1} max={20} step={1} value={indGoalieWins}
+              onChange={e => setIndGoalieWins(e.target.value)} className={inputCls} />
+            <p className="text-xs text-gray-400 mt-1">Départs consécutifs gagnants pour le badge victoires.</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">🎯 Matchs minimum (fenêtre sv%/GAA)</p>
+            <input type="number" min={1} max={20} step={1} value={indGoalieMinGames}
+              onChange={e => setIndGoalieMinGames(e.target.value)} className={inputCls} />
+            <p className="text-xs text-gray-400 mt-1">Nombre minimum de départs requis pour calculer sv% et GAA.</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">📊 Sv% minimum (%)</p>
+            <input type="number" min={80} max={100} step={0.1} value={indGoalieSvPct}
+              onChange={e => setIndGoalieSvPct(e.target.value)} className={inputCls} />
+            <p className="text-xs text-gray-400 mt-1">Sv% moyen sur la fenêtre de tendance. Ex : 93.0</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">📉 GAA maximale</p>
+            <input type="number" min={0} max={10} step={0.05} value={indGoalieGaa}
+              onChange={e => setIndGoalieGaa(e.target.value)} className={inputCls} />
+            <p className="text-xs text-gray-400 mt-1">GAA moyenne sur la fenêtre de tendance. Ex : 2.50</p>
           </div>
         </div>
       </div>

@@ -32,6 +32,10 @@ type Saison = {
   indicator_streak_froid?: number | null
   indicator_streak_crise?: number | null
   indicator_fenetre_tendance?: number | null
+  indicator_goalie_wins_streak?: number | null
+  indicator_goalie_sv_pct?: number | null
+  indicator_goalie_gaa?: number | null
+  indicator_goalie_min_games?: number | null
   saison_start_date?: string | null
   saison_end_date?: string | null
 }

@@ -309,22 +309,23 @@ async function fetchStreaksForStats(gameType: number, nhlSeason = NHL_SEASON): P
     if (gameType === 2) {
       const { data: season } = await supabase
         .from('pool_seasons')
-        .select('id, indicator_streak_chaud, indicator_streak_forme, indicator_streak_froid, indicator_streak_crise, indicator_fenetre_tendance')
+        .select('id, indicator_streak_chaud, indicator_streak_forme, indicator_streak_froid, indicator_streak_crise, indicator_fenetre_tendance, indicator_goalie_wins_streak, indicator_goalie_sv_pct, indicator_goalie_gaa, indicator_goalie_min_games')
         .eq('is_active', true)
         .eq('is_playoff', false)
         .single()
       if (!season) return {}
 
+      const s = season as any
       const config = {
-        streakChaud:          (season as any).indicator_streak_chaud     ?? DEFAULT_INDICATOR_CONFIG.streakChaud,
-        streakForme:          (season as any).indicator_streak_forme     ?? DEFAULT_INDICATOR_CONFIG.streakForme,
-        streakFroid:          (season as any).indicator_streak_froid     ?? DEFAULT_INDICATOR_CONFIG.streakFroid,
-        streakCrise:          (season as any).indicator_streak_crise     ?? DEFAULT_INDICATOR_CONFIG.streakCrise,
-        fenetreTendance:      (season as any).indicator_fenetre_tendance ?? DEFAULT_INDICATOR_CONFIG.fenetreTendance,
-        goalieWinsStreak:     DEFAULT_INDICATOR_CONFIG.goalieWinsStreak,
-        goalieSvPctThreshold: DEFAULT_INDICATOR_CONFIG.goalieSvPctThreshold,
-        goalieGaaThreshold:   DEFAULT_INDICATOR_CONFIG.goalieGaaThreshold,
-        goalieMinGames:       DEFAULT_INDICATOR_CONFIG.goalieMinGames,
+        streakChaud:          s.indicator_streak_chaud          ?? DEFAULT_INDICATOR_CONFIG.streakChaud,
+        streakForme:          s.indicator_streak_forme          ?? DEFAULT_INDICATOR_CONFIG.streakForme,
+        streakFroid:          s.indicator_streak_froid          ?? DEFAULT_INDICATOR_CONFIG.streakFroid,
+        streakCrise:          s.indicator_streak_crise          ?? DEFAULT_INDICATOR_CONFIG.streakCrise,
+        fenetreTendance:      s.indicator_fenetre_tendance      ?? DEFAULT_INDICATOR_CONFIG.fenetreTendance,
+        goalieWinsStreak:     s.indicator_goalie_wins_streak    ?? DEFAULT_INDICATOR_CONFIG.goalieWinsStreak,
+        goalieSvPctThreshold: s.indicator_goalie_sv_pct         ?? DEFAULT_INDICATOR_CONFIG.goalieSvPctThreshold,
+        goalieGaaThreshold:   s.indicator_goalie_gaa            ?? DEFAULT_INDICATOR_CONFIG.goalieGaaThreshold,
+        goalieMinGames:       s.indicator_goalie_min_games      ?? DEFAULT_INDICATOR_CONFIG.goalieMinGames,
       }
 
       const { data: rosters } = await supabase
