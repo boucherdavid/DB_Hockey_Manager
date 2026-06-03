@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-02 (suite)
+
+**[Feat] — Indicateurs de performance gardiens configurables** (`app/app/admin/config/SeasonConfigForm.tsx`, `actions.ts`, `statistiques/page.tsx`, `poolers/[id]/page.tsx`) :
+- 4 nouvelles colonnes dans `pool_seasons` : `indicator_goalie_wins_streak`, `indicator_goalie_sv_pct` (0.0–1.0), `indicator_goalie_gaa`, `indicator_goalie_min_games`
+- Nouvelle section "Indicateurs gardiens" dans l'onglet Pool Saison : victoires consécutives, sv% minimum (affiché en %), GAA maximale, matchs minimum pour la fenêtre sv%/GAA
+- `statistiques/page.tsx` et `poolers/[id]/page.tsx` lisent maintenant les valeurs depuis la BD (fallback sur `DEFAULT_INDICATOR_CONFIG` si null)
+- **À appliquer en BD** : `supabase_migrations/goalie_indicators.sql`
+- Commit : `0480ee5`
+
 ### 2026-06-02
 
 **[Refactor] — Réorganisation complète de la configuration admin en 5 onglets séparés** (`app/app/admin/config/`, `app/app/admin/pool/page.tsx`, `app/app/admin/presaison/`) :
