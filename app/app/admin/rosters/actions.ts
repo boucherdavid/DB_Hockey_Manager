@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 const ACTIVE_LIMITS = { forward: 12, defense: 6, goalie: 2 } as const
 type Bucket = keyof typeof ACTIVE_LIMITS
@@ -269,7 +270,7 @@ export async function adminInitRosterAction(
   toRemove: number[],
   toChangeType: ChangeTypeEntry[],
 ): Promise<{ error?: string }> {
-  const supabase = await createClient()
+  const supabase = createAdminClient() // bypass RLS — l'admin modifie le roster d'un autre pooler
 
   // Retraits
   if (toRemove.length > 0) {
