@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { submitRosterAction, adminInitRosterAction, updateRookieTypeAction } from './actions'
+import { submitRosterAction, adminInitRosterAction, updateRookieTypeAction, viderRostersAction } from './actions'
 import TeamBadge from '@/components/TeamBadge'
 
 type Pooler = { id: string; name: string }
@@ -270,6 +270,21 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
     setRoster(originalRoster)
   }
 
+  const handleViderTous = async () => {
+    if (!saison) return
+    if (!window.confirm(`Supprimer TOUS les rosters de la saison ${saison.season} ? Cette action est irréversible.`)) return
+    setSubmitting(true)
+    const result = await viderRostersAction(saison.id)
+    setSubmitting(false)
+    if (result.error) {
+      showMessage(result.error, 'error')
+    } else {
+      applyRoster([])
+      showMessage(`${result.deleted ?? 0} entrées supprimées.`, 'success')
+      router.refresh()
+    }
+  }
+
   const handleSubmit = async () => {
     if (!saison || !isDirty) return
     setSubmitting(true)
@@ -310,7 +325,7 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
         .eq('pool_season_id', saison.id)
         .eq('is_active', true)
       if (!fetchErr && data && data.length > 0) {
-        applyRoster(data as RosterEntry[] | null)
+        applyRoster(data as unknown as RosterEntry[])
       } else {
         // Le fetch client a échoué ou retourné vide — on garde l'état local soumis
         // et on force un rechargement serveur pour rafraîchir les props
@@ -387,8 +402,17 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
 
       {/* Bannière mode init */}
       {initMode && (
-        <div className="bg-orange-50 border border-orange-300 rounded-lg px-4 py-3 text-sm text-orange-800">
-          <span className="font-semibold">Mode init actif</span> — Aucune validation (limites de positions, réservistes, recrues). Les joueurs appartenant à un autre pooler sont affichés et seront automatiquement retirés de leur roster actuel lors de la soumission. Pas de snapshots NHL ni de notifications.
+        <div className="bg-orange-50 border border-orange-300 rounded-lg px-4 py-3 text-sm text-orange-800 flex items-start justify-between gap-4">
+          <span>
+            <span className="font-semibold">Mode init actif</span> — Aucune validation (limites de positions, réservistes, recrues). Les joueurs appartenant à un autre pooler sont affichés et seront automatiquement retirés de leur roster actuel lors de la soumission. Pas de snapshots NHL ni de notifications.
+          </span>
+          <button
+            onClick={handleViderTous}
+            disabled={submitting}
+            className="shrink-0 text-xs px-3 py-1.5 rounded border border-red-400 text-red-600 bg-white hover:bg-red-50 font-medium disabled:opacity-40"
+          >
+            Vider tous les rosters
+          </button>
         </div>
       )}
 

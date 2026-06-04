@@ -290,8 +290,9 @@ export async function adminInitRosterAction(
     if (error) return { error: error.message }
   }
 
-  // Ajouts — retire d'abord le joueur de tout autre roster actif pour cette saison
+  // Ajouts
   for (const entry of toAdd) {
+    // Retire le joueur des autres rosters actifs pour cette saison
     await supabase
       .from('pooler_rosters')
       .update({ is_active: false, removed_at: new Date().toISOString() })
@@ -304,7 +305,14 @@ export async function adminInitRosterAction(
       ? { rookie_type: entry.rookie_type, pool_draft_year: entry.rookie_type === 'repeche' ? (entry.pool_draft_year ?? null) : null }
       : {}
 
-    // Tente INSERT; si conflit de clé (23505), fait UPDATE à la place
+    // Supprime toute entrée existante pour ce pooler+joueur+saison (active ou non)
+    await supabase
+      .from('pooler_rosters')
+      .delete()
+      .eq('pooler_id', poolerId)
+      .eq('player_id', entry.player_id)
+      .eq('pool_season_id', saisonId)
+
     const { error: insertErr } = await supabase.from('pooler_rosters').insert({
       pooler_id:      poolerId,
       player_id:      entry.player_id,
@@ -313,22 +321,27 @@ export async function adminInitRosterAction(
       is_active:      true,
       ...rookieFields,
     })
-    if (insertErr) {
-      if (String(insertErr.code) === '23505' || insertErr.message?.includes('duplicate key')) {
-        const { error: updateErr } = await supabase
-          .from('pooler_rosters')
-          .update({ is_active: true, player_type: entry.player_type, removed_at: null, ...rookieFields })
-          .eq('pooler_id', poolerId)
-          .eq('player_id', entry.player_id)
-          .eq('pool_season_id', saisonId)
-        if (updateErr) return { error: updateErr.message }
-      } else {
-        return { error: insertErr.message }
-      }
-    }
+    if (insertErr) return { error: insertErr.message }
   }
 
   return {}
+}
+
+export async function viderRostersAction(saisonId: number): Promise<{ error?: string; deleted?: number }> {
+  const userClient = await createClient()
+  const { data: { user } } = await userClient.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await userClient.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const supabase = createAdminClient()
+  const { error, count } = await supabase
+    .from('pooler_rosters')
+    .delete({ count: 'exact' })
+    .eq('pool_season_id', saisonId)
+
+  if (error) return { error: error.message }
+  return { deleted: count ?? 0 }
 }
 
 export async function submitRosterAction(
