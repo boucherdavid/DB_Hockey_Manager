@@ -303,23 +303,28 @@ export async function adminInitRosterAction(
       ? { rookie_type: entry.rookie_type, pool_draft_year: entry.rookie_type === 'repeche' ? (entry.pool_draft_year ?? null) : null }
       : {}
 
-    // Upsert sur la contrainte unique (pooler_id, player_id, pool_season_id)
-    // évite le race condition du pattern check-then-insert
-    const { error: upsertError } = await supabase
+    // UPDATE d'abord — couvre le cas où une entrée existe déjà (active ou non)
+    const { data: updated, error: updateErr } = await supabase
       .from('pooler_rosters')
-      .upsert(
-        {
-          pooler_id:      poolerId,
-          player_id:      entry.player_id,
-          pool_season_id: saisonId,
-          player_type:    entry.player_type,
-          is_active:      true,
-          removed_at:     null,
-          ...rookieFields,
-        },
-        { onConflict: 'pooler_id,player_id,pool_season_id' },
-      )
-    if (upsertError) return { error: upsertError.message }
+      .update({ is_active: true, player_type: entry.player_type, removed_at: null, ...rookieFields })
+      .eq('pooler_id', poolerId)
+      .eq('player_id', entry.player_id)
+      .eq('pool_season_id', saisonId)
+      .select('id')
+    if (updateErr) return { error: updateErr.message }
+
+    // INSERT seulement si aucune ligne n'a été mise à jour
+    if (!updated || updated.length === 0) {
+      const { error: insertErr } = await supabase.from('pooler_rosters').insert({
+        pooler_id:      poolerId,
+        player_id:      entry.player_id,
+        pool_season_id: saisonId,
+        player_type:    entry.player_type,
+        is_active:      true,
+        ...rookieFields,
+      })
+      if (insertErr) return { error: insertErr.message }
+    }
   }
 
   return {}
