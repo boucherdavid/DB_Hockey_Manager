@@ -303,31 +303,23 @@ export async function adminInitRosterAction(
       ? { rookie_type: entry.rookie_type, pool_draft_year: entry.rookie_type === 'repeche' ? (entry.pool_draft_year ?? null) : null }
       : {}
 
-    const { data: existing } = await supabase
+    // Upsert sur la contrainte unique (pooler_id, player_id, pool_season_id)
+    // évite le race condition du pattern check-then-insert
+    const { error: upsertError } = await supabase
       .from('pooler_rosters')
-      .select('id')
-      .eq('pooler_id', poolerId)
-      .eq('player_id', entry.player_id)
-      .eq('pool_season_id', saisonId)
-      .maybeSingle()
-
-    if (existing) {
-      const { error } = await supabase
-        .from('pooler_rosters')
-        .update({ is_active: true, player_type: entry.player_type, removed_at: null, ...rookieFields })
-        .eq('id', existing.id)
-      if (error) return { error: error.message }
-    } else {
-      const { error } = await supabase.from('pooler_rosters').insert({
-        pooler_id:      poolerId,
-        player_id:      entry.player_id,
-        pool_season_id: saisonId,
-        player_type:    entry.player_type,
-        is_active:      true,
-        ...rookieFields,
-      })
-      if (error) return { error: error.message }
-    }
+      .upsert(
+        {
+          pooler_id:      poolerId,
+          player_id:      entry.player_id,
+          pool_season_id: saisonId,
+          player_type:    entry.player_type,
+          is_active:      true,
+          removed_at:     null,
+          ...rookieFields,
+        },
+        { onConflict: 'pooler_id,player_id,pool_season_id' },
+      )
+    if (upsertError) return { error: upsertError.message }
   }
 
   return {}
