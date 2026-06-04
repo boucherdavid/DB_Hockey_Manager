@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { submitRosterAction, adminInitRosterAction, updateRookieTypeAction } from './actions'
 import TeamBadge from '@/components/TeamBadge'
@@ -100,6 +101,7 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
   playerOwnerMap: Record<number, string>
 }) {
   const supabase = createClient()
+  const router = useRouter()
   const tempIdCounter = useRef(-1)
 
   const [selectedPooler, setSelectedPooler] = useState<string>(poolers[0]?.id ?? '')
@@ -301,13 +303,20 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
       showMessage(result.error, 'error')
     } else {
       // Recharger depuis la BD pour avoir les vrais IDs
-      const { data } = await supabase
+      const { data, error: fetchErr } = await supabase
         .from('pooler_rosters')
         .select('id, player_id, player_type, rookie_type, pool_draft_year, players(id, first_name, last_name, position, status, is_rookie, draft_year, draft_round, draft_overall, teams(code), player_contracts(season, cap_number))')
         .eq('pooler_id', selectedPooler)
         .eq('pool_season_id', saison.id)
         .eq('is_active', true)
-      applyRoster(data as RosterEntry[] | null)
+      if (!fetchErr && data && data.length > 0) {
+        applyRoster(data as RosterEntry[] | null)
+      } else {
+        // Le fetch client a échoué ou retourné vide — on garde l'état local soumis
+        // et on force un rechargement serveur pour rafraîchir les props
+        setOriginalRoster(roster)
+        router.refresh()
+      }
       showMessage('Alignement sauvegardé.', 'success')
     }
 
