@@ -304,27 +304,27 @@ export async function adminInitRosterAction(
       ? { rookie_type: entry.rookie_type, pool_draft_year: entry.rookie_type === 'repeche' ? (entry.pool_draft_year ?? null) : null }
       : {}
 
-    // UPDATE d'abord — couvre le cas où une entrée existe déjà (active ou non)
-    const { data: updated, error: updateErr } = await supabase
-      .from('pooler_rosters')
-      .update({ is_active: true, player_type: entry.player_type, removed_at: null, ...rookieFields })
-      .eq('pooler_id', poolerId)
-      .eq('player_id', entry.player_id)
-      .eq('pool_season_id', saisonId)
-      .select('id')
-    if (updateErr) return { error: updateErr.message }
-
-    // INSERT seulement si aucune ligne n'a été mise à jour
-    if (!updated || updated.length === 0) {
-      const { error: insertErr } = await supabase.from('pooler_rosters').insert({
-        pooler_id:      poolerId,
-        player_id:      entry.player_id,
-        pool_season_id: saisonId,
-        player_type:    entry.player_type,
-        is_active:      true,
-        ...rookieFields,
-      })
-      if (insertErr) return { error: insertErr.message }
+    // Tente INSERT; si conflit de clé (23505), fait UPDATE à la place
+    const { error: insertErr } = await supabase.from('pooler_rosters').insert({
+      pooler_id:      poolerId,
+      player_id:      entry.player_id,
+      pool_season_id: saisonId,
+      player_type:    entry.player_type,
+      is_active:      true,
+      ...rookieFields,
+    })
+    if (insertErr) {
+      if (insertErr.code === '23505') {
+        const { error: updateErr } = await supabase
+          .from('pooler_rosters')
+          .update({ is_active: true, player_type: entry.player_type, removed_at: null, ...rookieFields })
+          .eq('pooler_id', poolerId)
+          .eq('player_id', entry.player_id)
+          .eq('pool_season_id', saisonId)
+        if (updateErr) return { error: updateErr.message }
+      } else {
+        return { error: insertErr.message }
+      }
     }
   }
 
