@@ -314,7 +314,7 @@ export async function adminInitRosterAction(
       ...rookieFields,
     })
     if (insertErr) {
-      if (insertErr.code === '23505') {
+      if (String(insertErr.code) === '23505' || insertErr.message?.includes('duplicate key')) {
         const { error: updateErr } = await supabase
           .from('pooler_rosters')
           .update({ is_active: true, player_type: entry.player_type, removed_at: null, ...rookieFields })
