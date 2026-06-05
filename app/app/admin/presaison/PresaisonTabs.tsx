@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 import PresaisonManager from './PresaisonManager'
-import PicksEditor, { type Pick, type Pooler } from '../config/PicksEditor'
+import PicksManager from './PicksManager'
 import RookieOverrideManager from '../config/RookieOverrideManager'
+import { type Pick, type Pooler } from '../config/PicksEditor'
 
-type Saison = { id: number; season: string; is_active: boolean }
+type Saison = { id: number; season: string; is_active: boolean; draft_rounds: number }
+type ActiveSaison = { id: number; season: string }
 
 type Tab = 'presaison' | 'picks' | 'recrues'
 
@@ -16,14 +18,17 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 type Props = {
-  saisons: Saison[]
+  saisonsPresaison: { id: number; season: string; is_active: boolean }[]
   defaultSaisonId: number
-  picks: Pick[]
+  saisons: Saison[]
   poolers: Pooler[]
-  activeSaison: Saison | null
+  picksBySaison: Record<number, Pick[]>
+  activeSaison: ActiveSaison | null
 }
 
-export default function PresaisonTabs({ saisons, defaultSaisonId, picks, poolers, activeSaison }: Props) {
+export default function PresaisonTabs({
+  saisonsPresaison, defaultSaisonId, saisons, poolers, picksBySaison, activeSaison,
+}: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('presaison')
 
   const tabCls = (id: Tab) =>
@@ -44,13 +49,11 @@ export default function PresaisonTabs({ saisons, defaultSaisonId, picks, poolers
       </div>
 
       {activeTab === 'presaison' && (
-        <PresaisonManager saisons={saisons} defaultSaisonId={defaultSaisonId} />
+        <PresaisonManager saisons={saisonsPresaison} defaultSaisonId={defaultSaisonId} />
       )}
 
       {activeTab === 'picks' && (
-        activeSaison
-          ? <PicksEditor picks={picks} poolers={poolers} seasonLabel={activeSaison.season} />
-          : <div className="text-gray-400 text-sm bg-white rounded-lg shadow p-6">Aucune saison régulière active.</div>
+        <PicksManager saisons={saisons} poolers={poolers} picksBySaison={picksBySaison} />
       )}
 
       {activeTab === 'recrues' && (

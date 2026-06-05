@@ -36,6 +36,7 @@ type Saison = {
   indicator_goalie_sv_pct?: number | null
   indicator_goalie_gaa?: number | null
   indicator_goalie_min_games?: number | null
+  draft_rounds?: number | null
   saison_start_date?: string | null
   saison_end_date?: string | null
 }

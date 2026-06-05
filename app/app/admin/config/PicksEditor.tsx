@@ -59,7 +59,9 @@ export default function PicksEditor({
     }
   }
 
-  const rounds = [1, 2, 3, 4]
+  const rounds = [...new Set(localPicks.map(p => p.round))].sort((a, b) => a - b)
+
+  const roundLabel = (r: number) => r === 1 ? '1re ronde' : `${r}e ronde`
 
   return (
     <div>
@@ -87,7 +89,7 @@ export default function PicksEditor({
           return (
             <div key={round}>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                {ROUND_LABELS[round]}
+                {ROUND_LABELS[round] ?? roundLabel(round)}
               </h3>
               <div className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">

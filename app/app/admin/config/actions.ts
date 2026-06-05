@@ -386,6 +386,7 @@ export async function updateCapAction(
     indicatorGoalieSvPct?: number
     indicatorGoalieGaa?: number
     indicatorGoalieMinGames?: number
+    draftRounds?: number
     saisonStartDate?: string | null
     saisonEndDate?: string | null
   },
@@ -416,6 +417,7 @@ export async function updateCapAction(
   if (opts?.indicatorGoalieSvPct !== undefined) updates.indicator_goalie_sv_pct = opts.indicatorGoalieSvPct
   if (opts?.indicatorGoalieGaa !== undefined) updates.indicator_goalie_gaa = opts.indicatorGoalieGaa
   if (opts?.indicatorGoalieMinGames !== undefined) updates.indicator_goalie_min_games = opts.indicatorGoalieMinGames
+  if (opts?.draftRounds !== undefined) updates.draft_rounds = opts.draftRounds
   if (opts?.saisonStartDate !== undefined) updates.saison_start_date = opts.saisonStartDate ?? null
   if (opts?.saisonEndDate !== undefined) updates.saison_end_date = opts.saisonEndDate ?? null
 
@@ -430,4 +432,36 @@ export async function updateCapAction(
   revalidatePath('/')
   revalidatePath('/poolers')
   return {}
+}
+
+export async function initPicksAction(
+  saisonId: number,
+  draftRounds: number,
+): Promise<{ error?: string; created?: number }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { data: poolers } = await supabase.from('poolers').select('id').order('id')
+  if (!poolers || poolers.length === 0) return { error: 'Aucun pooler trouvé.' }
+
+  const rows = poolers.flatMap(p =>
+    Array.from({ length: draftRounds }, (_, i) => ({
+      pool_season_id:    saisonId,
+      original_owner_id: p.id,
+      current_owner_id:  p.id,
+      round:             i + 1,
+      is_used:           false,
+    }))
+  )
+
+  const { error, count } = await supabase
+    .from('pool_draft_picks')
+    .insert(rows, { count: 'exact' })
+
+  if (error) return { error: error.message }
+  revalidatePath('/admin/presaison')
+  return { created: count ?? rows.length }
 }

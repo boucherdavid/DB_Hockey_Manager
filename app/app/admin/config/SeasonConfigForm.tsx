@@ -24,6 +24,7 @@ type Saison = {
   indicator_goalie_sv_pct?: number | null
   indicator_goalie_gaa?: number | null
   indicator_goalie_min_games?: number | null
+  draft_rounds?: number | null
   saison_start_date?: string | null
   saison_end_date?: string | null
 }
@@ -43,6 +44,7 @@ export default function SeasonConfigForm({ saison }: { saison: Saison }) {
   const [delaiReactivation, setDelaiReactivation] = useState(String(saison.delai_reactivation_jours ?? 7))
   const [maxAl, setMaxAl] = useState(String(saison.max_signatures_al ?? 10))
   const [maxLtir, setMaxLtir] = useState(String(saison.max_signatures_ltir ?? 2))
+  const [draftRounds, setDraftRounds] = useState(String(saison.draft_rounds ?? 4))
   const [toolOuvert, setToolOuvert] = useState(saison.gestion_effectifs_ouvert ?? true)
   const [indStreakChaud, setIndStreakChaud] = useState(String(saison.indicator_streak_chaud ?? 3))
   const [indStreakForme, setIndStreakForme] = useState(String(saison.indicator_streak_forme ?? 2))
@@ -86,6 +88,7 @@ export default function SeasonConfigForm({ saison }: { saison: Saison }) {
         delaiReactivationJours: Math.max(0, parseInt(delaiReactivation) || 0),
         maxSignaturesAl: Math.max(0, parseInt(maxAl) || 0),
         maxSignaturesLtir: Math.max(0, parseInt(maxLtir) || 0),
+        draftRounds: Math.max(1, parseInt(draftRounds) || 4),
         gestionEffectifsOuvert: toolOuvert,
         indicatorStreakChaud: Math.max(1, parseInt(indStreakChaud) || 3),
         indicatorStreakForme: Math.max(1, parseInt(indStreakForme) || 2),
@@ -225,6 +228,12 @@ export default function SeasonConfigForm({ saison }: { saison: Saison }) {
               <input type="number" min={0} step={1} value={maxLtir}
                 onChange={e => setMaxLtir(e.target.value)} className={inputCls} />
             </div>
+          </div>
+          <div className="px-4 py-3">
+            <p className="text-xs text-gray-500 mb-1">Rondes de repêchage recrues</p>
+            <input type="number" min={1} step={1} value={draftRounds}
+              onChange={e => setDraftRounds(e.target.value)} className={inputCls} />
+            <p className="text-xs text-gray-400 mt-1">Nombre de rondes lors du repêchage annuel des recrues.</p>
           </div>
         </div>
       </div>
