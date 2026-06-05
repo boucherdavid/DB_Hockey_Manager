@@ -56,6 +56,22 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-05
+
+**[Fix] — Mode init : DELETE avant INSERT pour éviter conflit de clé** (`app/app/admin/rosters/actions.ts`, `RosterManager.tsx`) :
+- `adminInitRosterAction` utilise maintenant `createAdminClient()` (bypass RLS) + DELETE avant chaque INSERT pour garantir zéro conflit de clé peu importe l'état de la BD
+- Ajout bouton **"Vider tous les rosters"** (rouge) dans la bannière mode init → supprime toutes les lignes `pooler_rosters` de la saison active via `viderRostersAction`
+- Commits : `e549088`
+
+**[Feat] — Choix de repêchage configurables et multi-saisons** (`app/app/admin/presaison/`, `config/actions.ts`, `config/PicksEditor.tsx`) :
+- `draft_rounds` configurable par saison (Config > Pool Saison > Règles de transactions)
+- `PicksManager` : sélecteur de saison (toutes les saisons régulières) + bouton **"Initialiser"** qui crée N rondes × M poolers picks dynamiquement
+- `PicksEditor` : rondes dérivées des picks réels (plus hardcodé 1-4)
+- `initPicksAction` : crée les picks pour tous les poolers existants
+- Contrainte `pool_draft_picks.round >= 1` (remplace `BETWEEN 1 AND 4`)
+- **À appliquer en BD** : `supabase_migrations/draft_rounds_configurable.sql`
+- Commit : `99c0e43`
+
 ### 2026-06-02 (suite)
 
 **[Feat] — Indicateurs de performance gardiens configurables** (`app/app/admin/config/SeasonConfigForm.tsx`, `actions.ts`, `statistiques/page.tsx`, `poolers/[id]/page.tsx`) :
