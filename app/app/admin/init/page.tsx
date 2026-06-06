@@ -8,15 +8,18 @@ import BanqueRecruesManager from '../recrues/BanqueRecruesManager'
 import DraftBoard from '../repechage/DraftBoard'
 import DraftOrderEditor from '../repechage/DraftOrderEditor'
 import PresaisonManager from '../presaison/PresaisonManager'
+import PicksManager from '../presaison/PicksManager'
 import { SaisonSelectNav } from './SaisonSelectNav'
+import { type Pick, type Pooler } from '../config/PicksEditor'
 
 export const dynamic = 'force-dynamic'
 
 const TABS = [
   { id: 'rosters',   label: 'Rosters initiaux' },
   { id: 'recrues',   label: 'Banque de recrues' },
-  { id: 'repechage', label: 'Repêchage recrues' },
   { id: 'presaison', label: 'Pré-saison' },
+  { id: 'repechage', label: 'Repêchage recrues' },
+  { id: 'choix',     label: 'Choix de repêchage' },
 ]
 
 async function fetchAllRookies(
@@ -183,6 +186,36 @@ export default async function AdminInitPage({
     defaultPresaisonId = saisonsPresaison.find(s => s.is_active)?.id ?? saisonsPresaison[0]?.id ?? null
   }
 
+  // ── Choix de repêchage ────────────────────────────────────────────────────
+  let saisonsChoix: { id: number; season: string; is_active: boolean; draft_rounds: number }[] = []
+  let poolersChoix: Pooler[] = []
+  let picksBySaison: Record<number, Pick[]> = {}
+  if (activeTab === 'choix') {
+    const { data: sc } = await supabase.from('pool_seasons').select('id, season, is_active, draft_rounds').eq('is_playoff', false).order('season', { ascending: false })
+    saisonsChoix = (sc ?? []) as { id: number; season: string; is_active: boolean; draft_rounds: number }[]
+    const saisionIds = saisonsChoix.map(s => s.id)
+    const [{ data: pc }, { data: rp }] = await Promise.all([
+      supabase.from('poolers').select('id, name').order('name'),
+      saisionIds.length > 0
+        ? supabase.from('pool_draft_picks').select('id, round, original_owner_id, current_owner_id, is_used, pool_season_id').in('pool_season_id', saisionIds).order('round')
+        : Promise.resolve({ data: [] }),
+    ])
+    poolersChoix = (pc ?? []).map(p => ({ id: p.id, name: p.name }))
+    const pMap = new Map((pc ?? []).map(p => [p.id, p.name]))
+    for (const p of rp ?? []) {
+      const pick: Pick = {
+        id: p.id, round: p.round,
+        original_owner_id: p.original_owner_id,
+        original_owner_name: pMap.get(p.original_owner_id) ?? '?',
+        current_owner_id: p.current_owner_id,
+        current_owner_name: pMap.get(p.current_owner_id) ?? '?',
+        is_used: p.is_used,
+      }
+      if (!picksBySaison[p.pool_season_id]) picksBySaison[p.pool_season_id] = []
+      picksBySaison[p.pool_season_id].push(pick)
+    }
+  }
+
   return (
     <div>
       <AdminTabBar tabs={TABS} activeTab={activeTab} basePath="/admin/init" />
@@ -261,6 +294,14 @@ export default async function AdminInitPage({
                 />
               </>
           }
+        </div>
+      )}
+
+      {/* ── Choix de repêchage ── */}
+      {activeTab === 'choix' && (
+        <div className="max-w-5xl">
+          <h1 className="text-2xl font-bold text-gray-800 mb-6">Choix de repêchage</h1>
+          <PicksManager saisons={saisonsChoix} poolers={poolersChoix} picksBySaison={picksBySaison} />
         </div>
       )}
 
