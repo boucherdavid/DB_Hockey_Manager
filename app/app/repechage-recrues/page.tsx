@@ -1,0 +1,161 @@
+import { createClient } from '@/lib/supabase/server'
+import DraftBoard from '../admin/repechage/DraftBoard'
+import SaisonSelectClient from './SaisonSelectClient'
+
+export const dynamic = 'force-dynamic'
+
+export default async function RepechageRecruesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saisonId?: string }>
+}) {
+  const supabase = await createClient()
+  const { saisonId } = await searchParams
+
+  const { data: allSaisons } = await supabase
+    .from('pool_seasons')
+    .select('id, season, is_active')
+    .eq('is_playoff', false)
+    .order('season', { ascending: false })
+
+  const saisons = (allSaisons ?? []) as { id: number; season: string; is_active: boolean }[]
+  const parsedId = saisonId ? parseInt(saisonId, 10) : NaN
+  const saison = (!isNaN(parsedId) && saisons.find(s => s.id === parsedId))
+    || saisons.find(s => s.is_active)
+    || saisons[0]
+    || null
+
+  if (!saison) {
+    return (
+      <div className="max-w-5xl mx-auto py-8 px-4">
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Repêchage des recrues</h1>
+        <p className="text-gray-400">Aucune saison disponible.</p>
+      </div>
+    )
+  }
+
+  const poolDraftYear = parseInt(saison.season.split('-')[0], 10)
+
+  const [
+    { data: picksData },
+    { data: usedPicksData },
+    { data: rookiesData },
+    { data: bankData },
+  ] = await Promise.all([
+    supabase
+      .from('pool_draft_picks')
+      .select('id, round, draft_order, current_owner:poolers!current_owner_id(id, name), original_owner:poolers!original_owner_id(id, name)')
+      .eq('pool_season_id', saison.id)
+      .eq('is_used', false)
+      .order('round'),
+    supabase
+      .from('pool_draft_picks')
+      .select('id, round, draft_order, current_owner:poolers!current_owner_id(id, name), original_owner:poolers!original_owner_id(id, name)')
+      .eq('pool_season_id', saison.id)
+      .eq('is_used', true)
+      .order('round'),
+    supabase
+      .from('players')
+      .select('id, first_name, last_name, position, status, draft_year, draft_round, draft_overall, teams(code)')
+      .eq('is_rookie', true)
+      .not('draft_year', 'is', null)
+      .not('draft_overall', 'is', null)
+      .order('draft_year', { ascending: false })
+      .order('draft_round', { ascending: true, nullsFirst: false })
+      .order('draft_overall', { ascending: true, nullsFirst: false }),
+    supabase
+      .from('pooler_rosters')
+      .select('pooler_id, player_id, players(id, first_name, last_name, position, teams(code), draft_round, draft_overall)')
+      .eq('pool_season_id', saison.id)
+      .eq('player_type', 'recrue')
+      .eq('pool_draft_year', poolDraftYear)
+      .eq('is_active', true),
+  ])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bankByPooler = new Map<string, any[]>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const entry of (bankData ?? []) as any[]) {
+    const existing = bankByPooler.get(entry.pooler_id) ?? []
+    existing.push(entry.players)
+    bankByPooler.set(entry.pooler_id, existing)
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const inBankIds = new Set((bankData ?? []).map((r: any) => r.player_id))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const availableRookies = (rookiesData ?? []).filter((r: any) => !inBankIds.has(r.id))
+
+  const totalPicks = (picksData?.length ?? 0) + (usedPicksData?.length ?? 0)
+  const isDraftDone = (picksData?.length ?? 0) === 0 && totalPicks > 0
+  const isDraftStarted = (usedPicksData?.length ?? 0) > 0
+
+  return (
+    <div className="max-w-6xl mx-auto py-8 px-4">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Repêchage des recrues</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Repêchage {poolDraftYear}
+            {isDraftDone && <span className="ml-2 text-green-600 font-medium">· Complété ✓</span>}
+            {!isDraftStarted && totalPicks > 0 && <span className="ml-2 text-gray-400">· Pas encore commencé</span>}
+          </p>
+        </div>
+        <SaisonSelectClient saisons={saisons} selectedId={saison.id} />
+      </div>
+
+      {totalPicks === 0 ? (
+        <div className="bg-gray-50 rounded-lg border border-gray-200 px-6 py-12 text-center">
+          <p className="text-gray-500">Aucun choix de repêchage configuré pour cette saison.</p>
+          <p className="text-xs text-gray-400 mt-2">L'admin doit initialiser les picks dans Pré-saison &gt; Choix de repêchage.</p>
+        </div>
+      ) : (
+        <>
+          <DraftBoard
+            picks={(picksData ?? []) as never[]}
+            usedPicks={(usedPicksData ?? []) as never[]}
+            rookies={availableRookies as never[]}
+            bankByPooler={Object.fromEntries(bankByPooler)}
+            saisonId={saison.id}
+            poolDraftYear={poolDraftYear}
+            readOnly
+          />
+
+          {availableRookies.length > 0 && !isDraftDone && (
+            <div className="mt-8">
+              <h2 className="text-lg font-semibold text-gray-800 mb-3">
+                Joueurs disponibles{' '}
+                <span className="text-gray-400 font-normal text-sm">({availableRookies.length})</span>
+              </h2>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b text-left">
+                      <th className="px-4 py-2.5 font-medium text-gray-600">Joueur</th>
+                      <th className="px-4 py-2.5 font-medium text-gray-600 w-16">Pos</th>
+                      <th className="px-4 py-2.5 font-medium text-gray-600 w-20">Équipe</th>
+                      <th className="px-4 py-2.5 font-medium text-gray-600">Repêchage LNH</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {availableRookies.map((r: any) => (
+                      <tr key={r.id} className="border-b last:border-0 hover:bg-gray-50">
+                        <td className="px-4 py-2.5 font-medium text-gray-800">{r.last_name}, {r.first_name}</td>
+                        <td className="px-4 py-2.5 text-gray-500">{r.position ?? '—'}</td>
+                        <td className="px-4 py-2.5 text-gray-500">{r.teams?.code ?? '—'}</td>
+                        <td className="px-4 py-2.5 text-gray-500">
+                          {r.draft_year} — R{r.draft_round ?? '?'} #{r.draft_overall ?? '?'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}

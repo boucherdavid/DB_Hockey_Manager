@@ -32,6 +32,7 @@ export default function DraftBoard({
   bankByPooler,
   saisonId,
   poolDraftYear,
+  readOnly = false,
 }: {
   picks: Pick[]
   usedPicks: Pick[]
@@ -39,6 +40,7 @@ export default function DraftBoard({
   bankByPooler: Record<string, any[]>
   saisonId: number
   poolDraftYear: number
+  readOnly?: boolean
 }) {
   const [selections, setSelections] = useState<Record<number, number | null>>(() =>
     Object.fromEntries(picks.map(p => [p.id, null]))
@@ -183,7 +185,7 @@ export default function DraftBoard({
                               </>
                             : <span className="text-gray-400 text-xs">Soumis</span>
                           }
-                          {!rolledBackPickIds.has(pick.id) && (
+                          {!readOnly && !rolledBackPickIds.has(pick.id) && (
                             <button
                               onClick={() => handleRollback(pick.id)}
                               disabled={rollingBack === pick.id}
@@ -215,26 +217,29 @@ export default function DraftBoard({
                         }
                       </td>
                       <td className="px-4 py-3">
-                        <select
-                          value={selectedId ?? ''}
-                          onChange={e => setSelections(prev => ({
-                            ...prev,
-                            [pick.id]: e.target.value ? Number(e.target.value) : null,
-                          }))}
-                          className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="">— Choisir une recrue —</option>
-                          {rookies.map(r => {
-                            const alreadyPicked = selectedPlayerIds.has(r.id) && selections[pick.id] !== r.id
-                            const draftInfo = `R${r.draft_round ?? '?'} #${r.draft_overall ?? '?'}`
-                            return (
-                              <option key={r.id} value={r.id} disabled={alreadyPicked}>
-                                {r.last_name}, {r.first_name} {r.position ?? ''} {r.teams?.code ?? DASH} — {draftInfo}
-                                {alreadyPicked ? ' (déjà choisi)' : ''}
-                              </option>
-                            )
-                          })}
-                        </select>
+                        {readOnly
+                          ? <span className="text-xs text-gray-400 italic">En attente</span>
+                          : <select
+                              value={selectedId ?? ''}
+                              onChange={e => setSelections(prev => ({
+                                ...prev,
+                                [pick.id]: e.target.value ? Number(e.target.value) : null,
+                              }))}
+                              className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="">— Choisir une recrue —</option>
+                              {rookies.map(r => {
+                                const alreadyPicked = selectedPlayerIds.has(r.id) && selections[pick.id] !== r.id
+                                const draftInfo = `R${r.draft_round ?? '?'} #${r.draft_overall ?? '?'}`
+                                return (
+                                  <option key={r.id} value={r.id} disabled={alreadyPicked}>
+                                    {r.last_name}, {r.first_name} {r.position ?? ''} {r.teams?.code ?? DASH} — {draftInfo}
+                                    {alreadyPicked ? ' (déjà choisi)' : ''}
+                                  </option>
+                                )
+                              })}
+                            </select>
+                        }
                       </td>
                     </tr>
                   )
@@ -245,8 +250,8 @@ export default function DraftBoard({
         )
       })}
 
-      {/* Barre de soumission */}
-      <div className="flex items-center justify-between bg-white rounded-lg shadow px-5 py-4">
+      {/* Barre de soumission — admin seulement */}
+      {!readOnly && <div className="flex items-center justify-between bg-white rounded-lg shadow px-5 py-4">
         <div className="text-sm text-gray-500">
           {picks.filter(p => !submittedPickIds.has(p.id)).length > 0
             ? `${pendingSelections.length} / ${picks.filter(p => !submittedPickIds.has(p.id)).length} choix restants remplis`
@@ -269,7 +274,7 @@ export default function DraftBoard({
             </button>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

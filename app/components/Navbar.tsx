@@ -44,7 +44,7 @@ function Avatar({ name }: { name: string }) {
   )
 }
 
-type DropdownKey = 'pool-saison' | 'statistiques' | 'series' | 'admin' | 'profile' | null
+type DropdownKey = 'pool-saison' | 'statistiques' | 'repechage' | 'series' | 'admin' | 'profile' | null
 
 export default function Navbar({
   initialUserName,
@@ -231,9 +231,18 @@ export default function Navbar({
               </Link>
 
               {/* Repêchage */}
-              <Link href="/repechage" className={navBtnClass(isActive('/repechage'))}>
-                {'Rep\u00eachage'}
-              </Link>
+              <div className="relative">
+                <button onClick={() => toggle('repechage')}
+                  className={navBtnClass(isActive('/repechage', '/repechage-recrues'))}>
+                  {'Repêchage'} <Chevron open={openDropdown === 'repechage'} />
+                </button>
+                {openDropdown === 'repechage' && (
+                  <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                    <Link href="/repechage" className={dropdownLinkClass('/repechage')}>{'Repêchage LNH'}</Link>
+                    <Link href="/repechage-recrues" className={dropdownLinkClass('/repechage-recrues')}>{'Repêchage recrues'}</Link>
+                  </div>
+                )}
+              </div>
 
               {/* Calendrier */}
               <Link href="/calendrier" className={navBtnClass(isActive('/calendrier'))}>
@@ -281,6 +290,7 @@ export default function Navbar({
                       </Link>
                       <Link href="/admin/init"      className={dropdownLinkClass('/admin/init')}>Initialisation</Link>
                       <Link href="/admin/effectifs" className={dropdownLinkClass('/admin/effectifs')}>{'Gestion des effectifs'}</Link>
+                      <Link href="/admin/repechage" className={dropdownLinkClass('/admin/repechage')}>{'Repêchage recrues'}</Link>
                       <div className="border-t my-1" />
                       <Link href="/admin/series"    className={dropdownLinkClass('/admin/series')}>Pool des séries</Link>
                     </div>
@@ -374,7 +384,8 @@ export default function Navbar({
 
             <MobileSection label="Autre" />
             <Link href="/joueurs"    className={mobileLinkClass('/joueurs')}>Contrats LNH</Link>
-            <Link href="/repechage"  className={mobileLinkClass('/repechage')}>{'Rep\u00eachage'}</Link>
+            <Link href="/repechage"  className={mobileLinkClass('/repechage')}>{'Rep\u00eachage LNH'}</Link>
+            <Link href="/repechage-recrues" className={mobileLinkClass('/repechage-recrues')}>{'Rep\u00eachage recrues'}</Link>
             <Link href="/calendrier" className={mobileLinkClass('/calendrier')}>Calendrier</Link>
 
             <MobileSection label={'Pool S\u00e9ries'} />
