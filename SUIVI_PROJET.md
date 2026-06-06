@@ -56,6 +56,24 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-06
+
+**[Feat] — Page publique Repêchage recrues + admin multi-saisons** (`app/app/repechage-recrues/`, `app/app/admin/repechage/`, `app/components/Navbar.tsx`) :
+- `/repechage-recrues` : nouvelle page publique lecture seule — tableau de bord du draft par ronde, sélecteur de saison pour l'historique, liste des joueurs encore disponibles
+- `/admin/repechage` : sélecteur de saison ajouté (plus limité à la saison active)
+- `DraftBoard` : prop `readOnly` — masque dropdowns, bouton soumettre et boutons annuler
+- Navbar : "Repêchage" devient un dropdown (Repêchage LNH + Repêchage recrues), lien admin ajouté
+- Onglets admin/init réordonnés : Choix de repêchage **avant** Repêchage recrues (logique chronologique)
+- Auto-création des saisons futures : confirmé que `createSeasonAction` crée la saison demandée + les 2 suivantes automatiquement (comportement intentionnel existant)
+- Commits : `04a19d5`, `0ad78a9`
+
+**[Feat] — Picks configurables multi-saisons** (`app/app/admin/presaison/`, `app/app/admin/init/`) :
+- `PicksManager` dans Init > Choix de repêchage : sélecteur de toutes les saisons régulières + bouton **Initialiser** (N rondes × M poolers dynamiques)
+- `draft_rounds` configurable par saison (Config > Pool Saison)
+- `PicksEditor` : rondes dérivées des picks réels (plus hardcodé 1-4)
+- Migration BD : `supabase_migrations/draft_rounds_configurable.sql` (appliquée)
+- Commits : `99c0e43`, `98af829`
+
 ### 2026-06-05
 
 **[Fix] — Mode init : DELETE avant INSERT pour éviter conflit de clé** (`app/app/admin/rosters/actions.ts`, `RosterManager.tsx`) :
