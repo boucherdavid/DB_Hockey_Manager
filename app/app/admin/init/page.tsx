@@ -18,8 +18,8 @@ const TABS = [
   { id: 'rosters',   label: 'Rosters initiaux' },
   { id: 'recrues',   label: 'Banque de recrues' },
   { id: 'presaison', label: 'Pré-saison' },
-  { id: 'repechage', label: 'Repêchage recrues' },
   { id: 'choix',     label: 'Choix de repêchage' },
+  { id: 'repechage', label: 'Repêchage recrues' },
 ]
 
 async function fetchAllRookies(
