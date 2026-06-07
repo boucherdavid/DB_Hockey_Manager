@@ -19,7 +19,6 @@ const TABS = [
   { id: 'recrues',   label: 'Banque de recrues' },
   { id: 'presaison', label: 'Pré-saison' },
   { id: 'choix',     label: 'Choix de repêchage' },
-  { id: 'repechage', label: 'Repêchage recrues' },
 ]
 
 async function fetchAllRookies(
