@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import PlayerMerge from './PlayerMerge'
 
 export default async function AdminJoueursPage() {
   const supabase = await createClient()
@@ -57,6 +58,8 @@ export default async function AdminJoueursPage() {
           </p>
         </div>
       </div>
+
+      <PlayerMerge />
 
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 space-y-2">
         <h2 className="text-sm font-semibold text-amber-900">Important</h2>
