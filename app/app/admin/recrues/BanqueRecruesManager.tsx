@@ -242,6 +242,7 @@ export default function BanqueRecruesManager({
       setBank((prev) => [...prev, newEntry])
       setMessage('Recrue ajoutée!')
       setPendingRookie(null)
+      setSearch('')
     }
     setLoading(false)
     setTimeout(() => setMessage(''), 3000)
