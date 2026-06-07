@@ -45,6 +45,23 @@ export async function mergePlayersAction(
   const db = createAdminClient()
   const ops: string[] = []
 
+  // ── Enrichir le joueur à garder avec les champs manquants du doublon ───────
+  const [{ data: keepPlayer }, { data: dupPlayer }] = await Promise.all([
+    db.from('players').select('draft_year, draft_round, draft_overall, nhl_id').eq('id', keepId).single(),
+    db.from('players').select('draft_year, draft_round, draft_overall, nhl_id').eq('id', dupId).single(),
+  ])
+  if (keepPlayer && dupPlayer) {
+    const updates: Record<string, unknown> = {}
+    if (!keepPlayer.draft_year   && dupPlayer.draft_year)   updates.draft_year    = dupPlayer.draft_year
+    if (!keepPlayer.draft_round  && dupPlayer.draft_round)  updates.draft_round   = dupPlayer.draft_round
+    if (!keepPlayer.draft_overall && dupPlayer.draft_overall) updates.draft_overall = dupPlayer.draft_overall
+    if (!keepPlayer.nhl_id       && dupPlayer.nhl_id)       updates.nhl_id        = dupPlayer.nhl_id
+    if (Object.keys(updates).length > 0) {
+      await db.from('players').update(updates).eq('id', keepId)
+      ops.push(`players (enrichi: ${Object.keys(updates).join(', ')})`)
+    }
+  }
+
   // ── player_contracts ──────────────────────────────────────────────────────
   // Récupérer les saisons déjà couvertes par le joueur à garder
   const { data: keepContracts } = await db
