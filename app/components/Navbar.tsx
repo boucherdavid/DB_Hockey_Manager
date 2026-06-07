@@ -289,8 +289,8 @@ export default function Navbar({
                         </span>
                       </Link>
                       <Link href="/admin/init"      className={dropdownLinkClass('/admin/init')}>Initialisation</Link>
-                      <Link href="/admin/effectifs" className={dropdownLinkClass('/admin/effectifs')}>{'Gestion des effectifs'}</Link>
                       <Link href="/admin/repechage" className={dropdownLinkClass('/admin/repechage')}>{'Repêchage recrues'}</Link>
+                      <Link href="/admin/effectifs" className={dropdownLinkClass('/admin/effectifs')}>{'Gestion des effectifs'}</Link>
                       <div className="border-t my-1" />
                       <Link href="/admin/series"    className={dropdownLinkClass('/admin/series')}>Pool des séries</Link>
                     </div>
