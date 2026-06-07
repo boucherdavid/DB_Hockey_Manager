@@ -218,6 +218,7 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
 
   const addPlayer = (player: Player, playerType: 'actif' | 'recrue' | 'reserviste') => {
     if (rosterPlayerIds.has(player.id)) return
+    setSearch('')
     if (playerType === 'recrue' && !player.is_rookie && !initMode) {
       showMessage('Seuls les joueurs recrues peuvent aller dans la banque de recrues.', 'error')
       return
