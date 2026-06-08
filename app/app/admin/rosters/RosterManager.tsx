@@ -219,9 +219,14 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
   const addPlayer = (player: Player, playerType: 'actif' | 'recrue' | 'reserviste') => {
     if (rosterPlayerIds.has(player.id)) return
     setSearch('')
-    if (playerType === 'recrue' && !player.is_rookie && !initMode) {
-      showMessage('Seuls les joueurs recrues peuvent aller dans la banque de recrues.', 'error')
-      return
+    if (playerType === 'recrue' && !initMode) {
+      const saisonFin = saison ? parseInt(saison.season.split('-')[0], 10) + 1 : new Date().getFullYear()
+      const draftYearCutoff = saisonFin - 5
+      const isEligible = player.is_rookie || (player.draft_year != null && player.draft_year >= draftYearCutoff)
+      if (!isEligible) {
+        showMessage('Seuls les joueurs recrues peuvent aller dans la banque de recrues.', 'error')
+        return
+      }
     }
     const tempId = tempIdCounter.current--
     // Auto-détection du type recrue selon la présence d'un draft_year
@@ -260,9 +265,14 @@ export default function RosterManager({ poolers, players, saison, allTakenPlayer
   }
 
   const changeType = (entry: NormalizedRosterEntry, newType: 'actif' | 'recrue' | 'reserviste' | 'ltir') => {
-    if (newType === 'recrue' && !entry.players.is_rookie) {
-      showMessage('Seuls les joueurs recrues peuvent aller dans la banque de recrues.', 'error')
-      return
+    if (newType === 'recrue') {
+      const saisonFin = saison ? parseInt(saison.season.split('-')[0], 10) + 1 : new Date().getFullYear()
+      const draftYearCutoff = saisonFin - 5
+      const isEligible = entry.players.is_rookie || (entry.players.draft_year != null && entry.players.draft_year >= draftYearCutoff)
+      if (!isEligible) {
+        showMessage('Seuls les joueurs recrues peuvent aller dans la banque de recrues.', 'error')
+        return
+      }
     }
     setRoster(prev => prev.map(r => r.id === entry.id ? { ...r, player_type: newType } : r))
   }

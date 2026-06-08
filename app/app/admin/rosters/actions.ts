@@ -96,8 +96,14 @@ export async function addPlayerAction(
   const supabase = await createClient()
 
   if (playerType === 'recrue') {
-    const { data: player } = await supabase.from('players').select('is_rookie').eq('id', playerId).single()
-    if (!player?.is_rookie) {
+    const [{ data: player }, { data: season }] = await Promise.all([
+      supabase.from('players').select('is_rookie, draft_year').eq('id', playerId).single(),
+      supabase.from('pool_seasons').select('season').eq('id', saisonId).single(),
+    ])
+    const saisonFin = season ? parseInt(season.season.split('-')[0], 10) + 1 : new Date().getFullYear()
+    const draftYearCutoff = saisonFin - 5
+    const isEligible = player?.is_rookie || (player?.draft_year != null && player.draft_year >= draftYearCutoff)
+    if (!isEligible) {
       return { error: 'Seuls les joueurs recrues peuvent aller dans la banque de recrues.' }
     }
     if (!rookieType) {
