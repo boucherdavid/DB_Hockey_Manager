@@ -358,7 +358,7 @@ export default function BanqueRecruesManager({
         </div>
 
         {/* Recrues disponibles */}
-        <div className="bg-white rounded-lg shadow p-5">
+        <div className="bg-white rounded-lg shadow p-5 sticky top-4 self-start">
           <h2 className="font-semibold text-gray-700 mb-4">
             {`Recrues disponibles \u2014 ${availableRookies.length} joueur(s)`}
           </h2>
@@ -382,7 +382,7 @@ export default function BanqueRecruesManager({
             />
           </div>
 
-          <div className="space-y-1 max-h-[32rem] overflow-y-auto pr-1">
+          <div className="space-y-1 max-h-[calc(100vh-16rem)] overflow-y-auto pr-1">
             {availableRookies.map((rookie) => (
               <div key={rookie.id}>
                 <div className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 group">
