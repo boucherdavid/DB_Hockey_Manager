@@ -56,6 +56,24 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-08
+
+**[Fix] — Recrues éligibles à la banque : accepter les repêchés sans contrat NHL actif** (`app/app/admin/rosters/actions.ts`, `RosterManager.tsx`) :
+- La validation ne vérifiait que `is_rookie = true` (flag PuckPedia) — bloquait les joueurs repêchés récemment sans contrat ELC actif (ex : contrat AHL, pas encore signé NHL comme Eiserman 2024)
+- Désormais : `is_rookie = true` **OU** `draft_year >= saison_fin - 5` sont tous les deux éligibles
+- Corrigé côté serveur (`actions.ts`) et côté client (`RosterManager` : `addPlayer` + `changeType`)
+- Commits : `b9db51b`
+
+**[Feat] — Banque de recrues : panel recherche sticky + layout 2 colonnes fixe** (`app/app/admin/recrues/BanqueRecruesManager.tsx`) :
+- Layout `grid-cols-1 lg:grid-cols-2` → `grid-cols-2` permanent (admin desktop-only) pour que la zone de recherche reste toujours visible à droite de la banque
+- `sticky top-4 self-start` sur la colonne droite + hauteur liste adaptée à la fenêtre (`max-h-[calc(100vh-16rem)]`)
+- Commits : `7ee2262`, `b810f60`
+
+**[Fix] — Banque de recrues : exclure les recrues déjà assignées à un autre pooler** (`app/app/admin/recrues/BanqueRecruesManager.tsx`) :
+- `bankPlayerIds` ne couvrait que le pooler courant — un joueur ajouté à David restait visible dans la liste de Jérôme
+- `allTakenIds` charge au montage tous les `player_id` en `player_type='recrue'` pour la saison (tous poolers), et se met à jour localement lors des ajouts/retraits
+- Commit : `a350563`
+
 ### 2026-06-06
 
 **[Feat] — Page publique Repêchage recrues + admin multi-saisons** (`app/app/repechage-recrues/`, `app/app/admin/repechage/`, `app/components/Navbar.tsx`) :
