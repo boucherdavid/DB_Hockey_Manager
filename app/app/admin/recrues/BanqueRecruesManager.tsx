@@ -166,6 +166,7 @@ export default function BanqueRecruesManager({
   const supabase = createClient()
   const [selectedPooler, setSelectedPooler] = useState(poolers[0]?.id ?? '')
   const [bank, setBank] = useState<BankEntry[]>([])
+  const [allTakenIds, setAllTakenIds] = useState<Set<number>>(new Set())
   const [selectedTeam, setSelectedTeam] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
@@ -174,6 +175,18 @@ export default function BanqueRecruesManager({
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null)
 
   const saisonFin = saison ? getSaisonFin(saison.season) : 0
+
+  // Charger tous les IDs de recrues prises (tous poolers) pour éviter doublons
+  useEffect(() => {
+    if (!saison) return
+    supabase
+      .from('pooler_rosters')
+      .select('player_id')
+      .eq('pool_season_id', saison.id)
+      .eq('player_type', 'recrue')
+      .eq('is_active', true)
+      .then(({ data }) => setAllTakenIds(new Set((data ?? []).map((r) => r.player_id))))
+  }, [saison, supabase])
 
   useEffect(() => {
     if (!selectedPooler || !saison) return
@@ -194,8 +207,6 @@ export default function BanqueRecruesManager({
     fetchBank()
   }, [selectedPooler, saison, supabase])
 
-  const bankPlayerIds = useMemo(() => new Set(bank.map((e) => e.player_id)), [bank])
-
   const teamOptions = useMemo(() =>
     Array.from(new Set(rookies.map((r) => r.teams?.code ?? '').filter(Boolean)))
       .sort((a, b) => a.localeCompare(b, 'fr-CA')),
@@ -205,7 +216,7 @@ export default function BanqueRecruesManager({
   const availableRookies = useMemo(() => {
     const s = search.trim().toLowerCase()
     return rookies
-      .filter((r) => !bankPlayerIds.has(r.id))
+      .filter((r) => !allTakenIds.has(r.id))
       .filter((r) => {
         if (selectedTeam && (r.teams?.code ?? '') !== selectedTeam) return false
         if (!s) return true
@@ -240,6 +251,7 @@ export default function BanqueRecruesManager({
         players: pendingRookie,
       }
       setBank((prev) => [...prev, newEntry])
+      setAllTakenIds((prev) => new Set([...prev, pendingRookie.id]))
       setMessage('Recrue ajoutée!')
       setPendingRookie(null)
       setSearch('')
@@ -270,7 +282,9 @@ export default function BanqueRecruesManager({
     setLoading(true)
     const result = await removePlayerAction(entryId)
     if (!result.error) {
+      const removed = bank.find((e) => e.id === entryId)
       setBank((prev) => prev.filter((e) => e.id !== entryId))
+      if (removed) setAllTakenIds((prev) => { const next = new Set(prev); next.delete(removed.player_id); return next })
     } else {
       setMessage(`Erreur: ${result.error}`)
       setTimeout(() => setMessage(''), 3000)
