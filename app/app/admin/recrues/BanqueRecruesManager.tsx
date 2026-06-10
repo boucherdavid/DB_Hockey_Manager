@@ -225,7 +225,7 @@ export default function BanqueRecruesManager({
         return name.includes(s) || rev.includes(s) || (r.teams?.code ?? '').toLowerCase().includes(s)
       })
       .sort(sortRookies)
-  }, [rookies, bankPlayerIds, search, selectedTeam])
+  }, [rookies, allTakenIds, search, selectedTeam])
 
   const { protectedBank, expiredBank } = useMemo(() => {
     const sorted = [...bank].sort((a, b) => sortRookies(a.players, b.players))
