@@ -56,6 +56,13 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-09
+
+**[Fix] — Banque de recrues : référence résiduelle `bankPlayerIds` cassait le build Vercel** (`app/app/admin/recrues/BanqueRecruesManager.tsx`) :
+- Le commit `a350563` avait supprimé la variable `bankPlayerIds` mais oublié une référence dans le tableau de dépendances du `useMemo` de `availableRookies`, causant une erreur TypeScript en build (`Cannot find name 'bankPlayerIds'`) et une erreur runtime côté admin
+- Remplacée par `allTakenIds`
+- Commit : `4d864d9`
+
 ### 2026-06-08
 
 **[Fix] — Recrues éligibles à la banque : accepter les repêchés sans contrat NHL actif** (`app/app/admin/rosters/actions.ts`, `RosterManager.tsx`) :
