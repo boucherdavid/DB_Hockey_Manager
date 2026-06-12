@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { computeReverseStandingsOrder } from '@/lib/draftOrder'
 import type { PoolerCapInfo, ElcDecisionEntry } from './types'
 
 function getPlayerBucket(position: string | null): 'forward' | 'defense' | 'goalie' {
@@ -282,4 +283,39 @@ export async function saveDraftOrderAction(
 
   revalidatePath('/admin/presaison')
   return {}
+}
+
+// Initialise l'ordre du repêchage (agents libres ET recrues) à partir de
+// l'ordre inverse du classement final de la saison régulière précédente.
+export async function initDraftOrderFromStandingsAction(
+  saisonId: number,
+): Promise<{ error?: string; order?: string[]; previousSeason?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { poolerIds, previousSeason, error: orderErr } = await computeReverseStandingsOrder(supabase, saisonId)
+  if (orderErr || !poolerIds) return { error: orderErr ?? 'Impossible de calculer l\'ordre.' }
+
+  const { error: presaisonErr } = await supabase
+    .from('pool_seasons')
+    .update({ presaison_draft_order: poolerIds })
+    .eq('id', saisonId)
+  if (presaisonErr) return { error: presaisonErr.message }
+
+  for (let i = 0; i < poolerIds.length; i++) {
+    const { error } = await supabase
+      .from('pool_draft_picks')
+      .update({ draft_order: i + 1 })
+      .eq('pool_season_id', saisonId)
+      .eq('original_owner_id', poolerIds[i])
+    if (error) return { error: error.message }
+  }
+
+  revalidatePath('/admin/presaison')
+  revalidatePath('/admin/repechage')
+  return { order: poolerIds, previousSeason }
 }

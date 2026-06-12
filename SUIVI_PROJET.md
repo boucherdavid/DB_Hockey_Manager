@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-11
+
+**[Feat] — Initialisation automatique de l'ordre de repêchage (agents libres + recrues)** (`app/lib/draftOrder.ts`, `app/app/admin/presaison/actions.ts`, `app/app/admin/presaison/PresaisonManager.tsx`) :
+- L'ordre de repêchage des agents libres (`pool_seasons.presaison_draft_order`) et celui des recrues (`pool_draft_picks.draft_order`) sont tous les deux censés être l'inverse du classement final de la saison régulière précédente — mais étaient saisis manuellement et séparément
+- Nouveau helper `computeReverseStandingsOrder()` : trouve la saison précédente (`pool_seasons` triée par `season`), appelle `buildStandings()`, inverse l'ordre (pire au meilleur = premier au dernier choix)
+- Nouvelle action `initDraftOrderFromStandingsAction()` : met à jour `presaison_draft_order` ET `pool_draft_picks.draft_order` (toutes rondes) en un clic
+- Bouton "Initialiser à partir du classement précédent (inversé)" ajouté dans Admin > Pré-saison > Ordre du repêchage — pré-remplit l'éditeur, l'admin sauvegarde ensuite (peut ajuster manuellement avant)
+- Les deux éditeurs existants (`/admin/presaison` et `/admin/repechage`) restent disponibles pour ajustements manuels (échanges de premier choix, etc.)
+
 ### 2026-06-09
 
 **[Fix] — Banque de recrues : référence résiduelle `bankPlayerIds` cassait le build Vercel** (`app/app/admin/recrues/BanqueRecruesManager.tsx`) :

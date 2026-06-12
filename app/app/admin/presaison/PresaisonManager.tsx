@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { loadPresaisonDataAction, saveDraftOrderAction, resetLtirToActifAction, resetPresaisonDraftAction, resolveElcDecisionAction } from './actions'
+import { loadPresaisonDataAction, saveDraftOrderAction, initDraftOrderFromStandingsAction, resetLtirToActifAction, resetPresaisonDraftAction, resolveElcDecisionAction } from './actions'
 import { FREE_AGENT_THRESHOLD, type PoolerCapInfo, type RosterEntry, type ElcDecisionEntry } from './types'
 import { submitTransactionAction, searchFreeAgentsAction } from '../transactions/actions'
 
@@ -477,6 +477,7 @@ export default function PresaisonManager({
   const [draftOrder, setDraftOrder] = useState<string[]>([])
   const [savingOrder, setSavingOrder] = useState(false)
   const [orderMsg, setOrderMsg] = useState<string | null>(null)
+  const [initializingOrder, setInitializingOrder] = useState(false)
 
   // Draft state
   const [draftActive, setDraftActive] = useState(false)
@@ -590,6 +591,19 @@ export default function PresaisonManager({
     setSavingOrder(false)
     setOrderMsg(result.error ? `Erreur : ${result.error}` : 'Ordre sauvegardé.')
     setTimeout(() => setOrderMsg(null), 3000)
+  }
+
+  const handleInitOrderFromStandings = async () => {
+    setInitializingOrder(true)
+    const result = await initDraftOrderFromStandingsAction(saisonId)
+    setInitializingOrder(false)
+    if (result.error) {
+      setOrderMsg(`Erreur : ${result.error}`)
+    } else {
+      setDraftOrder(result.order ?? [])
+      setOrderMsg(`Ordre initialisé d'après le classement ${result.previousSeason} (inversé). N'oubliez pas de sauvegarder.`)
+    }
+    setTimeout(() => setOrderMsg(null), 5000)
   }
 
   if (loadingInit) return <div className="text-gray-400 text-sm p-8">Chargement...</div>
@@ -746,6 +760,16 @@ export default function PresaisonManager({
           <h2 className="font-semibold text-gray-800 mb-1">Ordre du repêchage</h2>
           <p className="text-xs text-gray-400 mb-4">
             Seuil de participation : {fmt(FREE_AGENT_THRESHOLD)} d'espace cap. En dessous, le pooler est retiré automatiquement de la file.
+          </p>
+          <button
+            onClick={handleInitOrderFromStandings}
+            disabled={initializingOrder}
+            className="text-xs px-3 py-1.5 mb-3 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg disabled:opacity-40"
+          >
+            {initializingOrder ? 'Calcul...' : 'Initialiser à partir du classement précédent (inversé)'}
+          </button>
+          <p className="text-xs text-gray-400 mb-3 -mt-2">
+            Met aussi à jour l&apos;ordre du repêchage des recrues (onglet Repêchage recrues).
           </p>
           <DraftOrderEditor
             poolers={data.poolers}
