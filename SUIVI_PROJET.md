@@ -56,6 +56,45 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-14
+
+**[Fix] — Sélecteur de recrues : menu coupé en bas de page** (`app/app/admin/repechage/RookieSelect.tsx`) :
+- Le combobox est réécrit avec `createPortal` (rendu dans `document.body`, `position: fixed` calculée via `getBoundingClientRect()`)
+- Corrige le menu déroulant tronqué pour les dernières rangées (David, Vincent) dans les conteneurs `overflow-hidden`
+
+**[Fix] — Soumission du repêchage rejetait des recrues valides** (`app/app/admin/repechage/actions.ts`) :
+- `submitDraftAction()` validait avec `is_rookie === true` strict alors que le sélecteur accepte déjà `is_rookie = true OU draft_year >= poolDraftYear - 4`
+- Règle alignée sur celle du sélecteur ; corrige l'erreur "Le joueur sélectionné (id: 886) n'est pas une recrue" pour Aitcheson (R1 #17, 2025)
+
+**[Audit] — Règle d'éligibilité recrue propagée partout** (`app/app/admin/rosters/actions.ts`, `app/app/admin/init/page.tsx`) :
+- Nouveau helper `getDraftYearCutoff()` (lit `pool_seasons.season`, retourne `saisonFin - 5`)
+- `changeTypeAction()` et `submitRosterAction()` (ajouts ET changements de type vers `recrue`) utilisaient encore `is_rookie === true` strict → alignés sur la règle large (`is_rookie = true OU draft_year >= cutoff`)
+- `admin/init/page.tsx` (onglet "Choix de repêchage", duplique `/admin/repechage`) : requête recrues alignée sur le filtre `.or(is_rookie.eq.true,draft_year.gte.poolDraftYear-4)` + ajout de `pending_player_id` à la requête des picks pour que la sauvegarde de progression fonctionne aussi sur cette page
+
+### 2026-06-13
+
+**[Docs] — Procédures admin** (`WORKFLOW_NOUVELLE_SAISON.md`) :
+- Étape 6 (Repêchage des recrues) corrigée : l'ordre de sélection n'est **pas** serpentin, il est le même à toutes les rondes
+- Ajout d'une mention du raccourci "Initialiser à partir du classement précédent (inversé)" (session 2026-06-11)
+
+**[Feat] — Résumé des choix par pooler** (`app/app/admin/config/PicksEditor.tsx`, `app/app/admin/repechage/DraftBoard.tsx`) :
+- Tableau condensé ajouté : nombre de choix par ronde/total par pooler (config), et Faits/Restants/Total par pooler (repêchage)
+- Le résumé du repêchage est visible aussi côté public (`/repechage-recrues`) pour le suivi en direct
+
+**[Fix] — Sélecteur de recrues : exclut les repêchés sans `is_rookie=true`** (`app/app/admin/repechage/page.tsx`, `app/app/repechage-recrues/page.tsx`) :
+- Même règle d'éligibilité que la banque de recrues (session 2026-06-08) : `is_rookie = true` OU `draft_year >= poolDraftYear - 4`
+- Corrige l'absence de joueurs comme Aitcheson (R1 #17, 2025, `is_rookie=false`) dans le sélecteur
+
+**[Feat] — Sélecteur de recrues avec recherche** (`app/app/admin/repechage/RookieSelect.tsx` nouveau, `DraftBoard.tsx`) :
+- Remplace le `<select>` par un combobox texte avec filtre par nom
+- Les recrues déjà choisies dans une autre ronde/pick (session en cours) disparaissent de la liste au lieu d'être juste désactivées
+
+**[Feat] — Sauvegarde des choix en cours de repêchage** (`supabase_migrations/draft_pending_selection.sql`, `app/app/admin/repechage/actions.ts`, `page.tsx`, `DraftBoard.tsx`) :
+- Nouvelle colonne `pool_draft_picks.pending_player_id` (exécutée manuellement dans Supabase)
+- Nouvelle action `saveDraftProgressAction()` + bouton "Sauvegarder" : persiste les sélections sans assigner les joueurs
+- Au chargement, les sélections sont restaurées depuis `pending_player_id` (admin seulement)
+- `submitDraftAction()` met `pending_player_id = null` au moment de la soumission finale
+
 ### 2026-06-11
 
 **[Feat] — Initialisation automatique de l'ordre de repêchage (agents libres + recrues)** (`app/lib/draftOrder.ts`, `app/app/admin/presaison/actions.ts`, `app/app/admin/presaison/PresaisonManager.tsx`) :

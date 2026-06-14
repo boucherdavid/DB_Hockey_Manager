@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { submitDraftAction, rollbackPickAction } from './actions'
+import { submitDraftAction, rollbackPickAction, saveDraftProgressAction } from './actions'
+import RookieSelect from './RookieSelect'
 
 const DASH = '\u2014'
 
@@ -10,6 +11,7 @@ type Pick = {
   id: number
   round: number
   draft_order: number | null
+  pending_player_id?: number | null
   current_owner: Pooler
   original_owner: Pooler
 }
@@ -43,9 +45,10 @@ export default function DraftBoard({
   readOnly?: boolean
 }) {
   const [selections, setSelections] = useState<Record<number, number | null>>(() =>
-    Object.fromEntries(picks.map(p => [p.id, null]))
+    Object.fromEntries(picks.map(p => [p.id, readOnly ? null : (p.pending_player_id ?? null)]))
   )
   const [submitting, setSubmitting] = useState(false)
+  const [savingProgress, setSavingProgress] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
   const [submittedPickIds, setSubmittedPickIds] = useState<Set<number>>(new Set())
@@ -115,8 +118,36 @@ export default function DraftBoard({
     setSubmitting(false)
   }
 
+  const handleSaveProgress = async () => {
+    setSavingProgress(true)
+    const entries = picks
+      .filter(p => !submittedPickIds.has(p.id))
+      .map(p => ({ pickId: p.id, playerId: selections[p.id] ?? null }))
+    const result = await saveDraftProgressAction(saisonId, entries)
+    if (result.error) {
+      showMessage(result.error, 'error')
+    } else {
+      showMessage('Choix sauvegardés.', 'success')
+    }
+    setSavingProgress(false)
+  }
+
   const totalPicks = picks.length + usedPicks.length
   const doneCount = usedPicks.length + submittedPickIds.size
+
+  const poolerSummary = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; total: number; done: number; order: number }>()
+    for (const pick of allPicks) {
+      const owner = pick.current_owner
+      const entry = map.get(owner.id) ?? { id: owner.id, name: owner.name, total: 0, done: 0, order: pick.draft_order ?? 999 }
+      entry.total += 1
+      const isDone = usedPicks.includes(pick) || submittedPickIds.has(pick.id)
+      if (isDone) entry.done += 1
+      entry.order = Math.min(entry.order, pick.draft_order ?? 999)
+      map.set(owner.id, entry)
+    }
+    return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'fr-CA'))
+  }, [allPicks, usedPicks, submittedPickIds])
 
   return (
     <div className="space-y-6">
@@ -134,6 +165,30 @@ export default function DraftBoard({
             />
           </div>
         </div>
+      </div>
+
+      {/* Résumé par pooler */}
+      <div className="bg-white rounded-lg shadow overflow-hidden overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b text-left">
+              <th className="px-4 py-2 font-medium text-gray-600">Pooler</th>
+              <th className="px-4 py-2 font-medium text-gray-600 text-center">Faits</th>
+              <th className="px-4 py-2 font-medium text-gray-600 text-center">Restants</th>
+              <th className="px-4 py-2 font-medium text-gray-600 text-center">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {poolerSummary.map(p => (
+              <tr key={p.id} className="border-b last:border-0">
+                <td className="px-4 py-2 font-medium text-gray-800">{p.name}</td>
+                <td className="px-4 py-2 text-center text-gray-700">{p.done}</td>
+                <td className="px-4 py-2 text-center text-gray-700">{p.total - p.done}</td>
+                <td className="px-4 py-2 text-center text-gray-500">{p.total}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {rounds.map(({ round, pending, used }) => {
@@ -219,26 +274,15 @@ export default function DraftBoard({
                       <td className="px-4 py-3">
                         {readOnly
                           ? <span className="text-xs text-gray-400 italic">En attente</span>
-                          : <select
-                              value={selectedId ?? ''}
-                              onChange={e => setSelections(prev => ({
+                          : <RookieSelect
+                              rookies={rookies}
+                              value={selectedId}
+                              excludeIds={selectedPlayerIds}
+                              onChange={playerId => setSelections(prev => ({
                                 ...prev,
-                                [pick.id]: e.target.value ? Number(e.target.value) : null,
+                                [pick.id]: playerId,
                               }))}
-                              className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="">— Choisir une recrue —</option>
-                              {rookies.map(r => {
-                                const alreadyPicked = selectedPlayerIds.has(r.id) && selections[pick.id] !== r.id
-                                const draftInfo = `R${r.draft_round ?? '?'} #${r.draft_overall ?? '?'}`
-                                return (
-                                  <option key={r.id} value={r.id} disabled={alreadyPicked}>
-                                    {r.last_name}, {r.first_name} {r.position ?? ''} {r.teams?.code ?? DASH} — {draftInfo}
-                                    {alreadyPicked ? ' (déjà choisi)' : ''}
-                                  </option>
-                                )
-                              })}
-                            </select>
+                            />
                         }
                       </td>
                     </tr>
@@ -265,13 +309,23 @@ export default function DraftBoard({
             </span>
           )}
           {picks.filter(p => !submittedPickIds.has(p.id)).length > 0 && (
-            <button
-              onClick={handleSubmit}
-              disabled={submitting || pendingSelections.length === 0}
-              className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {submitting ? 'Soumission...' : `Soumettre${pendingSelections.length > 0 ? ` (${pendingSelections.length})` : ''}`}
-            </button>
+            <>
+              <button
+                onClick={handleSaveProgress}
+                disabled={savingProgress}
+                className="px-5 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Sauvegarder les choix en cours sans les assigner"
+              >
+                {savingProgress ? 'Sauvegarde...' : 'Sauvegarder'}
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || pendingSelections.length === 0}
+                className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Soumission...' : `Soumettre${pendingSelections.length > 0 ? ` (${pendingSelections.length})` : ''}`}
+              </button>
+            </>
           )}
         </div>
       </div>}

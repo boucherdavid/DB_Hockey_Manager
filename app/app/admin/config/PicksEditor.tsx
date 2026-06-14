@@ -63,6 +63,17 @@ export default function PicksEditor({
 
   const roundLabel = (r: number) => r === 1 ? '1re ronde' : `${r}e ronde`
 
+  const summaryRows = poolers.map(pooler => {
+    const counts = rounds.map(round =>
+      localPicks.filter(p => p.round === round && p.current_owner_id === pooler.id).length,
+    )
+    return { pooler, counts, total: counts.reduce((sum, c) => sum + c, 0) }
+  })
+  const summaryTotals = {
+    counts: rounds.map((_, i) => summaryRows.reduce((sum, row) => sum + row.counts[i], 0)),
+    total: summaryRows.reduce((sum, row) => sum + row.total, 0),
+  }
+
   return (
     <div>
       <div className="mb-4">
@@ -77,6 +88,45 @@ export default function PicksEditor({
           {message.text}
         </p>
       )}
+
+      <div className="mb-6">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          Résumé — choix par pooler
+        </h3>
+        <div className="border rounded-lg overflow-hidden overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b">
+                <th className="text-left px-4 py-2 font-medium text-gray-600">Pooler</th>
+                {rounds.map(round => (
+                  <th key={round} className="text-center px-4 py-2 font-medium text-gray-600">
+                    {ROUND_LABELS[round] ?? roundLabel(round)}
+                  </th>
+                ))}
+                <th className="text-center px-4 py-2 font-medium text-gray-600">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summaryRows.map(({ pooler, counts, total }) => (
+                <tr key={pooler.id} className="border-b last:border-0">
+                  <td className="px-4 py-2.5 text-gray-700">{pooler.name}</td>
+                  {counts.map((count, i) => (
+                    <td key={rounds[i]} className="px-4 py-2.5 text-center text-gray-700">{count}</td>
+                  ))}
+                  <td className="px-4 py-2.5 text-center font-medium text-gray-800">{total}</td>
+                </tr>
+              ))}
+              <tr className="bg-gray-50 font-medium">
+                <td className="px-4 py-2.5 text-gray-700">Total</td>
+                {summaryTotals.counts.map((count, i) => (
+                  <td key={rounds[i]} className="px-4 py-2.5 text-center text-gray-700">{count}</td>
+                ))}
+                <td className="px-4 py-2.5 text-center text-gray-800">{summaryTotals.total}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="space-y-6">
         {rounds.map(round => {

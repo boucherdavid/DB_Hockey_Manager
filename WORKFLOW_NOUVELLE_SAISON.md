@@ -70,8 +70,13 @@ que ce soit pour entrer un historique ou démarrer une saison en temps réel.
 **Admin > Repêchage recrues**
 
 - Sélectionner la bonne saison dans le dropdown (haut droite)
-- Régler l'**ordre de sélection** dans le panneau gauche et cliquer **Sauvegarder**
-- L'ordre est serpentin (snake draft) — le pooler en position 1 choisit en premier à chaque ronde
+- Régler l'**ordre de sélection** dans le panneau gauche (`pool_draft_picks.draft_order`) et cliquer **Sauvegarder**
+- L'ordre est le même à chaque ronde (pas de serpentin) — le pooler en position 1 choisit en premier à toutes les rondes
+- Raccourci : dans **Admin > Pré-saison > Ordre du repêchage**, le bouton
+  **"Initialiser à partir du classement précédent (inversé)"** pré-remplit
+  à la fois `presaison_draft_order` (agents libres) et `pool_draft_picks.draft_order`
+  (recrues, toutes rondes) à partir du classement inversé de la saison précédente.
+  L'admin peut ensuite ajuster manuellement avant de sauvegarder dans chaque page.
 - Faire les picks ronde par ronde via les dropdowns
 - Cliquer **Soumettre** pour valider les choix
 - Les picks soumis apparaissent en vert ; on peut annuler un pick avec le bouton **Annuler**

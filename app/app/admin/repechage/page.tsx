@@ -53,7 +53,7 @@ export default async function RepechageAdminPage({
   ] = await Promise.all([
     supabase
       .from('pool_draft_picks')
-      .select('id, round, draft_order, current_owner:poolers!current_owner_id(id, name), original_owner:poolers!original_owner_id(id, name)')
+      .select('id, round, draft_order, pending_player_id, current_owner:poolers!current_owner_id(id, name), original_owner:poolers!original_owner_id(id, name)')
       .eq('pool_season_id', saison.id)
       .eq('is_used', false)
       .order('round'),
@@ -66,7 +66,7 @@ export default async function RepechageAdminPage({
     supabase
       .from('players')
       .select('id, first_name, last_name, position, status, draft_year, draft_round, draft_overall, teams(code)')
-      .eq('is_rookie', true)
+      .or(`is_rookie.eq.true,draft_year.gte.${poolDraftYear - 4}`)
       .not('draft_year', 'is', null)
       .not('draft_overall', 'is', null)
       .order('draft_year', { ascending: false })

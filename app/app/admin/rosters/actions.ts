@@ -65,6 +65,15 @@ function detectChangeType(
   return 'changement_type'
 }
 
+async function getDraftYearCutoff(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  saisonId: number,
+): Promise<number> {
+  const { data: season } = await supabase.from('pool_seasons').select('season').eq('id', saisonId).single()
+  const saisonFin = season ? parseInt(season.season.split('-')[0], 10) + 1 : new Date().getFullYear()
+  return saisonFin - 5
+}
+
 async function logChange(
   supabase: Awaited<ReturnType<typeof createClient>>,
   playerId: number,
@@ -96,12 +105,10 @@ export async function addPlayerAction(
   const supabase = await createClient()
 
   if (playerType === 'recrue') {
-    const [{ data: player }, { data: season }] = await Promise.all([
+    const [{ data: player }, draftYearCutoff] = await Promise.all([
       supabase.from('players').select('is_rookie, draft_year').eq('id', playerId).single(),
-      supabase.from('pool_seasons').select('season').eq('id', saisonId).single(),
+      getDraftYearCutoff(supabase, saisonId),
     ])
-    const saisonFin = season ? parseInt(season.season.split('-')[0], 10) + 1 : new Date().getFullYear()
-    const draftYearCutoff = saisonFin - 5
     const isEligible = player?.is_rookie || (player?.draft_year != null && player.draft_year >= draftYearCutoff)
     if (!isEligible) {
       return { error: 'Seuls les joueurs recrues peuvent aller dans la banque de recrues.' }
@@ -228,8 +235,12 @@ export async function changeTypeAction(
   const oldType = (currentEntry?.player_type ?? null) as PlayerType | null
 
   if (newType === 'recrue') {
-    const { data: player } = await supabase.from('players').select('is_rookie').eq('id', playerId).single()
-    if (!player?.is_rookie) {
+    const [{ data: player }, draftYearCutoff] = await Promise.all([
+      supabase.from('players').select('is_rookie, draft_year').eq('id', playerId).single(),
+      getDraftYearCutoff(supabase, saisonId),
+    ])
+    const isEligible = player?.is_rookie || (player?.draft_year != null && player.draft_year >= draftYearCutoff)
+    if (!isEligible) {
       return { error: 'Seuls les joueurs recrues peuvent aller dans la banque de recrues.' }
     }
   }
@@ -362,7 +373,7 @@ export async function submitRosterAction(
   // Récupérer le roster courant pour validation et détection des types
   const { data: current } = await supabase
     .from('pooler_rosters')
-    .select('id, player_id, player_type, players(position, is_rookie, nhl_id)')
+    .select('id, player_id, player_type, players(position, is_rookie, draft_year, nhl_id)')
     .eq('pooler_id', poolerId)
     .eq('pool_season_id', saisonId)
     .eq('is_active', true)
@@ -377,18 +388,28 @@ export async function submitRosterAction(
   type FinalEntry = { player_type: string; position: string | null; is_rookie: boolean }
   const finalEntries: FinalEntry[] = []
 
+  const draftYearCutoff = await getDraftYearCutoff(supabase, saisonId)
+
   for (const row of (current ?? []) as any[]) {
     if (removeSet.has(row.id)) continue
+    const newType = changeMap.get(row.id) ?? row.player_type
+    if (newType === 'recrue') {
+      const isEligible = row.players?.is_rookie || (row.players?.draft_year != null && row.players.draft_year >= draftYearCutoff)
+      if (!isEligible) {
+        return { error: `Seuls les joueurs recrues peuvent aller dans la banque de recrues.` }
+      }
+    }
     finalEntries.push({
-      player_type: changeMap.get(row.id) ?? row.player_type,
+      player_type: newType,
       position:    row.players?.position ?? null,
       is_rookie:   row.players?.is_rookie ?? false,
     })
   }
 
   for (const entry of toAdd) {
-    const { data: player } = await supabase.from('players').select('position, is_rookie').eq('id', entry.player_id).single()
-    if (entry.player_type === 'recrue' && !player?.is_rookie) {
+    const { data: player } = await supabase.from('players').select('position, is_rookie, draft_year').eq('id', entry.player_id).single()
+    const isEligible = player?.is_rookie || (player?.draft_year != null && player.draft_year >= draftYearCutoff)
+    if (entry.player_type === 'recrue' && !isEligible) {
       return { error: `Seuls les joueurs recrues peuvent aller dans la banque de recrues.` }
     }
     finalEntries.push({

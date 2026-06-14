@@ -145,9 +145,9 @@ export default async function AdminInitPage({
     if (saisonRep) {
       poolDraftYear = parseInt(saisonRep.season.split('-')[0], 10)
       const [pk, upk, rk, bk, od] = await Promise.all([
-        supabase.from('pool_draft_picks').select('id, round, draft_order, current_owner:poolers!current_owner_id(id, name), original_owner:poolers!original_owner_id(id, name)').eq('pool_season_id', saisonRep.id).eq('is_used', false).order('round'),
+        supabase.from('pool_draft_picks').select('id, round, draft_order, pending_player_id, current_owner:poolers!current_owner_id(id, name), original_owner:poolers!original_owner_id(id, name)').eq('pool_season_id', saisonRep.id).eq('is_used', false).order('round'),
         supabase.from('pool_draft_picks').select('id, round, draft_order, current_owner:poolers!current_owner_id(id, name), original_owner:poolers!original_owner_id(id, name)').eq('pool_season_id', saisonRep.id).eq('is_used', true).order('round'),
-        supabase.from('players').select('id, first_name, last_name, position, status, draft_year, draft_round, draft_overall, teams(code)').eq('is_rookie', true).not('draft_year', 'is', null).not('draft_overall', 'is', null).order('draft_year', { ascending: false }).order('draft_round', { ascending: true, nullsFirst: false }).order('draft_overall', { ascending: true, nullsFirst: false }),
+        supabase.from('players').select('id, first_name, last_name, position, status, draft_year, draft_round, draft_overall, teams(code)').or(`is_rookie.eq.true,draft_year.gte.${poolDraftYear - 4}`).not('draft_year', 'is', null).not('draft_overall', 'is', null).order('draft_year', { ascending: false }).order('draft_round', { ascending: true, nullsFirst: false }).order('draft_overall', { ascending: true, nullsFirst: false }),
         supabase.from('pooler_rosters').select('pooler_id, player_id, players(id, first_name, last_name, position, teams(code), draft_round, draft_overall)').eq('pool_season_id', saisonRep.id).eq('player_type', 'recrue').eq('pool_draft_year', poolDraftYear).eq('is_active', true),
         supabase.from('pool_draft_picks').select('original_owner_id, draft_order, original_owner:poolers!original_owner_id(id, name)').eq('pool_season_id', saisonRep.id).eq('round', 1),
       ])

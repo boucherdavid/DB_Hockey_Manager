@@ -34,14 +34,16 @@ export async function submitDraftAction(
   const playerIds = selections.map(s => s.player_id)
   const { data: players } = await supabase
     .from('players')
-    .select('id, is_rookie')
+    .select('id, is_rookie, draft_year')
     .in('id', playerIds)
 
   const playerMap = new Map((players ?? []).map((p: any) => [p.id, p]))
+  const draftYearCutoff = poolDraftYear - 4
 
   for (const sel of selections) {
     const player = playerMap.get(sel.player_id)
-    if (!player?.is_rookie) {
+    const isEligible = player?.is_rookie || (player?.draft_year != null && player.draft_year >= draftYearCutoff)
+    if (!isEligible) {
       return { error: `Le joueur sélectionné (id: ${sel.player_id}) n'est pas une recrue.` }
     }
   }
@@ -86,8 +88,32 @@ export async function submitDraftAction(
 
     const { error } = await supabase
       .from('pool_draft_picks')
-      .update({ is_used: true })
+      .update({ is_used: true, pending_player_id: null })
       .eq('id', sel.pick_id)
+    if (error) return { error: error.message }
+  }
+
+  return {}
+}
+
+export async function saveDraftProgressAction(
+  saisonId: number,
+  selections: { pickId: number; playerId: number | null }[],
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: pooler } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!pooler?.is_admin) return { error: 'Accès refusé.' }
+
+  for (const { pickId, playerId } of selections) {
+    const { error } = await supabase
+      .from('pool_draft_picks')
+      .update({ pending_player_id: playerId })
+      .eq('id', pickId)
+      .eq('pool_season_id', saisonId)
+      .eq('is_used', false)
     if (error) return { error: error.message }
   }
 
