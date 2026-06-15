@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-14 (suite)
+
+**[Fix données] — Classement à 0 points malgré les game logs importés** (correction manuelle SQL, `pooler_rosters`) :
+- `buildStandings()` (`app/lib/standings.ts`) ne compte un match que si `game_start_time > added_at` de la ligne `pooler_rosters`
+- Les rosters initiaux 2025-26 ont été créés le 2026-06-07/08/10 → `added_at` valait cette date (après tous les matchs de la saison, terminée le 2026-04-16) → 0 point partout
+- Correction : `UPDATE pooler_rosters SET added_at = '2025-10-07T12:00:00Z' WHERE pool_season_id = 1 AND player_type IN ('actif','reserviste') AND is_active = true` (182 lignes, exécuté manuellement)
+- Le champ "Date de début de saison" dans `/admin/config` (`saison_start_date`) est actuellement **informatif seulement** — rien ne l'applique automatiquement à `added_at` lors de la mise en place initiale des rosters
+- **À faire pour la prochaine saison** : soit automatiser ce réglage de `added_at = saison_start_date` au moment de la soumission des rosters initiaux (`adminInitRosterAction` / `submitRosterAction`), soit ajouter cette étape SQL manuelle au `WORKFLOW_NOUVELLE_SAISON.md`
+
 ### 2026-06-14
 
 **[Fix] — Sélecteur de recrues : menu coupé en bas de page** (`app/app/admin/repechage/RookieSelect.tsx`) :
