@@ -62,6 +62,7 @@ function deadlineLabel(deadline: string | null): string {
   if (!deadline) return 'Aucune deadline'
   return new Date(deadline).toLocaleString('fr-CA', {
     day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+    timeZone: 'America/Toronto',
   })
 }
 

@@ -3,6 +3,7 @@ import type { PlayoffChangeLogEntry } from '@/app/gestion-series/playoff-pool-ac
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleString('fr-CA', {
     day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+    timeZone: 'America/Toronto',
   })
 
 export default function ChangeLogPanel({

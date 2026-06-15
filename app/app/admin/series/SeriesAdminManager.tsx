@@ -371,7 +371,7 @@ export default function SeriesAdminManager({
         <span>Composition : <strong>{saison.maxF}F / {saison.maxD}D / {saison.maxG}G</strong></span>
         <span>Changements volontaires max : <strong>{saison.maxChanges}</strong></span>
         <span>Changements élimination max : <strong>{saison.maxElimChanges}</strong></span>
-        <span>Deadline : <strong>{saison.submissionDeadline ? new Date(saison.submissionDeadline).toLocaleString('fr-CA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'Aucune'}</strong></span>
+        <span>Deadline : <strong>{saison.submissionDeadline ? new Date(saison.submissionDeadline).toLocaleString('fr-CA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : 'Aucune'}</strong></span>
         {saison.submissionDeadline && new Date() < new Date(saison.submissionDeadline) && (
           <div className="ml-auto flex items-center gap-3">
             {reminderMsg && (

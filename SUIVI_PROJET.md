@@ -56,6 +56,18 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-15
+
+**[Fix] — Affichage UTC au lieu de l'heure de l'Est (EDT) dans les timestamps admin** (`app/app/admin/series/ChangeLogPanel.tsx`, `app/app/gestion-series/GestionSeriesManager.tsx`, `app/app/admin/series/SeriesAdminManager.tsx`) :
+- `toLocaleString('fr-CA', {...})` sans `timeZone` utilisait le fuseau du serveur Vercel (UTC) → les heures affichées étaient ~4h trop tard par rapport à l'heure locale (EDT = UTC−4)
+- Ajout de `timeZone: 'America/Toronto'` dans les 3 fonctions de formatage concernées (cohérent avec le reste du codebase)
+
+**[Fix données] — Cache classement pool des séries stale** (`playoff_pool_standings_cache`) :
+- Le cron `import_playoff_stats.py` (6h UTC) n'avait pas importé les game-logs de la partie du 14 juin (CAR, début 00h00 UTC 15 juin = 20h ET 14 juin), vraisemblablement parce que le boxscore NHL n'était pas finalisé à 2h ET
+- Les game-logs étaient présents en BD (`player_game_logs`) mais le cache (mis à jour à 12h11 UTC) ne les incluait pas encore
+- Correction directe via Python : recalcul des totaux de tous les poolers et mise à jour du cache → David 86→106, Paule 92→105 (Bussi Brandon V+JB = +4 pts, Shea Theodore activé mais 0 pt)
+- La mécanique elle-même est correcte : `added_at (20h58-59 UTC) < game_start_time (00h00 UTC 15 juin)` → les points comptent bien
+
 ### 2026-06-14 (suite)
 
 **[Fix données] — Classement à 0 points malgré les game logs importés** (correction manuelle SQL, `pooler_rosters`) :
