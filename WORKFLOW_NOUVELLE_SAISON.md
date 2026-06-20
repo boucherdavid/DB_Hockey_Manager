@@ -53,19 +53,11 @@ que ce soit pour entrer un historique ou démarrer une saison en temps réel.
 
 > 💡 Les recrues actives (hors banque) peuvent être ajoutées ici avec le type `Recrue`.
 
-> ⚠️ **Étape manuelle requise après la soumission** : le mode init insère les lignes
-> `pooler_rosters` avec `added_at = maintenant` (date réelle de saisie), pas la date
-> de début de saison. Le classement (`buildStandings()`) ne compte un match que si
-> `game_start_time > added_at` — si `added_at` est postérieur aux matchs déjà joués,
-> le classement affichera 0 point partout. Une fois tous les rosters soumis, exécuter
-> dans Supabase :
-> ```sql
-> UPDATE pooler_rosters
-> SET added_at = '<saison_start_date>T12:00:00Z'
-> WHERE pool_season_id = <id de la saison>
->   AND player_type IN ('actif', 'reserviste')
->   AND is_active = true;
-> ```
+> 💡 Le mode init applique automatiquement `added_at = saison_start_date` (12h UTC)
+> sur chaque ajout, tant que cette date est renseignée à l'étape 2. Aucune correction
+> SQL manuelle n'est requise. Si `saison_start_date` est vide au moment de la
+> soumission, `added_at` prend la date réelle de saisie — la renseigner avant de
+> commencer les rosters initiaux.
 
 ---
 

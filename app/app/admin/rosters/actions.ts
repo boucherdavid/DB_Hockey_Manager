@@ -289,6 +289,16 @@ export async function adminInitRosterAction(
 ): Promise<{ error?: string }> {
   const supabase = createAdminClient() // bypass RLS — l'admin modifie le roster d'un autre pooler
 
+  const { data: saisonConfig } = await supabase
+    .from('pool_seasons')
+    .select('saison_start_date')
+    .eq('id', saisonId)
+    .single()
+
+  const initAddedAt = saisonConfig?.saison_start_date
+    ? `${saisonConfig.saison_start_date}T12:00:00Z`
+    : new Date().toISOString()
+
   // Retraits
   if (toRemove.length > 0) {
     const { error } = await supabase
@@ -336,6 +346,7 @@ export async function adminInitRosterAction(
       pool_season_id: saisonId,
       player_type:    entry.player_type,
       is_active:      true,
+      added_at:       initAddedAt,
       ...rookieFields,
     })
     if (insertErr) return { error: insertErr.message }

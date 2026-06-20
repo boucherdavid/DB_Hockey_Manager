@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-05-27
+Derniere mise a jour: 2026-06-20
 
 ## Role du fichier
 
@@ -55,6 +55,14 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-06-20
+
+**[Feat] — Automatisation de `added_at` lors des rosters initiaux** (`app/app/admin/rosters/actions.ts`, `WORKFLOW_NOUVELLE_SAISON.md`) :
+- `adminInitRosterAction()` (Mode init) lit désormais `pool_seasons.saison_start_date` et fixe `added_at = '<saison_start_date>T12:00:00Z'` sur chaque ajout, au lieu de laisser le défaut BD (`now()`)
+- Reprend le pattern déjà validé dans `gestion-effectifs/actions.ts` (pré-saison)
+- Élimine l'étape SQL manuelle documentée le 2026-06-14 (`UPDATE pooler_rosters SET added_at = ...`) suite au bug "classement à 0 points" — supprimée du `WORKFLOW_NOUVELLE_SAISON.md`, remplacée par une note indiquant que `saison_start_date` doit être renseigné avant de soumettre les rosters initiaux
+- Si `saison_start_date` est vide, fallback sur la date réelle de saisie (comportement inchangé)
 
 ### 2026-06-15
 
