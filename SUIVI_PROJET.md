@@ -56,7 +56,16 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
-### 2026-06-20
+### 2026-06-20 (suite)
+
+**[Fix] — `/admin/transactions` ignorait la date historique pour le calcul des points** (`app/app/admin/transactions/actions.ts`) :
+- Contexte : avant de lancer la saisie des transactions historiques 2025-26 (échanges, signatures, libérations survenus en cours de la vraie saison, jamais saisis dans l'app), vérification de la mécanique de `submitTransactionAction`
+- Bug trouvé : le champ `transactionDate` du formulaire n'était appliqué qu'à `transactions.created_at` (affichage). Les mutations réelles sur `pooler_rosters` (`added_at` à l'ajout, `removed_at` au retrait) utilisaient toujours `new Date().toISOString()` — la date du jour, peu importe la date choisie
+- Impact : `buildStandings()` somme les game-logs dans la fenêtre `added_at → removed_at` — une transaction historique daterait sa fenêtre d'aujourd'hui au lieu de la vraie date passée → points mal attribués pour toute transaction backdatée
+- Fix : nouvelle constante `txTs` (= `${transactionDate}T12:00:00Z` si fourni, sinon `now()`), utilisée pour tous les `added_at`/`removed_at` sur `pooler_rosters` (transfer, ballotage, sign, release)
+- **Non corrigé (préexistant, hors scope)** : `promote` (recrue → actif) et `reactivate` (LTIR → actif) ne touchent pas `added_at` — la fenêtre de points repart du premier ajout (même si ce était en banque de recrues ou en LTIR). Comportement identique partout ailleurs dans le code (`gestion-effectifs/actions.ts`, `admin/rosters/actions.ts`). À surveiller si des transactions historiques de type promotion sont saisies — vérifier manuellement le classement après ces cas précis
+- Commit : `6be82f5`
+- **Recommandation** : tester la saisie des transactions historiques en staging d'abord (écrit/restructure des données de poolers), valider le classement contre l'Excel avant de répliquer en prod
 
 **[Feat] — Automatisation de `added_at` lors des rosters initiaux** (`app/app/admin/rosters/actions.ts`, `WORKFLOW_NOUVELLE_SAISON.md`) :
 - `adminInitRosterAction()` (Mode init) lit désormais `pool_seasons.saison_start_date` et fixe `added_at = '<saison_start_date>T12:00:00Z'` sur chaque ajout, au lieu de laisser le défaut BD (`now()`)
