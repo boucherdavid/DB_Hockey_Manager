@@ -259,8 +259,10 @@ export async function submitTransactionAction(
   // Ainsi, si une mutation échoue à mi-chemin, l'intent est toujours tracé
   // et un admin peut identifier et corriger l'état partiel.
   // (Une atomicité complète nécessiterait une fonction PostgreSQL via rpc().)
+  const txTs = transactionDate ? `${transactionDate}T12:00:00Z` : new Date().toISOString()
+
   const txPayload: Record<string, unknown> = { pool_season_id: saisonId, notes: notes || null, created_by: user.id }
-  if (transactionDate) txPayload.created_at = `${transactionDate}T12:00:00Z`
+  if (transactionDate) txPayload.created_at = txTs
 
   const { data: tx, error: txErr } = await supabase
     .from('transactions')
@@ -296,7 +298,7 @@ export async function submitTransactionAction(
       // Retirer du roster source
       const { error: e1 } = await supabase
         .from('pooler_rosters')
-        .update({ is_active: false, removed_at: new Date().toISOString() })
+        .update({ is_active: false, removed_at: txTs })
         .eq('pooler_id', from_pooler_id!)
         .eq('player_id', player_id)
         .eq('pool_season_id', saisonId)
@@ -305,10 +307,10 @@ export async function submitTransactionAction(
       // Ajouter au roster dest
       const { data: existingDest } = await supabase.from('pooler_rosters').select('id').eq('pooler_id', to_pooler_id!).eq('player_id', player_id).eq('pool_season_id', saisonId).maybeSingle()
       if (existingDest) {
-        const { error: e2 } = await supabase.from('pooler_rosters').update({ is_active: true, player_type: new_player_type ?? 'actif', removed_at: null }).eq('id', existingDest.id)
+        const { error: e2 } = await supabase.from('pooler_rosters').update({ is_active: true, player_type: new_player_type ?? 'actif', removed_at: null, added_at: txTs }).eq('id', existingDest.id)
         if (e2) return { error: e2.message }
       } else {
-        const { error: e2 } = await supabase.from('pooler_rosters').insert({ pooler_id: to_pooler_id, player_id, pool_season_id: saisonId, player_type: new_player_type ?? 'actif', is_active: true })
+        const { error: e2 } = await supabase.from('pooler_rosters').insert({ pooler_id: to_pooler_id, player_id, pool_season_id: saisonId, player_type: new_player_type ?? 'actif', is_active: true, added_at: txTs })
         if (e2) return { error: e2.message }
       }
       continue
@@ -332,10 +334,10 @@ export async function submitTransactionAction(
     if (action_type === 'sign') {
       const { data: existing } = await supabase.from('pooler_rosters').select('id').eq('pooler_id', to_pooler_id!).eq('player_id', player_id!).eq('pool_season_id', saisonId).maybeSingle()
       if (existing) {
-        const { error } = await supabase.from('pooler_rosters').update({ is_active: true, player_type: new_player_type!, removed_at: null }).eq('id', existing.id)
+        const { error } = await supabase.from('pooler_rosters').update({ is_active: true, player_type: new_player_type!, removed_at: null, added_at: txTs }).eq('id', existing.id)
         if (error) return { error: error.message }
       } else {
-        const { error } = await supabase.from('pooler_rosters').insert({ pooler_id: to_pooler_id, player_id, pool_season_id: saisonId, player_type: new_player_type, is_active: true })
+        const { error } = await supabase.from('pooler_rosters').insert({ pooler_id: to_pooler_id, player_id, pool_season_id: saisonId, player_type: new_player_type, is_active: true, added_at: txTs })
         if (error) return { error: error.message }
       }
       continue
@@ -344,7 +346,7 @@ export async function submitTransactionAction(
     if (action_type === 'release') {
       const { error } = await supabase
         .from('pooler_rosters')
-        .update({ is_active: false, removed_at: new Date().toISOString() })
+        .update({ is_active: false, removed_at: txTs })
         .eq('pooler_id', from_pooler_id!)
         .eq('player_id', player_id!)
         .eq('pool_season_id', saisonId)
