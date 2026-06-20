@@ -119,16 +119,33 @@ Hockey_Pool_App/
 **Utilisateur :**
 `/` `/login` `/joueurs` `/statistiques` `/repechage` `/calendrier`
 `/poolers` `/poolers/[id]` `/transactions` `/classement`
-`/series` `/series/picks` `/compte` `/aide`
+`/series` `/series/picks` `/gestion-effectifs` `/gestion-series` `/compte` `/aide`
 
 **Admin :**
 `/admin` `/admin/joueurs` `/admin/poolers` `/admin/rosters`
 `/admin/recrues` `/admin/transactions` `/admin/presaison`
-`/admin/config` `/admin/series`
+`/admin/config` `/admin/series` `/admin/historique`
 
 ---
 
 ## 6. Contraintes techniques
+
+**Convention — date historique d'un mouvement de roster :**
+- Plusieurs interfaces permettent de saisir un mouvement (ajout/retrait/échange) à une date
+  passée plutôt qu'à `now()` : `/gestion-effectifs` (admin, checkbox "Forcer une date
+  effective" → `forcedDate`), `/admin/transactions` (`transactionDate`), `/admin/historique`,
+  `adminInitRosterAction` (mode init, basé sur `saison_start_date`).
+- **Règle obligatoire** : la date choisie doit être propagée à `pooler_rosters.added_at` /
+  `removed_at` (et `roster_change_log.changed_at` si applicable) — PAS seulement à un champ
+  d'affichage comme `transactions.created_at`. `buildStandings()` calcule les points en
+  sommant les game-logs dans la fenêtre `added_at → removed_at` ; si cette fenêtre ne reflète
+  pas la vraie date du mouvement, les points sont mal attribués.
+- Avant de "corriger" ou d'ajouter une saisie de date historique quelque part : vérifier
+  d'abord si un mécanisme de surcharge existe déjà (chercher `forcedDate`, `transactionDate`,
+  `changedAt`, `txTs`) avant de supposer qu'il faut le construire.
+- Bug corrigé le 2026-06-20 dans `/admin/transactions` (`submitTransactionAction`) : la date
+  historique n'était appliquée qu'à `transactions.created_at`, pas aux mutations réelles sur
+  `pooler_rosters`. Voir `SUIVI_PROJET.md` (session 2026-06-20).
 
 **Next.js 16 :**
 - Utiliser `proxy.ts`, PAS `middleware.ts`

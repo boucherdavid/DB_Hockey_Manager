@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-20 (suite 2)
+
+**[Docs] — Clarification : `/gestion-effectifs` permet déjà de forcer une date manuelle** (`CLAUDE.md`) :
+- Question posée : pouvoir corriger les mouvements d'un pooler (signalés par texto) avec une date manuelle au lieu de la date de saisie
+- Constat : déjà implémenté — admin uniquement, checkbox "Forcer une date effective" (`GestionEffectifsManager.tsx:736-756`), `forcedDate` propagé correctement à `added_at`/`removed_at`/`roster_change_log.changed_at` dans `submitBatchAction` (`gestion-effectifs/actions.ts`)
+- Ajout d'une section "Convention — date historique d'un mouvement de roster" dans `CLAUDE.md` (section 6) listant tous les mécanismes de surcharge de date existants (`/gestion-effectifs`, `/admin/transactions`, `/admin/historique`, `adminInitRosterAction`) et la règle obligatoire (propager à `added_at`/`removed_at`, pas seulement à l'affichage)
+- Ajout de `/gestion-effectifs`, `/gestion-series`, `/admin/historique` à la liste des routes (section 5) — manquaient
+- But : éviter de re-découvrir ou de re-implémenter ce mécanisme par erreur dans une future session
+
 ### 2026-06-20 (suite)
 
 **[Fix] — `/admin/transactions` ignorait la date historique pour le calcul des points** (`app/app/admin/transactions/actions.ts`) :
