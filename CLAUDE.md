@@ -70,7 +70,8 @@ Hockey_Pool_App/
 │   └── settings.local.json
 ├── .github/
 │   └── workflows/
-│       └── import.yml         ← Pipeline auto (lundi 6h UTC + manuel)
+│       ├── import.yml             ← Pipeline auto (lundi 6h UTC + manuel)
+│       └── keepalive_staging.yml  ← Ping staging (jeudi 6h UTC) pour éviter pause Supabase
 ├── app/                       ← Application Next.js
 │   ├── CLAUDE.md              ← Règles spécifiques Next.js/TypeScript
 │   ├── AGENTS.md
