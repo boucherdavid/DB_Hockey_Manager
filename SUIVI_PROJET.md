@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-06-20
+Derniere mise a jour: 2026-06-21
 
 ## Role du fichier
 
@@ -55,6 +55,25 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-06-21
+
+**[Outil] — Consolidation des mouvements historiques depuis l'Excel `Pool LT.xlsm`** (`python_script/extract_mouvements.py`, `python_script/sort_mouvements.py`, `excel/Mouvements_consolides.xlsx`) :
+- Contexte : David doit saisir manuellement dans `/admin/transactions` l'historique des mouvements de roster, jusqu'ici éparpillé dans 8 onglets Excel (un par pooler : Vincent, Sebastien_FAU, Jerome, Sebastien_STL, David, Steve, Paule, Nicolas), colonnes P à Z.
+- `extract_mouvements.py` : fusionne les 8 onglets en une seule feuille, ajoute une colonne `Pooler` (271 lignes au total).
+- `sort_mouvements.py` : trie le résultat par ordre chronologique sur la colonne `Date`. Pour les lignes sans date explicite (échanges, "BLT", "Gestion Blessure" sans fenêtre temporaire), la date est déduite par report de la dernière date connue du même pooler (les onglets sources étaient déjà en ordre chronologique) ; colonne `Date estimée` (Oui/Non) ajoutée pour distinguer les dates lues des dates déduites.
+- Cas limite signalé à David : les 7 lignes de l'onglet `Sebastien_STL` n'ont aucune date dans tout l'onglet — restent sans `Date tri`, à dater manuellement avant saisie.
+- Décision : David valide lui-même le fichier `excel/Mouvements_consolides.xlsx` avant qu'on transforme la liste en transactions structurées pour `/admin/transactions`. Pas encore fait à ce stade.
+- Rappel discuté en session : saisir les transactions historiques dans `/admin/transactions` **en ordre chronologique strict** (pas par pooler), car `submitTransactionAction` valide l'état courant des rosters au moment de la saisie et ne gère pas les chevauchements temporels rétroactifs — voir [[feedback_date_override_roster]] et section 6 de `CLAUDE.md`.
+- Pas de commit : fichiers `extract_mouvements.py`, `sort_mouvements.py` et `excel/Mouvements_consolides.xlsx` ajoutés mais non poussés (le dossier `excel/` n'a pas encore été évalué pour inclusion au repo — à clarifier avec David : data perso/Excel à garder hors `.gitignore` ou pas).
+
+**[Outil] — Keepalive automatique du projet Supabase staging** (`.github/workflows/keepalive_staging.yml`, `python_script/keepalive_staging.py`) :
+- Contexte : email Supabase signalant que le projet staging (`pwblgjdmuaoyfixeyltg`, plan gratuit) serait mis en pause après 7 jours d'inactivité.
+- Écarté : changer de système de BD (Snowflake évalué et rejeté — c'est un entrepôt analytique OLAP, pas adapté à un backend applicatif avec Auth/RLS/temps réel).
+- Solution retenue : nouveau workflow GitHub Actions `keepalive_staging.yml`, cron hebdomadaire (jeudi 6h UTC, avant le seuil de 7 jours), qui exécute `keepalive_staging.py` (lecture minimale `SELECT id FROM poolers LIMIT 1` via `supabase-py`) sur le projet staging.
+- Secrets GitHub ajoutés : `STAGING_SUPABASE_URL`, `STAGING_SERVICE_KEY` (valeurs reprises de `python_script/.env.staging`, fichier local non commité).
+- Testé localement avec succès contre le vrai projet staging avant de pousser.
+- Alternative écartée : passer au plan Pro Supabase juste pour désactiver la pause auto — jugé disproportionné pour un projet staging.
 
 ### 2026-06-20 (suite 2)
 

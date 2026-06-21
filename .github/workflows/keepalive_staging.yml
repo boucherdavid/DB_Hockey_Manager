@@ -1,0 +1,36 @@
+name: Keepalive Supabase staging
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  workflow_dispatch:
+
+  # Tous les jeudis a 6h00 UTC (Supabase pause apres 7 jours d'inactivite)
+  schedule:
+    - cron: '0 6 * * 4'
+
+jobs:
+  ping:
+    name: Ping projet staging
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du depot
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: python_script/requirements.txt
+
+      - name: Installer les dependances
+        run: pip install -r python_script/requirements.txt
+
+      - name: Ping staging
+        env:
+          SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.STAGING_SERVICE_KEY }}
+        run: python python_script/keepalive_staging.py
