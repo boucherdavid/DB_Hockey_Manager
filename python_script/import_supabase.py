@@ -26,9 +26,39 @@ NHL_TEAM_CODES = [
     'WSH','WPG'
 ]
 
-NHL_SEASON = '20252026'
-
 PLAYER_LINK_CACHE = {}
+
+
+def get_active_season(supabase) -> str:
+    """Retourne le nhl_season_id ('20252026') depuis pool_seasons.
+
+    Priorité : saison régulière active → sinon la plus récente saison régulière.
+    """
+    row = (
+        supabase.table('pool_seasons')
+        .select('season')
+        .eq('is_active', True)
+        .eq('is_playoff', False)
+        .maybe_single()
+        .execute()
+        .data
+    )
+    if not row:
+        row = (
+            supabase.table('pool_seasons')
+            .select('season')
+            .eq('is_playoff', False)
+            .order('season', desc=True)
+            .limit(1)
+            .maybe_single()
+            .execute()
+            .data
+        )
+    if not row:
+        raise RuntimeError('Aucune saison régulière trouvée dans pool_seasons.')
+
+    start = int(row['season'].split('-')[0])
+    return f'{start}{start + 1}'
 
 
 def normaliser_nom(nom):
@@ -86,14 +116,13 @@ def get_player_link(row):
     return cache.get((normaliser_nom(first_name), normaliser_nom(last_name), team_code))
 
 
-def charger_rosters_nhl():
+def charger_rosters_nhl(saison: str):
     print('[INFO] Chargement des rosters NHL...')
     roster_map = {}
     # (fn, ln, team_code) → True  — permet de vérifier si un joueur précis est
     # dans le roster NHL actuel pour son équipe, même sans nhl_id.
     roster_by_team: set[tuple] = set()
     name_to_teams: dict[tuple, set] = {}
-    saison = NHL_SEASON
 
     for team in NHL_TEAM_CODES:
         try:
@@ -409,8 +438,11 @@ def upload_vers_supabase(csv_path=None):
     season_cols = [col for col in df.columns if '20' in col and '-' in col]
     print(f'[INFO] Saisons : {season_cols}')
 
+    nhl_season = get_active_season(supabase)
+    print(f'[INFO] Saison NHL active : {nhl_season}')
+
     build_player_link_cache()
-    roster_map, roster_ambiguous, roster_by_team = charger_rosters_nhl()
+    roster_map, roster_ambiguous, roster_by_team = charger_rosters_nhl(nhl_season)
     df = fusionner_doublons(df, roster_map)
     print(f'[INFO] {len(df)} joueurs apres fusion')
 

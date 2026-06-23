@@ -30,7 +30,6 @@ load_dotenv()
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
 NHL_SEARCH_URL = 'https://search.d3.nhle.com/api/v1/search/player'
-SEASON = '2025-26'
 DRY_RUN = '--dry-run' in sys.argv
 
 # Mapping des codes de position NHL vers nos valeurs en BD
@@ -43,6 +42,37 @@ POSITION_MAP = {
 
 def normaliser(nom: str) -> str:
     return unidecode(str(nom)).lower().strip().replace('-', ' ')
+
+
+def get_active_season(supabase) -> str:
+    """Retourne le season_label ('2025-26') depuis pool_seasons.
+
+    Priorité : saison régulière active → sinon la plus récente saison régulière.
+    """
+    row = (
+        supabase.table('pool_seasons')
+        .select('season')
+        .eq('is_active', True)
+        .eq('is_playoff', False)
+        .maybe_single()
+        .execute()
+        .data
+    )
+    if not row:
+        row = (
+            supabase.table('pool_seasons')
+            .select('season')
+            .eq('is_playoff', False)
+            .order('season', desc=True)
+            .limit(1)
+            .maybe_single()
+            .execute()
+            .data
+        )
+    if not row:
+        raise RuntimeError('Aucune saison régulière trouvée dans pool_seasons.')
+
+    return row['season']
 
 
 def chercher_position_nhl(first_name: str, last_name: str, team_code: str) -> str | None:
@@ -91,6 +121,7 @@ def chercher_position_nhl(first_name: str, last_name: str, team_code: str) -> st
 def main():
     print(f'[INFO] Connexion à Supabase...')
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    SEASON = get_active_season(supabase)
 
     # Récupère tous les joueurs avec position NULL + contrat actif cette saison
     print(f'[INFO] Recherche des joueurs avec position NULL (saison {SEASON})...\n')

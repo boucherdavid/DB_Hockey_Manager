@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-06-21
+Derniere mise a jour: 2026-06-22
 
 ## Role du fichier
 
@@ -55,6 +55,15 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-06-22
+
+**[Fix] — Saisons NHL codées en dur dans le pipeline Python** (`python_script/import_supabase.py`, `python_script/fix_null_positions.py`) :
+- Contexte : question de David sur l'état à jour du pipeline PuckPedia. Audit a révélé `NHL_SEASON = '20252026'` (`import_supabase.py`) et `SEASON = '2025-26'` (`fix_null_positions.py`) codés en dur, alors que `backfill_nhl_ids.py` avait déjà été migré vers une lecture dynamique de `pool_seasons` (commit `6326270`).
+- Risque : ces constantes deviennent fausses au changement de saison (ex : entre-saison actuelle avant 2026-27), faussant la désambiguïsation des rosters NHL (`import_supabase.py`) et le filtre de contrat actif (`fix_null_positions.py`).
+- Correction : ajout d'une fonction `get_active_season(supabase)` (même logique que `backfill_nhl_ids.py` — saison régulière active dans `pool_seasons`, sinon la plus récente) dans les deux scripts ; `charger_rosters_nhl()` prend désormais `saison` en paramètre au lieu de lire une constante globale.
+- Pas de migration de schéma requise — lecture seule sur `pool_seasons`.
+- Pas encore commité.
 
 ### 2026-06-21
 
