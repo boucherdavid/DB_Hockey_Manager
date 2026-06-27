@@ -191,11 +191,12 @@ export async function submitMouvementAction(
       .eq('pool_season_id', input.saisonId).maybeSingle()
     if (existing) {
       await supabase.from('pooler_rosters')
-        .update({ is_active: true, player_type: playerType, removed_at: null }).eq('id', existing.id)
+        .update({ is_active: true, player_type: playerType, removed_at: null, added_at: changedAt }).eq('id', existing.id)
     } else {
       await supabase.from('pooler_rosters').insert({
         pooler_id: input.poolerId, player_id: playerId,
         pool_season_id: input.saisonId, player_type: playerType, is_active: true,
+        added_at: changedAt,
       })
     }
     await log(playerId, 'signature_agent_libre', null, playerType)

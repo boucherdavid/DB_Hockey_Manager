@@ -56,6 +56,17 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-06-27
+
+**[Fix] — `added_at` non propagé lors d'une signature historique dans `/admin/mouvements`** (`app/app/admin/mouvements/actions.ts`) :
+- Contexte : David demandait si on était prêt à saisir l'historique des mouvements (source `excel/Mouvements_consolides.xlsx`, déjà consolidée et triée chronologiquement via `python_script/extract_mouvements.py` + `sort_mouvements.py`).
+- Audit de `submitMouvementAction` : `swap`/`activate_rookie`/`ltir`/`return_ltir` ne touchent pas `added_at`/`removed_at` — correct, car `buildStandings()` (`app/lib/standings.ts`) fenêtre les points sur la tenure complète du roster (`added_at`→`removed_at`), pas sur le statut actif/réserve/LTIR.
+- Bug réel : `addNewPlayer()` (utilisé par `sign` et `ltir_sign`) ne fixait jamais `added_at` — un nouvel insert retombait sur `DEFAULT NOW()` et une réactivation gardait l'ancien `added_at`, faussant la fenêtre de points pour toute saisie à une date passée. Conforme à la règle documentée dans `CLAUDE.md` (section 6).
+- Correction : `added_at: changedAt` ajouté dans les deux branches (insert et update) de `addNewPlayer()`.
+- `release()` était déjà correct (`removed_at: changedAt`).
+- Conclusion pour David : l'outil est maintenant fiable pour saisir l'historique complet via `/admin/mouvements`.
+- Pas encore commité.
+
 ### 2026-06-22
 
 **[Fix] — Saisons NHL codées en dur dans le pipeline Python** (`python_script/import_supabase.py`, `python_script/fix_null_positions.py`) :

@@ -3,6 +3,8 @@ app/.next/
 app/.env.local
 app/.env*
 
+excel
+
 python_script/venv/
 python_script/__pycache__/
 python_script/.env
