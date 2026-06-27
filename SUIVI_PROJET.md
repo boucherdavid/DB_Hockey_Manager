@@ -58,6 +58,15 @@ Je l'utiliserai pour:
 
 ### 2026-06-27
 
+**[Feat] — Désactivation d'une saison de séries + masquage des menus séries hors saison active** (`app/app/admin/config/actions.ts`, `app/app/admin/config/SeasonsManager.tsx`, `app/components/Navbar.tsx`) :
+- Contexte : David a terminé la saison de séries 2026-PO et voulait la désactiver sans la supprimer (le seul bouton visible pour une saison de séries active était "Supprimer", qui efface `transactions`/`transaction_items` liés et cascade en BD — destructif et non souhaité).
+- Constat : `pool_seasons` n'a qu'un statut binaire `is_active` (pas de notion "terminée" distincte), et `actions.ts` n'avait que `activateSeasonAction`/`deleteSeasonAction`, aucune action de désactivation pure.
+- Ajout `deactivateSeasonAction` (`admin/config/actions.ts`) : met `is_active=false` sur une saison, refuse si `is_playoff=false` (une saison régulière doit toujours avoir une autre saison active à la place via "Activer", jamais juste être désactivée à vide).
+- `SeasonsManager.tsx` : nouveau bouton "Désactiver" visible uniquement quand `is_active && is_playoff`.
+- Demande complémentaire : masquer les menus "Pool Séries" (Choix des joueurs, Classement, Résultats) dans la Navbar quand aucune saison de séries n'est active, sauf dans le menu Admin. `Navbar.tsx` recevait déjà `initialNewPlayoffActive` (fetch `pool_seasons.is_active && is_playoff` dans `layout.tsx`) — le dropdown "Pool Séries" complet (desktop) et la section mobile équivalente sont maintenant conditionnés par `newPlayoffActive`. Les liens admin (`/admin/series`) restent accessibles via le menu Admin (desktop ligne ~296, mobile ligne ~415), qui ne dépendent pas de ce flag.
+- Pas de migration de schéma requise.
+- Pas encore commité.
+
 **[Fix] — `added_at` non propagé lors d'une signature historique dans `/admin/mouvements`** (`app/app/admin/mouvements/actions.ts`) :
 - Contexte : David demandait si on était prêt à saisir l'historique des mouvements (source `excel/Mouvements_consolides.xlsx`, déjà consolidée et triée chronologiquement via `python_script/extract_mouvements.py` + `sort_mouvements.py`).
 - Audit de `submitMouvementAction` : `swap`/`activate_rookie`/`ltir`/`return_ltir` ne touchent pas `added_at`/`removed_at` — correct, car `buildStandings()` (`app/lib/standings.ts`) fenêtre les points sur la tenure complète du roster (`added_at`→`removed_at`), pas sur le statut actif/réserve/LTIR.

@@ -134,6 +134,28 @@ export async function activateSeasonAction(saisonId: number): Promise<{ error?: 
   return {}
 }
 
+export async function deactivateSeasonAction(saisonId: number): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+  const { data: me } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return { error: 'Accès refusé.' }
+
+  const { data: saison } = await supabase.from('pool_seasons').select('is_active, is_playoff').eq('id', saisonId).single()
+  if (!saison) return { error: 'Saison introuvable.' }
+  if (!saison.is_playoff) return { error: 'Seule une saison de séries peut être désactivée sans en activer une autre.' }
+
+  const { error } = await supabase
+    .from('pool_seasons')
+    .update({ is_active: false })
+    .eq('id', saisonId)
+  if (error) return { error: error.message }
+
+  revalidateAll()
+  return {}
+}
+
 export async function previewTransitionAction(
   fromSaisonId: number,
   toSaisonId: number,

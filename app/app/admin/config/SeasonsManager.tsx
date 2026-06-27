@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createSeasonAction, activateSeasonAction, previewTransitionAction, transitionSeasonAction, deleteSeasonAction } from './actions'
+import { createSeasonAction, activateSeasonAction, deactivateSeasonAction, previewTransitionAction, transitionSeasonAction, deleteSeasonAction } from './actions'
 
 type Saison = {
   id: number
@@ -26,6 +26,7 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
   const [isPlayoff, setIsPlayoff] = useState(false)
   const [saving, setSaving] = useState(false)
   const [activating, setActivating] = useState<number | null>(null)
+  const [deactivating, setDeactivating] = useState<number | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   type TransitionPreview = {
@@ -104,6 +105,19 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
     }
   }
 
+  const handleDeactivate = async (saisonId: number, saisonLabel: string) => {
+    if (!window.confirm(`Désactiver la saison de séries ${saisonLabel} ? Les données seront conservées, mais les menus séries disparaîtront pour les poolers.`)) return
+    setDeactivating(saisonId)
+    const result = await deactivateSeasonAction(saisonId)
+    setDeactivating(null)
+    if (result.error) {
+      showMsg('error', result.error)
+    } else {
+      showMsg('success', `Saison ${saisonLabel} désactivée.`)
+      router.refresh()
+    }
+  }
+
   const handleActivate = async (saisonId: number, saisonLabel: string) => {
     const target = saisons.find(s => s.id === saisonId)
     const activeOfSameType = saisons.find(s => s.is_active && s.is_playoff === target?.is_playoff && s.id !== saisonId)
@@ -174,6 +188,15 @@ export default function SeasonsManager({ saisons }: { saisons: Saison[] }) {
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-40"
                     >
                       {activating === s.id ? '...' : 'Activer'}
+                    </button>
+                  )}
+                  {s.is_active && s.is_playoff && (
+                    <button
+                      onClick={() => handleDeactivate(s.id, s.season)}
+                      disabled={deactivating === s.id}
+                      className="text-xs text-orange-600 hover:text-orange-800 font-medium disabled:opacity-40"
+                    >
+                      {deactivating === s.id ? '...' : 'Désactiver'}
                     </button>
                   )}
                   <button

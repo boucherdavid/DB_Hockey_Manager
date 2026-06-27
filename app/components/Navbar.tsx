@@ -249,7 +249,8 @@ export default function Navbar({
                 Calendrier
               </Link>
 
-              {/* Pool Séries */}
+              {/* Pool Séries — masqué hors saison de séries active */}
+              {newPlayoffActive && (
               <div className="relative">
                 <button onClick={() => toggle('series')}
                   className={navBtnClass(isActive('/gestion-series', '/classement-series'))}>
@@ -258,13 +259,14 @@ export default function Navbar({
                 {openDropdown === 'series' && (
                   <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
                     {userName && <Link href="/gestion-series" className={dropdownLinkClass('/gestion-series')}>Choix des joueurs</Link>}
-                    {newPlayoffActive && <Link href="/classement-series" className={dropdownLinkClass('/classement-series')}>Classement</Link>}
-                    {newPlayoffActive && <Link href="/resultats" className={dropdownLinkClass('/resultats')}>Résultats</Link>}
+                    <Link href="/classement-series" className={dropdownLinkClass('/classement-series')}>Classement</Link>
+                    <Link href="/resultats" className={dropdownLinkClass('/resultats')}>Résultats</Link>
                     {effectiveIsAdmin &&<div className="border-t my-1" />}
                     {effectiveIsAdmin &&<Link href="/admin/series" className={dropdownLinkClass('/admin/series')}>Gestion/Création Pool des séries</Link>}
                   </div>
                 )}
               </div>
+              )}
 
               {/* Admin */}
               {effectiveIsAdmin &&(
@@ -389,11 +391,13 @@ export default function Navbar({
             <Link href="/repechage-recrues" className={mobileLinkClass('/repechage-recrues')}>{'Rep\u00eachage recrues'}</Link>
             <Link href="/calendrier" className={mobileLinkClass('/calendrier')}>Calendrier</Link>
 
+            {newPlayoffActive && (<>
             <MobileSection label={'Pool S\u00e9ries'} />
             {userName && <Link href="/gestion-series" className={mobileLinkClass('/gestion-series')}>Choix des joueurs</Link>}
-            {newPlayoffActive && <Link href="/classement-series" className={mobileLinkClass('/classement-series')}>Classement</Link>}
-            {newPlayoffActive && <Link href="/resultats" className={mobileLinkClass('/resultats')}>Résultats</Link>}
+            <Link href="/classement-series" className={mobileLinkClass('/classement-series')}>Classement</Link>
+            <Link href="/resultats" className={mobileLinkClass('/resultats')}>Résultats</Link>
             {effectiveIsAdmin &&<Link href="/admin/series" className={mobileLinkClass('/admin/series')}>{'Gestion/Cr\u00e9ation Pool des s\u00e9ries'}</Link>}
+            </>)}
 
             {userName && (
               <div className="mt-1 pt-1 border-t border-pool-navy-light flex flex-col gap-0.5">
