@@ -29,7 +29,7 @@ export default async function DraftCenterPage() {
     <div className="max-w-6xl mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-1">DraftCenter {draftYear}</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Classements de prospects selon plusieurs sources — trié par rang moyen · cliquer un joueur pour voir le détail des sources
+        Classements de prospects selon plusieurs sources — trié par rang moyen · cliquer sur un joueur pour voir les points amassés au cours de la dernière saison
       </p>
       <DraftCenterTable prospects={rows} draftYear={draftYear} />
     </div>
