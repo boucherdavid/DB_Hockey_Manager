@@ -32,6 +32,11 @@ export default function DraftCenterTable({ prospects, draftYear }: { prospects: 
       {/* Légende */}
       <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
         <p className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">Légende des sources</p>
+        <div className="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-xs text-gray-600">
+          <span><span className="font-bold text-blue-700">1</span> Rang 1–5</span>
+          <span><span className="font-bold text-gray-700">6</span> Rang 6–15</span>
+          <span><span className="font-bold text-gray-400">16</span> Rang 16+</span>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-1">
           {DRAFT_SOURCES_RANKED.map(s => (
             <span key={s.key} className="text-xs text-gray-600">
