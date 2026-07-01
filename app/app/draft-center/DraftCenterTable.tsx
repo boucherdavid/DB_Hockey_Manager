@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useState } from 'react'
-import { DRAFT_SOURCES_RANKED, DRAFT_SOURCES_INFOONLY } from '@/lib/draft-sources'
+import { DRAFT_SOURCES, DRAFT_SOURCES_RANKED, DRAFT_SOURCES_INFOONLY } from '@/lib/draft-sources'
 
 type Ranking = { source: string; rank: number; source_url: string | null }
 type Prospect = {
@@ -23,54 +23,47 @@ type Prospect = {
 type View = 'global' | 'cs_na' | 'cs_eu'
 
 const TABS: { key: View; label: string; source?: string }[] = [
-  { key: 'global',  label: 'Classement global' },
+  { key: 'global', label: 'Classement global' },
   { key: 'cs_na',  label: 'Classement LNH Nord-Américain', source: 'central_scouting_na' },
   { key: 'cs_eu',  label: 'Classement LNH Européen',       source: 'central_scouting_eu' },
 ]
-
 
 export default function DraftCenterTable({ prospects, draftYear }: { prospects: Prospect[]; draftYear: number }) {
   const [view, setView] = useState<View>('global')
   const [expanded, setExpanded] = useState<number | null>(null)
 
   const toggleExpand = (id: number) => setExpanded(prev => prev === id ? null : id)
-
-  const rankMap = (rankings: Ranking[]) =>
-    Object.fromEntries(rankings.map(r => [r.source, r]))
-
+  const rankMap = (rankings: Ranking[]) => Object.fromEntries(rankings.map(r => [r.source, r]))
   const currentTab = TABS.find(t => t.key === view)!
+  const isCS = view !== 'global'
 
-  const rows: Prospect[] = view === 'global'
+  const rows: Prospect[] = isCS
     ? prospects
-    : prospects
         .filter(p => p.rankings.some(r => r.source === currentTab.source))
         .sort((a, b) => {
           const ra = a.rankings.find(r => r.source === currentTab.source)?.rank ?? 999
           const rb = b.rankings.find(r => r.source === currentTab.source)?.rank ?? 999
           return ra - rb
         })
+    : prospects
 
-  const isCS = view !== 'global'
+  // nombre total de colonnes pour colSpan
+  const colCount = isCS ? 9 : (4 + DRAFT_SOURCES.length + 1) // rang+joueur+pos+PTS + sources + chevron
 
   return (
     <div>
       {/* Onglets */}
-      <div className="flex gap-1 mb-4 border-b border-gray-200">
+      <div className="flex flex-wrap gap-1 mb-4 border-b border-gray-200">
         {TABS.map(tab => (
-          <button
-            key={tab.key}
+          <button key={tab.key}
             onClick={() => { setView(tab.key); setExpanded(null) }}
             className={`px-4 py-2 text-sm font-medium rounded-t border-b-2 transition-colors ${
-              view === tab.key
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+              view === tab.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
             {tab.label}
             {tab.source && (
-              <span className="ml-1.5 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
-                informatif
-              </span>
+              <span className="ml-1.5 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">informatif</span>
             )}
           </button>
         ))}
@@ -78,33 +71,57 @@ export default function DraftCenterTable({ prospects, draftYear }: { prospects: 
 
       {isCS && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
-          Les listes des Éclaireurs LNH classent les joueurs par catégorie (attaquants NA, défenseurs NA, gardiens NA...),
-          pas en classement global. Ces rangs sont fournis à titre informatif et ne sont pas inclus dans le rang moyen.
+          Les Éclaireurs LNH classent les joueurs par catégorie (attaquants, défenseurs, gardiens) séparément —
+          pas un classement global. Fourni à titre informatif, non inclus dans le rang moyen.
         </p>
       )}
 
       <p className="text-sm text-gray-500 mb-3">
         {rows.length} prospects
-        {!isCS && <> · rang moyen calculé sur {DRAFT_SOURCES_RANKED.length} sources</>}
-        {' · '}cliquer un joueur pour voir le détail des classements
+        {!isCS && <> · rang moyen calculé sur {DRAFT_SOURCES_RANKED.length} sources · CS-NA et CS-EU à titre informatif</>}
+        {isCS && <> · cliquer un joueur pour voir ses classements sur les autres sources</>}
       </p>
 
       <div className="bg-white rounded-lg shadow overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="text-sm border-collapse" style={{ minWidth: isCS ? undefined : '1100px' }}>
           <thead>
             <tr className="bg-gray-50 border-b">
-              <th className="text-center px-3 py-3 font-medium text-gray-600 w-20">
-                {isCS ? 'Rang' : 'Rang moy.'}
+              <th className="text-center px-3 py-3 font-medium text-gray-600 sticky left-0 bg-gray-50 z-10 min-w-[72px]">
+                {isCS ? 'Rang' : 'Moy.'}
               </th>
-              <th className="text-left px-3 py-3 font-medium text-gray-600">Joueur</th>
-              <th className="text-left px-3 py-3 font-medium text-gray-600">Pos</th>
-              <th className="text-left px-3 py-3 font-medium text-gray-600 hidden sm:table-cell">Équipe</th>
-              <th className="text-right px-3 py-3 font-medium text-gray-600 hidden sm:table-cell">PJ</th>
-              <th className="text-right px-3 py-3 font-medium text-gray-600 hidden sm:table-cell">B</th>
-              <th className="text-right px-3 py-3 font-medium text-gray-600 hidden sm:table-cell">A</th>
-              <th className="text-right px-3 py-3 font-medium text-gray-600">PTS</th>
-              <th className="text-right px-3 py-3 font-medium text-gray-600 hidden sm:table-cell">PUN</th>
-              <th className="w-6 px-2"></th>
+              <th className="text-left px-3 py-3 font-medium text-gray-600 sticky left-[72px] bg-gray-50 z-10 min-w-[160px]">
+                Joueur
+              </th>
+              <th className="text-left px-3 py-3 font-medium text-gray-600 w-12">Pos</th>
+
+              {!isCS && (
+                <>
+                  {DRAFT_SOURCES_RANKED.map(s => (
+                    <th key={s.key} className="text-center px-2 py-3 font-medium text-gray-600 w-12 text-xs">
+                      {s.abbr}
+                    </th>
+                  ))}
+                  {DRAFT_SOURCES_INFOONLY.map(s => (
+                    <th key={s.key} className="text-center px-2 py-3 font-medium text-amber-600 w-12 text-xs bg-amber-50">
+                      {s.abbr}
+                    </th>
+                  ))}
+                </>
+              )}
+
+              {isCS && (
+                <>
+                  <th className="text-left px-3 py-3 font-medium text-gray-600">Équipe</th>
+                  <th className="text-right px-3 py-3 font-medium text-gray-600">PJ</th>
+                  <th className="text-right px-3 py-3 font-medium text-gray-600">B</th>
+                  <th className="text-right px-3 py-3 font-medium text-gray-600">A</th>
+                  <th className="text-right px-3 py-3 font-medium text-gray-600">PTS</th>
+                  <th className="text-right px-3 py-3 font-medium text-gray-600">PUN</th>
+                </>
+              )}
+
+              {!isCS && <th className="text-right px-3 py-3 font-medium text-gray-600 w-14">PTS</th>}
+              <th className="w-6 px-2" />
             </tr>
           </thead>
           <tbody>
@@ -119,7 +136,7 @@ export default function DraftCenterTable({ prospects, draftYear }: { prospects: 
                 <Fragment key={p.id}>
                   {showSeparator && (
                     <tr className="bg-gray-50">
-                      <td colSpan={10} className="px-4 py-2 text-xs text-gray-500 italic border-t-2 border-gray-300">
+                      <td colSpan={colCount} className="px-4 py-2 text-xs text-gray-500 italic border-t-2 border-gray-300">
                         ↓ Prospects repérés par les Éclaireurs LNH uniquement — non classés par les analystes indépendants
                       </td>
                     </tr>
@@ -128,88 +145,113 @@ export default function DraftCenterTable({ prospects, draftYear }: { prospects: 
                     onClick={() => toggleExpand(p.id)}
                     className={`border-b cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                   >
-                    {/* Rang moyen / rang CS */}
-                    <td className="px-3 py-3 text-center">
+                    {/* Rang moyen / rang CS — sticky */}
+                    <td className={`px-3 py-2 text-center sticky left-0 z-10 ${isExpanded ? 'bg-blue-50' : 'bg-white'}`}>
                       {isCS ? (
-                        <span className="text-xl font-bold text-gray-800">
-                          {csRank ?? '—'}
-                        </span>
+                        <span className="text-xl font-bold text-gray-800">{csRank ?? '—'}</span>
                       ) : (
                         <div className="flex flex-col items-center">
-                          <span className="text-xl font-bold text-blue-600">
+                          <span className="text-lg font-bold text-blue-600">
                             {p.avgRank ? p.avgRank.toFixed(1) : '—'}
                           </span>
-                          {p.avgRank && (
-                            <span className="text-xs text-gray-400">{p.sourceCount} src</span>
-                          )}
+                          {p.avgRank && <span className="text-xs text-gray-400">{p.sourceCount} src</span>}
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-3 font-medium text-gray-800">{p.last_name}, {p.first_name}</td>
-                    <td className="px-3 py-3 text-gray-600">{p.position ?? '—'}</td>
-                    <td className="px-3 py-3 text-gray-500 hidden sm:table-cell text-xs">{p.team ?? '—'}</td>
-                    <td className="px-3 py-3 text-right text-gray-600 hidden sm:table-cell">{p.games_played ?? '—'}</td>
-                    <td className="px-3 py-3 text-right text-gray-600 hidden sm:table-cell">{p.goals ?? '—'}</td>
-                    <td className="px-3 py-3 text-right text-gray-600 hidden sm:table-cell">{p.assists ?? '—'}</td>
-                    <td className="px-3 py-3 text-right font-medium text-gray-800">{p.points ?? '—'}</td>
-                    <td className="px-3 py-3 text-right text-gray-500 hidden sm:table-cell">{p.pim ?? '—'}</td>
-                    <td className="px-2 py-3 text-gray-400 text-xs">
-                      {isExpanded ? '▲' : '▼'}
+
+                    {/* Joueur — sticky */}
+                    <td className={`px-3 py-2 font-medium text-gray-800 sticky left-[72px] z-10 ${isExpanded ? 'bg-blue-50' : 'bg-white'}`}>
+                      {p.last_name}, {p.first_name}
                     </td>
+
+                    <td className="px-3 py-2 text-gray-500 text-xs">{p.position ?? '—'}</td>
+
+                    {/* Colonnes par source (onglet global uniquement) */}
+                    {!isCS && (
+                      <>
+                        {DRAFT_SOURCES_RANKED.map(s => {
+                          const r = rm[s.key]
+                          return (
+                            <td key={s.key} className="px-2 py-2 text-center text-xs">
+                              {r ? (
+                                <span className={`font-semibold ${r.rank <= 5 ? 'text-blue-700' : r.rank <= 15 ? 'text-gray-700' : 'text-gray-400'}`}>
+                                  {r.rank}
+                                </span>
+                              ) : (
+                                <span className="text-gray-200">—</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                        {DRAFT_SOURCES_INFOONLY.map(s => {
+                          const r = rm[s.key]
+                          return (
+                            <td key={s.key} className="px-2 py-2 text-center text-xs bg-amber-50">
+                              {r ? (
+                                <span className="font-semibold text-amber-700">{r.rank}</span>
+                              ) : (
+                                <span className="text-amber-200">—</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </>
+                    )}
+
+                    {/* Stats (onglet CS) */}
+                    {isCS && (
+                      <>
+                        <td className="px-3 py-2 text-gray-500 text-xs">{p.team ?? '—'}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{p.games_played ?? '—'}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{p.goals ?? '—'}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{p.assists ?? '—'}</td>
+                        <td className="px-3 py-2 text-right font-medium text-gray-800">{p.points ?? '—'}</td>
+                        <td className="px-3 py-2 text-right text-gray-500">{p.pim ?? '—'}</td>
+                      </>
+                    )}
+
+                    {/* PTS (onglet global) */}
+                    {!isCS && (
+                      <td className="px-3 py-2 text-right font-medium text-gray-800">{p.points ?? '—'}</td>
+                    )}
+
+                    <td className="px-2 py-2 text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</td>
                   </tr>
 
+                  {/* Expand : stats complètes (global) ou rangs sources (CS) */}
                   {isExpanded && (
                     <tr className="bg-blue-50 border-b">
-                      <td colSpan={10} className="px-4 py-3">
-                        <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
-                          Classements {draftYear}
-                        </p>
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {DRAFT_SOURCES_RANKED.map(s => {
-                            const r = rm[s.key]
-                            if (!r) return (
-                              <span key={s.key} className="text-xs text-gray-300 border border-gray-100 rounded px-2 py-0.5 bg-white">
-                                {s.label} —
-                              </span>
-                            )
-                            const content = <>{s.label} <span className="font-bold">#{r.rank}</span></>
-                            return r.source_url ? (
-                              <a key={s.key} href={r.source_url} target="_blank" rel="noopener noreferrer"
-                                className="text-xs bg-white border border-blue-200 text-blue-700 rounded px-2 py-0.5 hover:bg-blue-50"
-                                onClick={e => e.stopPropagation()}>
-                                {content}
-                              </a>
-                            ) : (
-                              <span key={s.key} className="text-xs bg-white border border-gray-200 text-gray-700 rounded px-2 py-0.5">
-                                {content}
-                              </span>
-                            )
-                          })}
-                        </div>
-                        {DRAFT_SOURCES_INFOONLY.some(s => rm[s.key]) && (
-                          <>
-                            <p className="text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wide">
-                              Éclaireurs LNH (informatif)
+                      <td colSpan={colCount} className="px-4 py-3">
+                        {!isCS ? (
+                          <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+                            <span><span className="font-medium">Équipe :</span> {p.team ?? '—'}</span>
+                            <span><span className="font-medium">PJ :</span> {p.games_played ?? '—'}</span>
+                            <span><span className="font-medium">B :</span> {p.goals ?? '—'}</span>
+                            <span><span className="font-medium">A :</span> {p.assists ?? '—'}</span>
+                            <span><span className="font-medium">PTS :</span> {p.points ?? '—'}</span>
+                            <span><span className="font-medium">PUN :</span> {p.pim ?? '—'}</span>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
+                              Classements {draftYear}
                             </p>
                             <div className="flex flex-wrap gap-2">
-                              {DRAFT_SOURCES_INFOONLY.map(s => {
+                              {DRAFT_SOURCES_RANKED.map(s => {
                                 const r = rm[s.key]
-                                if (!r) return null
-                                const content = <>{s.label} <span className="font-bold">#{r.rank}</span></>
-                                return r.source_url ? (
-                                  <a key={s.key} href={r.source_url} target="_blank" rel="noopener noreferrer"
-                                    className="text-xs bg-white border border-amber-200 text-amber-700 rounded px-2 py-0.5 hover:bg-amber-50"
-                                    onClick={e => e.stopPropagation()}>
-                                    {content}
-                                  </a>
-                                ) : (
-                                  <span key={s.key} className="text-xs bg-white border border-amber-200 text-amber-700 rounded px-2 py-0.5">
-                                    {content}
+                                if (!r) return (
+                                  <span key={s.key} className="text-xs text-gray-300 border border-gray-100 rounded px-2 py-0.5 bg-white">
+                                    {s.label} —
+                                  </span>
+                                )
+                                return (
+                                  <span key={s.key} className="text-xs bg-white border border-blue-200 text-blue-700 rounded px-2 py-0.5">
+                                    {s.label} <span className="font-bold">#{r.rank}</span>
                                   </span>
                                 )
                               })}
                             </div>
-                          </>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -218,11 +260,32 @@ export default function DraftCenterTable({ prospects, draftYear }: { prospects: 
               )
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={10} className="px-4 py-10 text-center text-gray-400">Aucune donnée disponible.</td></tr>
+              <tr>
+                <td colSpan={colCount} className="px-4 py-10 text-center text-gray-400">Aucune donnée disponible.</td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Légende */}
+      {!isCS && (
+        <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <p className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">Légende des sources</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-1">
+            {DRAFT_SOURCES_RANKED.map(s => (
+              <span key={s.key} className="text-xs text-gray-600">
+                <span className="font-semibold text-gray-800">{s.abbr}</span> — {s.label}
+              </span>
+            ))}
+            {DRAFT_SOURCES_INFOONLY.map(s => (
+              <span key={s.key} className="text-xs text-amber-700">
+                <span className="font-semibold">{s.abbr}</span> — {s.label} <span className="italic">(informatif)</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
