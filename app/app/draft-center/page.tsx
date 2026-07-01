@@ -1,7 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import DraftCenterTable from './DraftCenterTable'
+import { DRAFT_SOURCES_INFOONLY } from '@/lib/draft-sources'
 
 export const revalidate = 3600
+
+const INFO_ONLY_KEYS = new Set(DRAFT_SOURCES_INFOONLY.map(s => s.key))
 
 export default async function DraftCenterPage() {
   const supabase = await createClient()
@@ -17,8 +20,9 @@ export default async function DraftCenterPage() {
 
   const rows = (prospects ?? []).map(p => {
     const rankings = (p.draft_prospect_rankings as { source: string; rank: number; source_url: string | null }[])
-    const avg = rankings.length > 0 ? rankings.reduce((s, r) => s + r.rank, 0) / rankings.length : null
-    return { ...p, rankings, avgRank: avg, sourceCount: rankings.length }
+    const ranked = rankings.filter(r => !INFO_ONLY_KEYS.has(r.source as never))
+    const avg = ranked.length > 0 ? ranked.reduce((s, r) => s + r.rank, 0) / ranked.length : null
+    return { ...p, rankings, avgRank: avg, sourceCount: ranked.length }
   }).sort((a, b) => (a.avgRank ?? 9999) - (b.avgRank ?? 9999))
 
   return (

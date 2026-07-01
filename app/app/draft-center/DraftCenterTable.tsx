@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useState } from 'react'
-import { DRAFT_SOURCES } from '@/lib/draft-sources'
+import { DRAFT_SOURCES_RANKED, DRAFT_SOURCES_INFOONLY } from '@/lib/draft-sources'
 
 type Ranking = { source: string; rank: number; source_url: string | null }
 type Prospect = {
@@ -77,9 +77,9 @@ export default function DraftCenterTable({ prospects, draftYear }: { prospects: 
                   {isExpanded && (
                     <tr className="bg-blue-50 border-b">
                       <td colSpan={10} className="px-4 py-3">
-                        <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Rangs par source — {draftYear}</p>
-                        <div className="flex flex-wrap gap-2">
-                          {DRAFT_SOURCES.map(s => {
+                        <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Classements — {draftYear}</p>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {DRAFT_SOURCES_RANKED.map(s => {
                             const r = rm[s.key]
                             if (!r) return (
                               <span key={s.key} className="text-xs text-gray-300 border border-gray-100 rounded px-2 py-0.5 bg-white">
@@ -87,14 +87,9 @@ export default function DraftCenterTable({ prospects, draftYear }: { prospects: 
                               </span>
                             )
                             return r.source_url ? (
-                              <a
-                                key={s.key}
-                                href={r.source_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <a key={s.key} href={r.source_url} target="_blank" rel="noopener noreferrer"
                                 className="text-xs bg-white border border-blue-200 text-blue-700 rounded px-2 py-0.5 hover:bg-blue-50"
-                                onClick={e => e.stopPropagation()}
-                              >
+                                onClick={e => e.stopPropagation()}>
                                 {s.label} <span className="font-bold">#{r.rank}</span>
                               </a>
                             ) : (
@@ -104,6 +99,28 @@ export default function DraftCenterTable({ prospects, draftYear }: { prospects: 
                             )
                           })}
                         </div>
+                        {DRAFT_SOURCES_INFOONLY.some(s => rm[s.key]) && (
+                          <>
+                            <p className="text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wide">Éclaireurs LNH (informatif — non inclus dans le rang moyen)</p>
+                            <div className="flex flex-wrap gap-2">
+                              {DRAFT_SOURCES_INFOONLY.map(s => {
+                                const r = rm[s.key]
+                                if (!r) return null
+                                return r.source_url ? (
+                                  <a key={s.key} href={r.source_url} target="_blank" rel="noopener noreferrer"
+                                    className="text-xs bg-white border border-amber-200 text-amber-700 rounded px-2 py-0.5 hover:bg-amber-50"
+                                    onClick={e => e.stopPropagation()}>
+                                    {s.label} <span className="font-bold">#{r.rank}</span>
+                                  </a>
+                                ) : (
+                                  <span key={s.key} className="text-xs bg-white border border-amber-200 text-amber-700 rounded px-2 py-0.5">
+                                    {s.label} <span className="font-bold">#{r.rank}</span>
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          </>
+                        )}
                       </td>
                     </tr>
                   )}

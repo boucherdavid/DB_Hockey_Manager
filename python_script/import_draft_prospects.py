@@ -37,7 +37,7 @@ SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
 SOURCES_VALIDES = {
     'elite_prospects', 'tsn_button', 'tsn_peters', 'mckeens', 'thn_ferrari', 'thn_kennedy',
     'daily_faceoff', 'flohockey_peters', 'central_scouting_na', 'central_scouting_eu',
-    'draft_prospects_hockey', 'sportsnet_cosentino', 'sportsnet_bukala', 'recruit_scouting',
+    'draft_prospects_hockey', 'sportsnet_cosentino', 'sportsnet_bukala',
     'smaht_scouting', 'dobber_prospects', 'hpr_malloy',
 }
 

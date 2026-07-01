@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import AddProspectForm from './AddProspectForm'
 import DraftProspectActions from './DraftProspectActions'
+import { DRAFT_SOURCES_INFOONLY } from '@/lib/draft-sources'
+
+const INFO_ONLY_KEYS = new Set(DRAFT_SOURCES_INFOONLY.map(s => s.key))
 
 export default async function AdminDraftCenterPage() {
   const supabase = await createClient()
@@ -23,9 +26,10 @@ export default async function AdminDraftCenterPage() {
     .order('last_name')
 
   const rows = (prospects ?? []).map(p => {
-    const ranks = (p.draft_prospect_rankings as { rank: number }[]).map(r => r.rank)
-    const avg = ranks.length > 0 ? ranks.reduce((s, r) => s + r, 0) / ranks.length : null
-    return { ...p, avgRank: avg, sourceCount: ranks.length }
+    const allRanks = (p.draft_prospect_rankings as { rank: number; source: string }[])
+    const ranked = allRanks.filter(r => !INFO_ONLY_KEYS.has(r.source as never))
+    const avg = ranked.length > 0 ? ranked.reduce((s, r) => s + r.rank, 0) / ranked.length : null
+    return { ...p, avgRank: avg, sourceCount: ranked.length }
   }).sort((a, b) => (a.avgRank ?? 999) - (b.avgRank ?? 999))
 
   return (
