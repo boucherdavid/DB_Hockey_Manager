@@ -47,7 +47,7 @@ export default function DraftCenterTable({ prospects, draftYear }: { prospects: 
       </div>
 
       <p className="text-sm text-gray-500 mb-3">
-        {prospects.length} prospects · rang moyen calculé sur {DRAFT_SOURCES_RANKED.length} sources · CS-NA et CS-EU à titre informatif · cliquer sur un joueur pour voir les points amassés au cours de la dernière saison
+        {prospects.length} prospects · rang moyen calculé sur {DRAFT_SOURCES_RANKED.length} sources · cliquer sur un joueur pour voir les points amassés au cours de la dernière saison
       </p>
 
       <div className="bg-white rounded-lg shadow overflow-x-auto">
