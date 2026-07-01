@@ -58,6 +58,18 @@ Je l'utiliserai pour:
 
 ### 2026-07-01
 
+**[Feat] — DraftCenter : améliorations UX tableau** (`app/app/draft-center/DraftCenterTable.tsx`, `app/app/draft-center/page.tsx`) :
+- Colonnes par source toujours visibles dans le tableau (acronymes en en-tête) + code couleur : bleu foncé rang 1–5, gris foncé 6–15, gris pâle 16+.
+- Colonnes CS-NA et CS-EU en fond ambré pour les distinguer visuellement des sources classement global.
+- Légende déplacée en haut de page avec explication du code couleur.
+- Suppression des onglets Central Scouting (rangs désormais visibles directement comme colonnes).
+- Rang moyen affiché en gros et bleu en première colonne sticky; colonnes Joueur et Rang moyen restent visibles au scroll horizontal.
+- Séparateur automatique avant les prospects classés uniquement par les Éclaireurs LNH.
+- Expand par clic sur une ligne : affiche équipe + stats complètes (PJ/B/A/PTS/PUN).
+- Texte indicatif ajusté : "cliquer sur un joueur pour voir les points amassés au cours de la dernière saison".
+- Suppression du sous-titre redondant sur la page.
+- Commits : `60284f3` à `609ff6b`.
+
 **[Fix] — DraftCenter : ajustements sources + import complet 16 sources** (`app/lib/draft-sources.ts`, `app/app/draft-center/`, `app/app/admin/draft-center/page.tsx`, `python_script/import_draft_prospects.py`, `supabase_migrations/draft_center_v2.sql`) :
 - Retrait de `recruit_scouting` (pas de liste disponible) — migration SQL `draft_center_v2.sql` met à jour la contrainte CHECK.
 - `central_scouting_na` et `central_scouting_eu` marqués `infoOnly: true` dans `draft-sources.ts` : exclus du rang moyen (leurs listes sont par catégorie NA/EU distinctes, pas un classement global), affichés séparément dans l'expand sous "Éclaireurs LNH (informatif)".
