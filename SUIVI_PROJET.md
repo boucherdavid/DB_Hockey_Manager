@@ -56,6 +56,16 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-01
+
+**[Feat] — DraftCenter : rankings de prospects repêchage LNH 2026** (`supabase_migrations/draft_center.sql`, `python_script/import_draft_prospects.py`, `app/lib/draft-sources.ts`, `app/app/draft-center/`, `app/app/admin/draft-center/`, `app/components/Navbar.tsx`) :
+- Contexte : David veut offrir aux poolers un centre de classements de prospects (17 sources : EliteProspects, TSN/Button, TSN/Peters, McKeen's, THN×2, Daily Faceoff, FloHockey, Central Scouting NA/EU, Draft Prospects Hockey, Sportsnet×2, Recruit Scouting, Smaht Scouting, DobberProspects, HPR/Malloy) sans risquer la violation de copyright (classement = faits non protégés ; liens vers les sources pour attribution, pas de texte rédactionnel copié).
+- **BD** : 2 nouvelles tables `draft_prospects` (bio + stats PJ/B/A/PTS/PUN) + `draft_prospect_rankings` (rang par source avec contrainte CHECK sur 17 slugs), RLS lecture publique / écriture admin. Migration exécutée staging + prod.
+- **Script Python** `import_draft_prospects.py` : lit un classeur Excel multi-onglets (nom d'onglet = slug source). Gère deux formats de colonnes : `first_name/last_name/position` séparés ou champ `name` combiné du style `"Gavin McKenna\xa0(LW)Verified player"` (EliteProspects), nettoyage du préfixe `"USA flagNCAA"` dans le champ `league`, accept `p` et `tp` indifféremment pour les points. Import initial EliteProspects : 32 prospects créés (saison régulière stats incluses). Fichier source : `excel/draft_prospects_2026.xlsx` (gitignored).
+- **Page publique** `/draft-center` : tableau trié par rang moyen, colonnes PJ/B/A masquées mobile, clic sur joueur pour voir les rangs de chaque source sous forme de badges cliquables (avec lien source si `source_url` renseignée).
+- **Page admin** `/admin/draft-center` : liste avec rang moyen + nb sources + actions Modifier/Supprimer ; formulaire ajout inline ; page `/admin/draft-center/[id]` avec édition bio/stats + 17 champs rang+URL par source.
+- **Navbar** : lien public "DraftCenter 2026" ajouté dans le dropdown "Repêchage" (desktop + mobile) ; lien admin "DraftCenter" dans le menu Admin (desktop + mobile).
+
 ### 2026-06-27
 
 **[Feat] — Désactivation d'une saison de séries + masquage des menus séries hors saison active** (`app/app/admin/config/actions.ts`, `app/app/admin/config/SeasonsManager.tsx`, `app/components/Navbar.tsx`) :

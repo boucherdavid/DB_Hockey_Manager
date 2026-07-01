@@ -1,0 +1,33 @@
+import { createClient } from '@/lib/supabase/server'
+import DraftCenterTable from './DraftCenterTable'
+
+export const revalidate = 3600
+
+export default async function DraftCenterPage() {
+  const supabase = await createClient()
+
+  const { data: yearRow } = await supabase
+    .from('draft_prospects').select('draft_year').order('draft_year', { ascending: false }).limit(1).maybeSingle()
+  const draftYear = yearRow?.draft_year ?? new Date().getFullYear()
+
+  const { data: prospects } = await supabase
+    .from('draft_prospects')
+    .select('id, first_name, last_name, position, team, games_played, goals, assists, points, pim, draft_prospect_rankings(source, rank, source_url)')
+    .eq('draft_year', draftYear)
+
+  const rows = (prospects ?? []).map(p => {
+    const rankings = (p.draft_prospect_rankings as { source: string; rank: number; source_url: string | null }[])
+    const avg = rankings.length > 0 ? rankings.reduce((s, r) => s + r.rank, 0) / rankings.length : null
+    return { ...p, rankings, avgRank: avg, sourceCount: rankings.length }
+  }).sort((a, b) => (a.avgRank ?? 9999) - (b.avgRank ?? 9999))
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      <h1 className="text-2xl font-bold text-gray-800 mb-1">DraftCenter {draftYear}</h1>
+      <p className="text-sm text-gray-500 mb-6">
+        Classements de prospects selon plusieurs sources — trié par rang moyen · cliquer un joueur pour voir le détail des sources
+      </p>
+      <DraftCenterTable prospects={rows} draftYear={draftYear} />
+    </div>
+  )
+}

@@ -233,13 +233,14 @@ export default function Navbar({
               {/* Repêchage */}
               <div className="relative">
                 <button onClick={() => toggle('repechage')}
-                  className={navBtnClass(isActive('/repechage', '/repechage-recrues'))}>
+                  className={navBtnClass(isActive('/repechage', '/repechage-recrues', '/draft-center'))}>
                   {'Repêchage'} <Chevron open={openDropdown === 'repechage'} />
                 </button>
                 {openDropdown === 'repechage' && (
                   <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
                     <Link href="/repechage" className={dropdownLinkClass('/repechage')}>{'Repêchage LNH'}</Link>
                     <Link href="/repechage-recrues" className={dropdownLinkClass('/repechage-recrues')}>{'Repêchage recrues'}</Link>
+                    <Link href="/draft-center" className={dropdownLinkClass('/draft-center')}>DraftCenter 2026</Link>
                   </div>
                 )}
               </div>
@@ -294,8 +295,9 @@ export default function Navbar({
                       <Link href="/admin/repechage" className={dropdownLinkClass('/admin/repechage')}>{'Repêchage recrues'}</Link>
                       <Link href="/admin/effectifs" className={dropdownLinkClass('/admin/effectifs')}>{'Gestion des effectifs'}</Link>
                       <div className="border-t my-1" />
-                      <Link href="/admin/joueurs"   className={dropdownLinkClass('/admin/joueurs')}>{'Données joueurs'}</Link>
-                      <Link href="/admin/series"    className={dropdownLinkClass('/admin/series')}>Pool des séries</Link>
+                      <Link href="/admin/joueurs"      className={dropdownLinkClass('/admin/joueurs')}>{'Données joueurs'}</Link>
+                      <Link href="/admin/draft-center" className={dropdownLinkClass('/admin/draft-center')}>DraftCenter</Link>
+                      <Link href="/admin/series"       className={dropdownLinkClass('/admin/series')}>Pool des séries</Link>
                     </div>
                   )}
                 </div>
@@ -389,6 +391,7 @@ export default function Navbar({
             <Link href="/joueurs"    className={mobileLinkClass('/joueurs')}>Contrats LNH</Link>
             <Link href="/repechage"  className={mobileLinkClass('/repechage')}>{'Rep\u00eachage LNH'}</Link>
             <Link href="/repechage-recrues" className={mobileLinkClass('/repechage-recrues')}>{'Rep\u00eachage recrues'}</Link>
+            <Link href="/draft-center" className={mobileLinkClass('/draft-center')}>DraftCenter 2026</Link>
             <Link href="/calendrier" className={mobileLinkClass('/calendrier')}>Calendrier</Link>
 
             {newPlayoffActive && (<>
@@ -416,7 +419,8 @@ export default function Navbar({
                 )}
                 {effectiveIsAdmin &&<Link href="/admin/init"      className={mobileLinkClass('/admin/init')}>Initialisation</Link>}
                 {effectiveIsAdmin &&<Link href="/admin/effectifs" className={mobileLinkClass('/admin/effectifs')}>{'Gestion des effectifs'}</Link>}
-                {effectiveIsAdmin &&<Link href="/admin/series"    className={mobileLinkClass('/admin/series')}>Pool des séries</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/draft-center" className={mobileLinkClass('/admin/draft-center')}>DraftCenter</Link>}
+                {effectiveIsAdmin &&<Link href="/admin/series"       className={mobileLinkClass('/admin/series')}>Pool des séries</Link>}
                 {isAdmin && (
                   <button onClick={togglePoolerView}
                     className="block text-left px-3 py-2 rounded text-sm font-medium text-amber-300 hover:bg-pool-navy-light transition-colors">
