@@ -24,8 +24,8 @@ type View = 'global' | 'cs_na' | 'cs_eu'
 
 const TABS: { key: View; label: string; source?: string }[] = [
   { key: 'global',  label: 'Classement global' },
-  { key: 'cs_na',  label: 'Central Scouting NA', source: 'central_scouting_na' },
-  { key: 'cs_eu',  label: 'Central Scouting EU', source: 'central_scouting_eu' },
+  { key: 'cs_na',  label: 'Classement LNH Nord-Américain', source: 'central_scouting_na' },
+  { key: 'cs_eu',  label: 'Classement LNH Européen',       source: 'central_scouting_eu' },
 ]
 
 
@@ -108,13 +108,22 @@ export default function DraftCenterTable({ prospects, draftYear }: { prospects: 
             </tr>
           </thead>
           <tbody>
-            {rows.map(p => {
+            {rows.map((p, idx) => {
               const rm = rankMap(p.rankings)
               const isExpanded = expanded === p.id
               const csRank = currentTab.source ? rm[currentTab.source]?.rank : null
+              const prevHadRank = idx > 0 && rows[idx - 1].avgRank !== null
+              const showSeparator = !isCS && p.avgRank === null && prevHadRank
 
               return (
                 <Fragment key={p.id}>
+                  {showSeparator && (
+                    <tr className="bg-gray-50">
+                      <td colSpan={10} className="px-4 py-2 text-xs text-gray-500 italic border-t-2 border-gray-300">
+                        ↓ Prospects repérés par les Éclaireurs LNH uniquement — non classés par les analystes indépendants
+                      </td>
+                    </tr>
+                  )}
                   <tr
                     onClick={() => toggleExpand(p.id)}
                     className={`border-b cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
