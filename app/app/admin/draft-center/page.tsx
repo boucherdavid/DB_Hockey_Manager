@@ -3,11 +3,18 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import AddProspectForm from './AddProspectForm'
 import DraftProspectActions from './DraftProspectActions'
+import AdminDraftYearSelect from './AdminDraftYearSelect'
 import { DRAFT_SOURCES_INFOONLY } from '@/lib/draft-sources'
+
+export const dynamic = 'force-dynamic'
 
 const INFO_ONLY_KEYS = new Set(DRAFT_SOURCES_INFOONLY.map(s => s.key))
 
-export default async function AdminDraftCenterPage() {
+export default async function AdminDraftCenterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -15,9 +22,17 @@ export default async function AdminDraftCenterPage() {
   const { data: pooler } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
   if (!pooler?.is_admin) redirect('/')
 
-  const { data: yearRow } = await supabase
-    .from('draft_prospects').select('draft_year').order('draft_year', { ascending: false }).limit(1).maybeSingle()
-  const draftYear = yearRow?.draft_year ?? new Date().getFullYear()
+  const { year } = await searchParams
+
+  const { data: yearRows } = await supabase
+    .from('draft_prospects').select('draft_year').order('draft_year', { ascending: false })
+  const existingYears = Array.from(new Set((yearRows ?? []).map(r => r.draft_year))) as number[]
+  const latestYear = existingYears[0] ?? new Date().getFullYear()
+  const parsedYear = year ? parseInt(year, 10) : NaN
+  const draftYear = !isNaN(parsedYear) ? parsedYear : latestYear
+  // Toujours offrir l'année suivante dans le sélecteur pour démarrer la liste du prochain repêchage
+  const nextYear = latestYear + 1
+  const years = Array.from(new Set([...existingYears, nextYear, draftYear])).sort((a, b) => b - a)
 
   const { data: prospects } = await supabase
     .from('draft_prospects')
@@ -37,8 +52,9 @@ export default async function AdminDraftCenterPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <Link href="/admin" className="text-sm text-gray-400 hover:text-gray-600">{'← Admin'}</Link>
-          <h1 className="text-2xl font-bold text-gray-800 mt-1">DraftCenter — Prospects {draftYear}</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mt-1">{'Classement des prospects'} — {draftYear}</h1>
         </div>
+        <AdminDraftYearSelect years={years} selectedYear={draftYear} />
       </div>
 
       <AddProspectForm draftYear={draftYear} />

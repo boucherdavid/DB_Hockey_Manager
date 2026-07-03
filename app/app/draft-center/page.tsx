@@ -1,17 +1,29 @@
 import { createClient } from '@/lib/supabase/server'
 import DraftCenterTable from './DraftCenterTable'
+import DraftYearSelect from './DraftYearSelect'
 import { DRAFT_SOURCES_INFOONLY } from '@/lib/draft-sources'
 
-export const revalidate = 3600
+export const dynamic = 'force-dynamic'
 
 const INFO_ONLY_KEYS = new Set(DRAFT_SOURCES_INFOONLY.map(s => s.key))
 
-export default async function DraftCenterPage() {
+export default async function DraftCenterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string }>
+}) {
   const supabase = await createClient()
+  const { year } = await searchParams
 
-  const { data: yearRow } = await supabase
-    .from('draft_prospects').select('draft_year').order('draft_year', { ascending: false }).limit(1).maybeSingle()
-  const draftYear = yearRow?.draft_year ?? new Date().getFullYear()
+  const { data: yearRows } = await supabase
+    .from('draft_prospects')
+    .select('draft_year')
+    .order('draft_year', { ascending: false })
+
+  const years = Array.from(new Set((yearRows ?? []).map(r => r.draft_year))) as number[]
+  const latestYear = years[0] ?? new Date().getFullYear()
+  const parsedYear = year ? parseInt(year, 10) : NaN
+  const draftYear = (!isNaN(parsedYear) && years.includes(parsedYear)) ? parsedYear : latestYear
 
   const { data: prospects } = await supabase
     .from('draft_prospects')
@@ -27,7 +39,10 @@ export default async function DraftCenterPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">DraftCenter {draftYear}</h1>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <h1 className="text-2xl font-bold text-gray-800">{'Classement des prospects'} {draftYear}</h1>
+        {years.length > 1 && <DraftYearSelect years={years} selectedYear={draftYear} />}
+      </div>
       <DraftCenterTable prospects={rows} draftYear={draftYear} />
     </div>
   )

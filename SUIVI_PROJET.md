@@ -56,7 +56,14 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
-### 2026-07-02
+### 2026-07-03
+
+**[Feat] — Renommage "DraftCenter" → "Classement des prospects" + réordonnancement du menu Repêchage + sélecteur d'année** (`app/components/Navbar.tsx`, `app/app/draft-center/page.tsx`, `app/app/draft-center/DraftYearSelect.tsx`, `app/app/admin/draft-center/page.tsx`, `app/app/admin/draft-center/AdminDraftYearSelect.tsx`, `app/app/admin/draft-center/[id]/page.tsx`) :
+- Contexte : David voulait un nom plus clair que "DraftCenter" et un ordre logique dans le dropdown "Repêchage" : Classement des prospects (avant le repêchage LNH) → Repêchage LNH → Repêchage recrues (pool, qui pige parmi les joueurs déjà repêchés).
+- Renommage du libellé partout (desktop/mobile, admin/public) : "DraftCenter"/"DraftCenter 2026" → "Classement des prospects". Les noms de fichiers/composants (`DraftCenterTable`, route `/draft-center`) ne sont pas renommés (changement de libellé uniquement).
+- Réordonnancement des liens du dropdown "Repêchage" (desktop et mobile) : Classement des prospects, Repêchage LNH, Repêchage recrues.
+- **Ajout d'un sélecteur d'année** sur `/draft-center` (public, visible seulement si ≥2 années présentes) et `/admin/draft-center` (toujours visible, inclut année suivante + année demandée par l'URL) : avant ce changement, la page ne montrait que la valeur MAX(draft_year) dans `draft_prospects`, donc dès qu'un nouveau repêchage serait importé (ex. 2027), le classement 2026 serait devenu invisible/inaccessible. Maintenant navigable via `?year=`.
+- Pas de migration de schéma requise (draft_prospects.draft_year existait déjà, supporte plusieurs années).
 
 **[Fix] — DraftBoard repêchage de recrues : affichage du mauvais joueur par pick** (`app/app/admin/repechage/DraftBoard.tsx`, `app/app/admin/repechage/page.tsx`, `app/app/repechage-recrues/page.tsx`, `app/app/admin/init/page.tsx`) :
 - Contexte : David a signalé que le repêchage 2025 recréé (staging) affichait des joueurs répétés à plusieurs picks différents (ex. Vincent = Cullen Potter à 3 reprises, Steve = Mason West 2 fois) alors que chaque pick doit correspondre à une recrue distincte.
