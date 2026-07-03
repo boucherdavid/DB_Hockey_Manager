@@ -22,8 +22,13 @@ if (-not $env:SUPABASE_URL -or -not $env:SUPABASE_SERVICE_KEY) {
     Write-Error "SUPABASE_URL / SUPABASE_SERVICE_KEY absents de $envFile"
 }
 
+$venvPython = Join-Path $scriptsDir 'venv\Scripts\python.exe'
+if (-not (Test-Path $venvPython)) {
+    Write-Error "Venv introuvable: $venvPython (voir python_script/venv/)"
+}
+
 Write-Host "=== Pipeline hockey pool -- STAGING ===" -ForegroundColor Cyan
 Write-Host "Cible: $($env:SUPABASE_URL)" -ForegroundColor Yellow
 
 Set-Location $scriptsDir
-python run_pipeline.py @args
+& $venvPython run_pipeline.py @args

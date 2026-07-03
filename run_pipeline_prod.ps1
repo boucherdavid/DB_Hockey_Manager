@@ -31,5 +31,10 @@ if ($confirm.Trim().ToLower() -ne 'oui') {
     exit 0
 }
 
+$venvPython = Join-Path $scriptsDir 'venv\Scripts\python.exe'
+if (-not (Test-Path $venvPython)) {
+    Write-Error "Venv introuvable: $venvPython (voir python_script/venv/)"
+}
+
 Set-Location $scriptsDir
-python run_pipeline.py @args
+& $venvPython run_pipeline.py @args
