@@ -74,7 +74,7 @@ export default async function RepechageAdminPage({
       .order('draft_overall', { ascending: true, nullsFirst: false }),
     supabase
       .from('pooler_rosters')
-      .select('pooler_id, player_id, players(id, first_name, last_name, position, teams(code), draft_round, draft_overall)')
+      .select('pooler_id, player_id, draft_pick_id, players(id, first_name, last_name, position, teams(code), draft_round, draft_overall)')
       .eq('pool_season_id', saison.id)
       .eq('player_type', 'recrue')
       .eq('pool_draft_year', poolDraftYear)
@@ -97,12 +97,12 @@ export default async function RepechageAdminPage({
   const poolersForEditor = Array.from(poolerOrderMap.values())
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bankByPooler = new Map<string, any[]>()
+  const playerByPickId = new Map<number, any>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const entry of (bankData ?? []) as any[]) {
-    const existing = bankByPooler.get(entry.pooler_id) ?? []
-    existing.push(entry.players)
-    bankByPooler.set(entry.pooler_id, existing)
+    if (entry.draft_pick_id != null) {
+      playerByPickId.set(entry.draft_pick_id, entry.players)
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -139,7 +139,7 @@ export default async function RepechageAdminPage({
         picks={(picksData ?? []) as never[]}
         usedPicks={(usedPicksData ?? []) as never[]}
         rookies={availableRookies as never[]}
-        bankByPooler={Object.fromEntries(bankByPooler)}
+        playerByPickId={Object.fromEntries(playerByPickId)}
         saisonId={saison.id}
         poolDraftYear={poolDraftYear}
       />

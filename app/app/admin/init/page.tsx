@@ -126,7 +126,7 @@ export default async function AdminInitPage({
   let usedPicksData: any[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let availableRookies: any[] = []
-  let bankByPooler: Record<string, unknown[]> = {}
+  let playerByPickId: Record<number, unknown> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let poolersForEditor: any[] = []
   let poolDraftYear = 0
@@ -148,7 +148,7 @@ export default async function AdminInitPage({
         supabase.from('pool_draft_picks').select('id, round, draft_order, pending_player_id, current_owner:poolers!current_owner_id(id, name), original_owner:poolers!original_owner_id(id, name)').eq('pool_season_id', saisonRep.id).eq('is_used', false).order('round'),
         supabase.from('pool_draft_picks').select('id, round, draft_order, current_owner:poolers!current_owner_id(id, name), original_owner:poolers!original_owner_id(id, name)').eq('pool_season_id', saisonRep.id).eq('is_used', true).order('round'),
         supabase.from('players').select('id, first_name, last_name, position, status, draft_year, draft_round, draft_overall, teams(code)').or(`is_rookie.eq.true,draft_year.gte.${poolDraftYear - 4}`).not('draft_year', 'is', null).not('draft_overall', 'is', null).order('draft_year', { ascending: false }).order('draft_round', { ascending: true, nullsFirst: false }).order('draft_overall', { ascending: true, nullsFirst: false }),
-        supabase.from('pooler_rosters').select('pooler_id, player_id, players(id, first_name, last_name, position, teams(code), draft_round, draft_overall)').eq('pool_season_id', saisonRep.id).eq('player_type', 'recrue').eq('pool_draft_year', poolDraftYear).eq('is_active', true),
+        supabase.from('pooler_rosters').select('pooler_id, player_id, draft_pick_id, players(id, first_name, last_name, position, teams(code), draft_round, draft_overall)').eq('pool_season_id', saisonRep.id).eq('player_type', 'recrue').eq('pool_draft_year', poolDraftYear).eq('is_active', true),
         supabase.from('pool_draft_picks').select('original_owner_id, draft_order, original_owner:poolers!original_owner_id(id, name)').eq('pool_season_id', saisonRep.id).eq('round', 1),
       ])
       picksData = (pk.data ?? []) as unknown[]
@@ -161,14 +161,14 @@ export default async function AdminInitPage({
         if (p && !pMap.has(p.id)) pMap.set(p.id, { id: p.id, name: p.name, draft_order: row.draft_order })
       }
       poolersForEditor = Array.from(pMap.values())
-      const bankMap = new Map<string, unknown[]>()
+      const pickPlayerMap = new Map<number, unknown>()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const entry of (bk.data ?? []) as any[]) {
-        const list = bankMap.get(entry.pooler_id) ?? []
-        list.push(entry.players)
-        bankMap.set(entry.pooler_id, list)
+        if (entry.draft_pick_id != null) {
+          pickPlayerMap.set(entry.draft_pick_id, entry.players)
+        }
       }
-      bankByPooler = Object.fromEntries(bankMap)
+      playerByPickId = Object.fromEntries(pickPlayerMap)
       const inBankIds = new Set((bk.data ?? []).map((r: { player_id: number }) => r.player_id))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       availableRookies = (rk.data ?? []).filter((r: any) => !inBankIds.has(r.id))
@@ -287,7 +287,7 @@ export default async function AdminInitPage({
                   picks={picksData as never[]}
                   usedPicks={usedPicksData as never[]}
                   rookies={availableRookies as never[]}
-                  bankByPooler={bankByPooler as Record<string, never[]>}
+                  playerByPickId={playerByPickId as Record<number, never>}
                   saisonId={saisonRep.id}
                   poolDraftYear={poolDraftYear}
                 />

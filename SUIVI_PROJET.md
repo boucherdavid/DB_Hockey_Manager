@@ -56,6 +56,18 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-02
+
+**[Fix] — DraftBoard repêchage de recrues : affichage du mauvais joueur par pick** (`app/app/admin/repechage/DraftBoard.tsx`, `app/app/admin/repechage/page.tsx`, `app/app/repechage-recrues/page.tsx`, `app/app/admin/init/page.tsx`) :
+- Contexte : David a signalé que le repêchage 2025 recréé (staging) affichait des joueurs répétés à plusieurs picks différents (ex. Vincent = Cullen Potter à 3 reprises, Steve = Mason West 2 fois) alors que chaque pick doit correspondre à une recrue distincte.
+- Cause : `DraftBoard.tsx` déterminait le joueur affiché pour un pick soumis en cherchant dans la banque du pooler un joueur dont `draft_round` (round NHL réel) correspondait au round du pool — une coïncidence sans rapport — et retombait sur `bankPlayers[0]` (le premier joueur de la banque) si aucun match. Résultat : le même premier joueur de la banque s'affichait pour tous les picks du pooler.
+- Les données en base étaient correctes : `pooler_rosters.draft_pick_id` (FK explicite vers `pool_draft_picks.id`, ajoutée par migration 2026-04-09) est bien remplie par `submitDraftAction`. C'était un bug d'affichage pur.
+- Vérifié par reconstruction directe sur staging via `draft_pick_id` : 32/32 sélections du repêchage 2025 sont distinctes, aucun doublon — les données recréées sont bonnes (Nicolas = Matthew Schaefer en ronde 1, etc.).
+- **Constat additionnel** : en **prod**, la saison 2025-26 n'a aucun pick soumis (`is_used=false` sur les 32 picks, `draft_pick_id` absent) — le repêchage 2025 n'a été recréé qu'en staging pour l'instant, pas encore poussé en prod.
+- Fix : les 3 pages qui alimentent `DraftBoard` (`admin/repechage`, `repechage-recrues`, `admin/init?tab=repechage`) construisent maintenant une map `pick.id → joueur` via `draft_pick_id` au lieu de deviner. Le même bug était dupliqué dans les 3 fichiers (copié-collé) — les trois ont été corrigés.
+- Mémoire ajoutée : toujours joindre via une FK explicite quand elle existe (`draft_pick_id`), ne jamais improviser un matching par round/ordre; vérifier tous les appelants d'un composant partagé avant de considérer un fix de ce type terminé.
+- Pas encore commité (en attente de confirmation).
+
 ### 2026-07-01
 
 **[Feat] — DraftCenter : améliorations UX tableau** (`app/app/draft-center/DraftCenterTable.tsx`, `app/app/draft-center/page.tsx`) :

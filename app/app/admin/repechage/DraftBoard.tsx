@@ -31,7 +31,7 @@ export default function DraftBoard({
   picks,
   usedPicks,
   rookies,
-  bankByPooler,
+  playerByPickId,
   saisonId,
   poolDraftYear,
   readOnly = false,
@@ -39,7 +39,7 @@ export default function DraftBoard({
   picks: Pick[]
   usedPicks: Pick[]
   rookies: Rookie[]
-  bankByPooler: Record<string, any[]>
+  playerByPickId: Record<number, any>
   saisonId: number
   poolDraftYear: number
   readOnly?: boolean
@@ -217,9 +217,7 @@ export default function DraftBoard({
                 {/* Picks déjà soumis en lecture seule */}
                 {allUsed.map(pick => {
                   const isOwn = pick.current_owner.id === pick.original_owner.id
-                  const bankPlayers: any[] = bankByPooler[pick.current_owner.id] ?? []
-                  // Trouver le joueur de la bonne ronde (draft_round correspond à la ronde du pool)
-                  const chosen = bankPlayers.find((p: any) => p.draft_round === round) ?? bankPlayers[0]
+                  const chosen = playerByPickId[pick.id]
                   return (
                     <tr key={pick.id} className="border-b last:border-0 bg-green-50">
                       <td className="px-4 py-3 text-center text-xs text-gray-400">{pick.draft_order ?? DASH}</td>
