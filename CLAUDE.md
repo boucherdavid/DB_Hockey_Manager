@@ -38,8 +38,18 @@ cd app && npm run dev
 ./stop_app.ps1
 ```
 
+```powershell
+# Pipeline complet (depuis la racine) — cible staging ou prod selon le script
+./run_pipeline_staging.ps1   # SUPABASE_URL/SUPABASE_SERVICE_KEY pris dans python_script/.env.staging
+./run_pipeline_prod.ps1      # SUPABASE_URL/SUPABASE_SERVICE_KEY pris dans python_script/.env — demande confirmation
+
+# Passer des arguments au pipeline (ex: sans scraping)
+./run_pipeline_staging.ps1 --no-scrape
+```
+
 ```bash
-# Pipeline Python complet
+# Pipeline Python complet (manuel — cible toujours prod via python_script/.env,
+# sauf si SUPABASE_URL/SUPABASE_SERVICE_KEY sont déjà définis dans la session)
 cd python_script
 python run_pipeline.py
 
