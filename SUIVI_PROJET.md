@@ -58,6 +58,14 @@ Je l'utiliserai pour:
 
 ### 2026-07-03
 
+**[Feat] — Départage par âge des homonymes lors de l'import PuckPedia** (`python_script/import_supabase.py`) :
+- Contexte : David a demandé (en pleine période d'agents libres, beaucoup de changements d'équipe) si le pipeline gère bien les joueurs qui changent d'équipe. Analyse : le cas à risque est un vrai homonyme NHL (ex. les deux Sebastian Aho) où l'un des deux vient de signer ailleurs — le matching par nom seul est volontairement bloqué dans ce cas (`ambiguous_names` côté import, `roster_ambiguous` côté dédoublonnage) pour ne pas fusionner deux personnes différentes, ce qui pouvait laisser un doublon non résolu pour le joueur qui a bougé.
+- David a proposé d'utiliser l'âge du joueur (déjà scrapé, colonne `players.age DECIMAL(4,1)`) comme signal de départage : deux personnes différentes partageant le même nom ET un âge quasi identique sont rarissimes.
+- Ajout `AGE_MATCH_TOLERANCE = 1.0` (an) + fonction `match_by_age()` : comparaison par proximité plutôt qu'égalité stricte, car l'âge est recalculé à la date du scrape et dérive donc légèrement d'un import à l'autre pour le même joueur.
+- Utilisé à deux endroits : (1) `upload_vers_supabase()` — quand le nom seul est ambigu, tente de matcher via l'âge avant de considérer le joueur comme nouveau ; (2) `deduplicate_players()` cas 3 — quand ni le `nhl_id` ni l'exception homonyme NHL ne tranchent, tente une fusion par âge (limité à exactement 2 candidats restants, pour rester conservateur).
+- Ne fusionne/matche que si un seul candidat est dans la tolérance — sinon reste conservateur (comportement inchangé) plutôt que de deviner entre deux personnes différentes.
+- Pas de migration requise (colonne `age` déjà existante). À valider au prochain run du pipeline (surveiller les lignes `[DEDUP] ... départagé par âge` dans la sortie console).
+
 **[Feat] — Renommage "DraftCenter" → "Classement des prospects" + réordonnancement du menu Repêchage + sélecteur d'année** (`app/components/Navbar.tsx`, `app/app/draft-center/page.tsx`, `app/app/draft-center/DraftYearSelect.tsx`, `app/app/admin/draft-center/page.tsx`, `app/app/admin/draft-center/AdminDraftYearSelect.tsx`, `app/app/admin/draft-center/[id]/page.tsx`) :
 - Contexte : David voulait un nom plus clair que "DraftCenter" et un ordre logique dans le dropdown "Repêchage" : Classement des prospects (avant le repêchage LNH) → Repêchage LNH → Repêchage recrues (pool, qui pige parmi les joueurs déjà repêchés).
 - Renommage du libellé partout (desktop/mobile, admin/public) : "DraftCenter"/"DraftCenter 2026" → "Classement des prospects". Les noms de fichiers/composants (`DraftCenterTable`, route `/draft-center`) ne sont pas renommés (changement de libellé uniquement).

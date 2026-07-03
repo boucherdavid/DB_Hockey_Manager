@@ -28,6 +28,22 @@ NHL_TEAM_CODES = [
 
 PLAYER_LINK_CACHE = {}
 
+# Tolérance (en années) pour matcher un joueur par âge quand son nom seul est
+# ambigu. L'âge est recalculé à la date du scrape (DECIMAL(4,1)) et dérive donc
+# légèrement d'un import à l'autre pour le même joueur — on compare par
+# proximité plutôt que par égalité stricte.
+AGE_MATCH_TOLERANCE = 1.0
+
+
+def match_by_age(candidates, target_age):
+    """Retourne l'unique candidat dont l'âge est à moins de AGE_MATCH_TOLERANCE
+    de target_age, ou None si aucun ou plusieurs candidats correspondent (dans
+    ce dernier cas on préfère ne pas deviner entre deux personnes différentes)."""
+    if target_age is None:
+        return None
+    close = [c for c in candidates if c.get('age') is not None and abs(c['age'] - target_age) <= AGE_MATCH_TOLERANCE]
+    return close[0] if len(close) == 1 else None
+
 
 def get_active_season(supabase) -> str:
     """Retourne le nhl_season_id ('20252026') depuis pool_seasons.
@@ -320,18 +336,19 @@ def deduplicate_players(supabase, roster_ambiguous: set | None = None, roster_by
     """Détecte et fusionne les doublons joueurs. Trois cas couverts :
     1. Même nom + même équipe → doublons directs.
     2. Même nom + un sans équipe + un seul avec équipe → fusionner.
-    3. Même nom + équipes différentes, un seul a un nhl_id → le sans nhl_id est un doublon
-       (joueur qui a changé d'équipe entre deux imports).
-       Exceptions Cas 3 :
-       - Si le nom est dans roster_ambiguous (même nom sur plusieurs équipes NHL) → homonymes.
-       - Si le joueur sans nhl_id est dans roster_by_team pour son équipe → joueur réel en NHL.
+    3. Même nom + équipes différentes (joueur qui a changé d'équipe entre deux imports) :
+       - Si un seul des deux a un nhl_id → le sans nhl_id est le doublon (sauf s'il est
+         un joueur réel présent dans roster_by_team pour son équipe → homonyme).
+       - Sinon (aucun/les deux ont un nhl_id, ou nom marqué homonyme actif via
+         roster_ambiguous) → départage par âge (AGE_MATCH_TOLERANCE) : deux personnes
+         différentes du même nom ET d'un âge quasi identique sont rarissimes.
     Conserve l'enregistrement avec le plus petit ID, sauf cas 3 où on garde celui avec nhl_id."""
     print('\n[DEDUP] Recherche de doublons joueurs...')
 
     all_players = []
     offset = 0
     while True:
-        batch = supabase.table('players').select('id, first_name, last_name, team_id, nhl_id').range(offset, offset + 999).execute().data
+        batch = supabase.table('players').select('id, first_name, last_name, team_id, nhl_id, age').range(offset, offset + 999).execute().data
         all_players.extend(batch)
         if len(batch) < 1000:
             break
@@ -393,24 +410,41 @@ def deduplicate_players(supabase, roster_ambiguous: set | None = None, roster_by
         if len(real_remaining) >= 2:
             fn_ln = tuple(name_key.split('|', 1))
             # Exception A : nom ambigu (même nom sur plusieurs équipes NHL en même temps)
-            if roster_ambiguous and fn_ln in roster_ambiguous:
+            is_live_homonym = bool(roster_ambiguous and fn_ln in roster_ambiguous)
+            if is_live_homonym:
                 print(f'[DEDUP] Homonyme NHL ignoré ({name_key}) — nom sur plusieurs équipes NHL')
-            else:
-                with_nhl_id = [p for p in real_remaining if p.get('nhl_id')]
-                without_nhl_id = [p for p in real_remaining if not p.get('nhl_id')]
-                if len(with_nhl_id) == 1 and len(without_nhl_id) >= 1:
-                    keep = with_nhl_id[0]
-                    for dup in without_nhl_id:
-                        # Exception B : le joueur sans nhl_id est dans le roster NHL
-                        # actuel pour son équipe → c'est un joueur réel, pas un doublon
-                        if roster_by_team and teams_id_to_code:
-                            dup_team = teams_id_to_code.get(dup['team_id'], '')
-                            if (fn_ln[0], fn_ln[1], dup_team) in roster_by_team:
-                                print(f'[DEDUP] Cas 3 ignoré ({name_key}|{dup_team}): joueur sans nhl_id présent dans le roster NHL → homonyme probable')
-                                continue
-                        print(f'[DEDUP] Doublon changement équipe ({name_key}): conserver {keep["id"]} (nhl_id={keep["nhl_id"]}), supprimer {dup["id"]}')
-                        _merge(supabase, keep['id'], dup['id'])
-                        nb_fusions += 1
+
+            with_nhl_id = [p for p in real_remaining if p.get('nhl_id')]
+            without_nhl_id = [p for p in real_remaining if not p.get('nhl_id')]
+
+            if not is_live_homonym and len(with_nhl_id) == 1 and len(without_nhl_id) >= 1:
+                keep = with_nhl_id[0]
+                for dup in without_nhl_id:
+                    # Exception B : le joueur sans nhl_id est dans le roster NHL
+                    # actuel pour son équipe → c'est un joueur réel, pas un doublon
+                    if roster_by_team and teams_id_to_code:
+                        dup_team = teams_id_to_code.get(dup['team_id'], '')
+                        if (fn_ln[0], fn_ln[1], dup_team) in roster_by_team:
+                            print(f'[DEDUP] Cas 3 ignoré ({name_key}|{dup_team}): joueur sans nhl_id présent dans le roster NHL → homonyme probable')
+                            continue
+                    print(f'[DEDUP] Doublon changement équipe ({name_key}): conserver {keep["id"]} (nhl_id={keep["nhl_id"]}), supprimer {dup["id"]}')
+                    _merge(supabase, keep['id'], dup['id'])
+                    nb_fusions += 1
+            elif len(real_remaining) == 2:
+                # Ni le nhl_id ni l'exception A n'ont permis de trancher (homonyme
+                # NHL réel au moment du scrape, ou aucun/les deux ont un nhl_id) :
+                # on départage par âge. Deux personnes différentes qui partagent
+                # le même nom ET un âge quasi identique sont rarissimes, alors
+                # qu'un même joueur ayant changé d'équipe garde sensiblement le
+                # même âge d'un import à l'autre.
+                a, b = real_remaining
+                if a.get('age') is not None and b.get('age') is not None and abs(a['age'] - b['age']) <= AGE_MATCH_TOLERANCE:
+                    keep, dup = (a, b) if (a.get('nhl_id') or a['id'] < b['id']) else (b, a)
+                    print(f"[DEDUP] Doublon changement équipe, départagé par âge ({name_key}, âges {a['age']}/{b['age']}): conserver {keep['id']}, supprimer {dup['id']}")
+                    _merge(supabase, keep['id'], dup['id'])
+                    nb_fusions += 1
+                elif is_live_homonym:
+                    print(f"[DEDUP] Homonyme NHL confirmé par l'âge ({name_key}, âges {a.get('age')}/{b.get('age')}) — conservés distincts")
 
     if nb_fusions:
         print(f'[DEDUP] {nb_fusions} doublon(s) supprimé(s).')
@@ -460,12 +494,12 @@ def upload_vers_supabase(csv_path=None):
 
     offset = 0
     while True:
-        batch = supabase.table('players').select('id, first_name, last_name, team_id, draft_year').range(offset, offset + 999).execute().data
+        batch = supabase.table('players').select('id, first_name, last_name, team_id, draft_year, age').range(offset, offset + 999).execute().data
         for p in batch:
             fn = normaliser_nom(p['first_name'])
             ln = normaliser_nom(p['last_name'])
             tc = teams_id_to_code.get(p.get('team_id'), '')
-            entry = {'id': p['id'], 'draft_year': p.get('draft_year')}
+            entry = {'id': p['id'], 'draft_year': p.get('draft_year'), 'age': p.get('age')}
             existing_map[f'{fn}|{ln}|{tc}'] = entry
             existing_by_name.setdefault(f'{fn}|{ln}', []).append({'team_code': tc, **entry})
         if len(batch) < 1000:
@@ -553,15 +587,20 @@ def upload_vers_supabase(csv_path=None):
         elif f'{fn}|{ln}|' in existing_map:
             # Joueur en base sans équipe assignée (team_id null)
             player_info = existing_map[f'{fn}|{ln}|']
-        elif (key_name in existing_by_name
-              and len(existing_by_name[key_name]) == 1
-              and key_name not in ambiguous_names):
-            # Joueur unique par nom avec une équipe différente (changement d'équipe).
-            # Bloqué si le nom est ambigu (homonymes dans le CSV) pour éviter
-            # qu'un nouvel homonyme écrase le joueur existant.
-            player_info = existing_by_name[key_name][0]
-            # Mettre à jour le cache avec la nouvelle clé équipe pour les passes suivantes (ex: contrats)
-            existing_map[key_team] = {'id': player_info['id'], 'draft_year': player_info.get('draft_year')}
+        elif key_name in existing_by_name:
+            candidates = existing_by_name[key_name]
+            if len(candidates) == 1 and key_name not in ambiguous_names:
+                # Joueur unique par nom avec une équipe différente (changement d'équipe).
+                player_info = candidates[0]
+            else:
+                # Nom ambigu (plusieurs joueurs en base pour ce nom, ou homonyme
+                # actif dans le CSV du jour) : on départage par âge plutôt que de
+                # bloquer — deux personnes différentes qui partagent le même nom
+                # ET un âge quasi identique sont rarissimes.
+                player_info = match_by_age(candidates, age)
+            if player_info:
+                # Mettre à jour le cache avec la nouvelle clé équipe pour les passes suivantes (ex: contrats)
+                existing_map[key_team] = {'id': player_info['id'], 'draft_year': player_info.get('draft_year')}
         else:
             player_info = None
 
