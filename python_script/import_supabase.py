@@ -332,7 +332,7 @@ def _merge(supabase, keep_id, dup_id):
     supabase.table('players').delete().eq('id', dup_id).execute()
 
 
-def deduplicate_players(supabase, roster_ambiguous: set | None = None, roster_by_team: set | None = None, teams_id_to_code: dict | None = None):
+def deduplicate_players(supabase, roster_ambiguous: set | None = None, roster_by_team: set | None = None, teams_id_to_code: dict | None = None, csv_ambiguous_names: set | None = None):
     """Détecte et fusionne les doublons joueurs. Trois cas couverts :
     1. Même nom + même équipe → doublons directs.
     2. Même nom + un sans équipe + un seul avec équipe → fusionner.
@@ -340,8 +340,11 @@ def deduplicate_players(supabase, roster_ambiguous: set | None = None, roster_by
        - Si un seul des deux a un nhl_id → le sans nhl_id est le doublon (sauf s'il est
          un joueur réel présent dans roster_by_team pour son équipe → homonyme).
        - Sinon (aucun/les deux ont un nhl_id, ou nom marqué homonyme actif via
-         roster_ambiguous) → départage par âge (AGE_MATCH_TOLERANCE) : deux personnes
-         différentes du même nom ET d'un âge quasi identique sont rarissimes.
+         roster_ambiguous OU csv_ambiguous_names) → départage par âge (AGE_MATCH_TOLERANCE) :
+         deux personnes différentes du même nom ET d'un âge quasi identique sont rarissimes.
+    roster_ambiguous (rosters NHL en direct) rate un homonyme si l'un des deux est
+    actuellement agent libre non signé (aucune équipe) — csv_ambiguous_names comble ce
+    trou en se basant sur le CSV du jour (2+ équipes différentes pour ce nom).
     Conserve l'enregistrement avec le plus petit ID, sauf cas 3 où on garde celui avec nhl_id."""
     print('\n[DEDUP] Recherche de doublons joueurs...')
 
@@ -409,10 +412,16 @@ def deduplicate_players(supabase, roster_ambiguous: set | None = None, roster_by
         real_remaining = [p for p in remaining if p['team_id'] is not None]
         if len(real_remaining) >= 2:
             fn_ln = tuple(name_key.split('|', 1))
-            # Exception A : nom ambigu (même nom sur plusieurs équipes NHL en même temps)
-            is_live_homonym = bool(roster_ambiguous and fn_ln in roster_ambiguous)
+            # Exception A : nom ambigu (même nom sur plusieurs équipes NHL en même temps,
+            # OU plusieurs équipes différentes pour ce nom dans le CSV du jour — ce second
+            # signal capte aussi le cas où l'un des deux homonymes est agent libre sans
+            # équipe, donc invisible pour roster_ambiguous)
+            is_live_homonym = bool(
+                (roster_ambiguous and fn_ln in roster_ambiguous)
+                or (csv_ambiguous_names and name_key in csv_ambiguous_names)
+            )
             if is_live_homonym:
-                print(f'[DEDUP] Homonyme NHL ignoré ({name_key}) — nom sur plusieurs équipes NHL')
+                print(f'[DEDUP] Homonyme ignoré ({name_key}) — nom sur plusieurs équipes (NHL et/ou CSV du jour)')
 
             with_nhl_id = [p for p in real_remaining if p.get('nhl_id')]
             without_nhl_id = [p for p in real_remaining if not p.get('nhl_id')]
@@ -483,12 +492,24 @@ def upload_vers_supabase(csv_path=None):
     teams_map = {t['code']: t['id'] for t in supabase.table('teams').select('id, code').execute().data}
     teams_id_to_code = {v: k for k, v in teams_map.items()}
 
-    deduplicate_players(supabase, roster_ambiguous, roster_by_team, teams_id_to_code)
+    # Noms qui apparaissent plusieurs fois dans le CSV avec des équipes différentes
+    # (ex: les deux Sebastian Aho). Calculé avant le dédoublonnage pour que ce
+    # signal (plus fiable que roster_ambiguous quand un homonyme est agent libre
+    # sans équipe) soit disponible dès le premier passage.
+    name_counts: dict[str, set[str]] = {}
+    for _, row in df.iterrows():
+        fn_tmp, ln_tmp = parse_nom(row.get('Joueur', ''))
+        tc_tmp = str(row.get('Equipe', '')).strip().upper()
+        k = f'{normaliser_nom(fn_tmp)}|{normaliser_nom(ln_tmp)}'
+        name_counts.setdefault(k, set()).add(tc_tmp)
+    ambiguous_names = {k for k, teams in name_counts.items() if len(teams) > 1}
+    if ambiguous_names:
+        print(f'[INFO] Noms ambigus (homonymes dans le CSV) : {ambiguous_names}')
+
+    deduplicate_players(supabase, roster_ambiguous, roster_by_team, teams_id_to_code, ambiguous_names)
 
     # Clé primaire : nom|equipe  (distingue les homonymes comme les deux Sebastian Aho)
     # Clé secondaire : nom seul → liste, utilisée comme fallback si non-ambigu
-    teams_id_to_code = {v: k for k, v in teams_map.items()}
-
     existing_map = {}       # 'fn|ln|team' → {id, draft_year}
     existing_by_name = {}   # 'fn|ln'      → [{id, draft_year, team_code}, ...]
 
@@ -506,19 +527,6 @@ def upload_vers_supabase(csv_path=None):
             break
         offset += 1000
     print(f'[INFO] {len(existing_map)} joueurs deja en base')
-
-    # Noms qui apparaissent plusieurs fois dans le CSV avec des équipes différentes
-    # (ex: les deux Sebastian Aho). Le fallback existing_by_name (len==1) est bloqué
-    # pour ces noms afin d'éviter qu'un homonyme écrase le joueur déjà en base.
-    name_counts: dict[str, set[str]] = {}
-    for _, row in df.iterrows():
-        fn_tmp, ln_tmp = parse_nom(row.get('Joueur', ''))
-        tc_tmp = str(row.get('Equipe', '')).strip().upper()
-        k = f'{normaliser_nom(fn_tmp)}|{normaliser_nom(ln_tmp)}'
-        name_counts.setdefault(k, set()).add(tc_tmp)
-    ambiguous_names = {k for k, teams in name_counts.items() if len(teams) > 1}
-    if ambiguous_names:
-        print(f'[INFO] Noms ambigus (homonymes dans le CSV) : {ambiguous_names}')
 
     players_to_insert = []
     players_to_update = []
@@ -592,12 +600,19 @@ def upload_vers_supabase(csv_path=None):
             if len(candidates) == 1 and key_name not in ambiguous_names:
                 # Joueur unique par nom avec une équipe différente (changement d'équipe).
                 player_info = candidates[0]
-            else:
-                # Nom ambigu (plusieurs joueurs en base pour ce nom, ou homonyme
-                # actif dans le CSV du jour) : on départage par âge plutôt que de
-                # bloquer — deux personnes différentes qui partagent le même nom
-                # ET un âge quasi identique sont rarissimes.
+            elif len(candidates) > 1:
+                # Plusieurs joueurs en base pour ce nom (homonyme déjà connu) : on
+                # départage par âge entre ces candidats connus — deux personnes
+                # différentes qui partagent le même nom ET un âge quasi identique
+                # sont rarissimes.
                 player_info = match_by_age(candidates, age)
+            else:
+                # Un seul candidat en base, mais le nom est ambigu dans le CSV du
+                # jour (2+ équipes) : impossible de savoir si ce candidat unique a
+                # changé d'équipe ou si c'est un tout nouvel homonyme jamais vu.
+                # On refuse de deviner contre un âge isolé — traité comme nouveau
+                # joueur (visible dans [DEDUP] pour révision admin au besoin).
+                player_info = None
             if player_info:
                 # Mettre à jour le cache avec la nouvelle clé équipe pour les passes suivantes (ex: contrats)
                 existing_map[key_team] = {'id': player_info['id'], 'draft_year': player_info.get('draft_year')}
@@ -682,7 +697,7 @@ def upload_vers_supabase(csv_path=None):
             print(f'[ERREUR CONTRAT] Batch {i//BATCH_SIZE + 1}: {e}')
 
     # Second passage de dédup : nettoie les doublons créés par les inserts ci-dessus
-    deduplicate_players(supabase, roster_ambiguous, roster_by_team, teams_id_to_code)
+    deduplicate_players(supabase, roster_ambiguous, roster_by_team, teams_id_to_code, ambiguous_names)
 
     # Marquer is_available = False pour les joueurs absents du run courant
     # (rachetés, retraités, salaires retenus, etc.)

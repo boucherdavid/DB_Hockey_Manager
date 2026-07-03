@@ -350,13 +350,12 @@ def scraper_depuis_csv_source(csv_path=DEFAULT_SOURCE_CSV, headless=True):
 
         html_file = os.path.join(DIAGNOSTICS_DIR, f"{sigle}_source.html")
 
-        if os.path.exists(html_file):
-            print(f"📂 Fichier HTML déjà présent pour {sigle}, scraping direct.")
-        else:
-            telecharger_html(url, sigle, headless=headless)
-            if not os.path.exists(html_file):
-                print(f"❌ HTML introuvable pour {sigle}")
-                continue
+        # Toujours retélécharger : un HTML mis en cache peut dater de mois,
+        # ce qui masquerait silencieusement transactions/signatures récentes.
+        telecharger_html(url, sigle, headless=headless)
+        if not os.path.exists(html_file):
+            print(f"❌ HTML introuvable pour {sigle}")
+            continue
 
         try:
             df = scraper_depuis_html(html_file, sigle)
