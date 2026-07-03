@@ -74,7 +74,7 @@ Je l'utiliserai pour:
 - Retrait de `recruit_scouting` (pas de liste disponible) — migration SQL `draft_center_v2.sql` met à jour la contrainte CHECK.
 - `central_scouting_na` et `central_scouting_eu` marqués `infoOnly: true` dans `draft-sources.ts` : exclus du rang moyen (leurs listes sont par catégorie NA/EU distinctes, pas un classement global), affichés séparément dans l'expand sous "Éclaireurs LNH (informatif)".
 - Import complet des 16 onglets (15 onglets nouveaux + `elite_prospects` déjà en BD) : 512 rangs, 75 prospects distincts.
-- Migration `draft_center_v2.sql` à exécuter en staging + prod (retrait `recruit_scouting` de la contrainte).
+- Migration `draft_center_v2.sql` confirmée exécutée sur **staging** le 2026-07-02 (test d'insertion `source='recruit_scouting'` rejeté par la contrainte CHECK, code 23514). Statut sur **prod** non vérifié directement — à confirmer.
 
 **[Feat] — DraftCenter : rankings de prospects repêchage LNH 2026** (`supabase_migrations/draft_center.sql`, `python_script/import_draft_prospects.py`, `app/lib/draft-sources.ts`, `app/app/draft-center/`, `app/app/admin/draft-center/`, `app/components/Navbar.tsx`) :
 - Contexte : David veut offrir aux poolers un centre de classements de prospects (17 sources : EliteProspects, TSN/Button, TSN/Peters, McKeen's, THN×2, Daily Faceoff, FloHockey, Central Scouting NA/EU, Draft Prospects Hockey, Sportsnet×2, Recruit Scouting, Smaht Scouting, DobberProspects, HPR/Malloy) sans risquer la violation de copyright (classement = faits non protégés ; liens vers les sources pour attribution, pas de texte rédactionnel copié).
