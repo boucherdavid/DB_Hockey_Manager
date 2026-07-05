@@ -11,6 +11,8 @@ import sys
 import time
 import os
 
+sys.stdout.reconfigure(encoding='utf-8')
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 STEPS = [

@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import time
 import requests
 import pandas as pd
@@ -12,6 +13,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
+sys.stdout.reconfigure(encoding='utf-8')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SOURCE_DIR = os.path.join(BASE_DIR, "source")
