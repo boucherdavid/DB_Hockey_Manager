@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import time
+import threading
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -86,6 +87,49 @@ def get_driver(headless=True):
     service = Service(executable_path=chrome_path)
     return webdriver.Chrome(service=service, options=options)
 
+
+def naviguer_avec_timeout(driver, url, timeout):
+    """Navigue vers `url` avec un timeout matériel. Le page_load_timeout de
+    Selenium n'est pas toujours fiable (une ressource tierce qui ne termine
+    jamais son chargement, ex. une pub, peut bloquer driver.get() indéfiniment
+    malgré le timeout configuré). Utilise un thread daemon (pas
+    ThreadPoolExecutor — son shutdown attend le thread bloqué même après un
+    timeout sur future.result(), ce qui annule l'effet recherché) : si le
+    thread est toujours vivant après `timeout` secondes, on tue le processus
+    chromedriver sous-jacent pour le débloquer et on abandonne. Le driver est
+    alors mort — l'appelant doit en recréer un. Retourne True si la
+    navigation a abouti dans le temps imparti."""
+    resultat = {'ok': False}
+
+    def _get():
+        try:
+            driver.get(url)
+            resultat['ok'] = True
+        except Exception:
+            pass
+
+    thread = threading.Thread(target=_get, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        tuer_driver(driver)
+        return False
+    return resultat['ok']
+
+
+def tuer_driver(driver):
+    """Tue le processus chromedriver/Chrome sous-jacent sans attendre de
+    réponse — utilisé quand le driver est bloqué et qu'un .quit() normal
+    risque lui aussi de rester bloqué indéfiniment."""
+    try:
+        driver.service.process.kill()
+    except Exception:
+        pass
+    try:
+        driver.quit()
+    except Exception:
+        pass
+
 def telecharger_html(url, sigle, headless=True, timeout=30, driver=None):
     """Télécharge le HTML d'une page d'équipe. Si `driver` est fourni, réutilise
     cette fenêtre Chrome (navigation vers une nouvelle URL) au lieu d'en ouvrir
@@ -100,17 +144,9 @@ def telecharger_html(url, sigle, headless=True, timeout=30, driver=None):
         driver.set_page_load_timeout(timeout)
         driver.set_script_timeout(timeout)
 
-        try:
-            driver.get(url)
-        except Exception as e:
-            print(f"⚠️ Première tentative échouée : {e}")
-            print("🔁 Nouvelle tentative après 5 secondes...")
-            time.sleep(5)
-            try:
-                driver.get(url)
-            except Exception as e2:
-                print(f"❌ Échec définitif pour {sigle} : {e2}")
-                return False
+        if not naviguer_avec_timeout(driver, url, timeout + 10):
+            print(f"❌ Chargement de {sigle} bloqué au-delà de {timeout + 10}s (ressource tierce probablement figée) — abandon")
+            return False
 
         print("⏳ Attente du tableau principal...")
         try:
@@ -195,10 +231,8 @@ def recuperer_salaires_reels(player_url, name, headless=True, timeout=30, driver
             driver = get_driver(headless)
         driver.set_page_load_timeout(timeout)
         driver.set_script_timeout(timeout)
-        try:
-            driver.get(player_url)
-        except Exception as e:
-            print(f"⚠️ Échec chargement fiche joueur {name} : {e}")
+        if not naviguer_avec_timeout(driver, player_url, timeout + 10):
+            print(f"⚠️ Chargement de la fiche de {name} bloqué au-delà de {timeout + 10}s — abandon")
             SALAIRES_REELS_CACHE[player_url] = resultat
             return resultat
 
@@ -510,19 +544,15 @@ def scraper_depuis_csv_source(csv_path=DEFAULT_SOURCE_CSV, headless=True):
             frais = telecharger_html(url, sigle, headless=headless, driver=driver)
 
             if not frais:
-                # Vérifier si la fenêtre est encore vivante ; sinon la recréer
-                # pour ne pas planter en boucle sur toutes les équipes restantes.
-                try:
-                    _ = driver.title
-                except Exception:
-                    print("♻️  Fenêtre Chrome inutilisable, recréation...")
-                    try:
-                        driver.quit()
-                    except Exception:
-                        pass
-                    driver = get_driver(headless)
-                    # Une seconde chance avec la fenêtre fraîche avant d'abandonner l'équipe.
-                    frais = telecharger_html(url, sigle, headless=headless, driver=driver)
+                # Ne pas sonder la fenêtre (ex: driver.title) : si elle est
+                # bloquée, la sonde elle-même risque de rester bloquée. On la
+                # tue et on en recrée une fraîche systématiquement, pour ne
+                # pas planter en boucle sur toutes les équipes restantes.
+                print("♻️  Fenêtre Chrome relancée (chargement précédent bloqué ou échoué)...")
+                tuer_driver(driver)
+                driver = get_driver(headless)
+                # Une seconde chance avec la fenêtre fraîche avant d'abandonner l'équipe.
+                frais = telecharger_html(url, sigle, headless=headless, driver=driver)
 
             if not frais:
                 if os.path.exists(html_file):

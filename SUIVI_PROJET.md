@@ -58,6 +58,13 @@ Je l'utiliserai pour:
 
 ### 2026-07-05
 
+**[Fix] — Timeout matériel pour débloquer un chargement de page figé** (`python_script/scrape_puckpedia.py`) :
+- Contexte : le scraping restait figé après avoir ouvert la fenêtre de la première équipe (page normale affichée, mais le script ne progresse jamais) — le `page_load_timeout` de Selenium ne s'est pas déclenché, probablement à cause d'une ressource tierce (pub, script tiers) qui ne termine jamais son chargement selon Chrome.
+- Ajout de `naviguer_avec_timeout()` : lance `driver.get()` dans un thread daemon et n'attend que le temps imparti (`page_load_timeout + 10s`) ; si le thread est toujours vivant après ce délai, tue le processus chromedriver (`tuer_driver()`) pour le débloquer plutôt que d'attendre indéfiniment.
+- Piège évité : une première version utilisait `concurrent.futures.ThreadPoolExecutor` — `future.result(timeout=...)` respecte bien le timeout, mais la sortie du `with` (shutdown implicite) attend quand même le thread bloqué, annulant l'effet recherché. `threading.Thread(daemon=True)` + `thread.join(timeout)` n'a pas ce problème (vérifié par test : le script se termine immédiatement même avec un thread bloqué en arrière-plan).
+- Utilisé à la fois pour le chargement des pages d'équipe et des fiches joueurs (salaires retenus). La boucle principale (`scraper_depuis_csv_source`) tue et recrée systématiquement la fenêtre en cas d'échec, sans sonder sa santé au préalable (une sonde comme `driver.title` risquerait elle aussi de rester bloquée).
+- À revalider au prochain `.\run_pipeline_staging.ps1`.
+
 **[Feat] — Correction automatique du cap hit réduit par rétention de salaire** (`python_script/scrape_puckpedia.py`, `python_script/import_supabase.py`) :
 - Contexte : David a remarqué que Brendan Gallagher (échangé MTL → VAN avec rétention) affichait $3,25M sur la page d'équipe PuckPedia (montant réduit après rétention) au lieu de son vrai cap hit de $6,50M. Règle du pool : on veut toujours le salaire plein du contrat, jamais le montant réduit — sinon un joueur échangé avec rétention avantagerait injustement son pooler en cours de contrat.
 - PuckPedia marque ces cellules avec une icône loupe (`data-title="Retained Salary"`). Fiche HTML réelle obtenue via l'aide de David (Cloudflare bloque les requêtes headless depuis cet environnement) pour confirmer la structure exacte des tableaux `pp_table-contract` sur la fiche du joueur (ligne "Cap Hit", inclut les saisons futures d'un contrat actif — contrairement au tableau de stats saison-par-saison qui s'arrête à la dernière saison jouée).
