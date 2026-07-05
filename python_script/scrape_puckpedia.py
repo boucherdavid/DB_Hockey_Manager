@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import requests
 import pandas as pd
@@ -15,10 +16,16 @@ from selenium.webdriver.support import expected_conditions as EC
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SOURCE_DIR = os.path.join(BASE_DIR, "source")
 DIAGNOSTICS_DIR = os.path.join(BASE_DIR, "diagnostics")
+DIAGNOSTICS_PLAYERS_DIR = os.path.join(BASE_DIR, "diagnostics_joueurs")
 TEAMS_OFFLINE_DIR = os.path.join(BASE_DIR, "teams_offline")
 OUTPUT_CSV = os.path.join(BASE_DIR, "PuckPedia_update.csv")
 OFFLINE_CSV = os.path.join(BASE_DIR, "PuckPedia_offline.csv")
 DEFAULT_SOURCE_CSV = os.path.join(SOURCE_DIR, "teams_todo.csv")
+PUCKPEDIA_BASE_URL = "https://puckpedia.com"
+
+# Cache mémoire (le temps d'un run) des salaires réels déjà récupérés par joueur,
+# pour éviter de re-télécharger la même fiche si plusieurs saisons sont retenues.
+SALAIRES_REELS_CACHE = {}
 
 def fusionner_equipes(dossier=TEAMS_OFFLINE_DIR, fichier_sortie=OUTPUT_CSV):
     print(f"\n🔄 Fusion des fichiers CSV du dossier : {dossier}")
@@ -38,7 +45,7 @@ def fusionner_equipes(dossier=TEAMS_OFFLINE_DIR, fichier_sortie=OUTPUT_CSV):
 
     if not all_data.empty:
         # 🧼 Réorganisation des colonnes
-        colonnes_fixes = ['Joueur', 'Equipe', 'Statut', 'Position', 'Age', 'ELC_Saisons']
+        colonnes_fixes = ['Joueur', 'Equipe', 'Statut', 'Position', 'Age', 'ELC_Saisons', 'Salaire_Reel_Saisons']
         colonnes_salaires = [col for col in all_data.columns if "20" in col and "-" in col]
         colonnes_finales = colonnes_fixes + colonnes_salaires
 
@@ -123,6 +130,91 @@ def telecharger_html(url, sigle, headless=True, timeout=30):
                 pass
 
 
+def extraire_salaires_reels(html):
+    """Extrait, depuis la fiche d'un joueur, le cap hit plein (non réduit par
+    une rétention de salaire) pour chaque saison, à partir des tableaux
+    'Contrat' (un par contrat de la carrière — inclut la saison en cours et
+    les saisons futures d'un contrat actif, contrairement au tableau de stats
+    saison-par-saison qui ne couvre que les saisons déjà jouées).
+    Retourne {'2025-26': 6500000, ...} (clé = saison au format court, comme
+    dans les colonnes du CSV)."""
+    soup = BeautifulSoup(html, "html.parser")
+    saisons = {}
+    for table in soup.find_all("table", class_="pp_table-contract"):
+        thead = table.find("thead")
+        tbody = table.find("tbody")
+        if not thead or not tbody:
+            continue
+        headers = [th.get_text(strip=True) for th in thead.find_all("th")][1:]
+        cap_row = None
+        for row in tbody.find_all("tr"):
+            tds = row.find_all("td")
+            if tds and tds[0].get_text(strip=True).lower() == "cap hit":
+                cap_row = tds[1:]
+                break
+        if not cap_row:
+            continue
+        for season, cell in zip(headers, cap_row):
+            if not re.match(r"^\d{4}-\d{2}$", season):
+                continue
+            text = cell.get_text(strip=True)
+            m = re.search(r"\$([\d,]+)", text)
+            if not m:
+                continue
+            try:
+                saisons[season] = int(m.group(1).replace(",", ""))
+            except Exception:
+                continue
+    return saisons
+
+
+def recuperer_salaires_reels(player_url, name, headless=True, timeout=30):
+    """Télécharge la fiche d'un joueur et retourne ses cap hits pleins par
+    saison (utilisé pour corriger un cap hit réduit par rétention de salaire
+    affiché sur une page d'équipe). Mise en cache mémoire pour le run courant."""
+    if player_url in SALAIRES_REELS_CACHE:
+        return SALAIRES_REELS_CACHE[player_url]
+
+    driver = None
+    resultat = {}
+    try:
+        driver = get_driver(headless)
+        driver.set_page_load_timeout(timeout)
+        driver.set_script_timeout(timeout)
+        try:
+            driver.get(player_url)
+        except Exception as e:
+            print(f"⚠️ Échec chargement fiche joueur {name} : {e}")
+            SALAIRES_REELS_CACHE[player_url] = resultat
+            return resultat
+
+        time.sleep(3)
+        html = driver.page_source
+
+        if "cf-turnstile" in html.lower() or "un instant" in html.lower():
+            print(f"⚠️ Défi Cloudflare non résolu pour la fiche de {name}")
+            SALAIRES_REELS_CACHE[player_url] = resultat
+            return resultat
+
+        os.makedirs(DIAGNOSTICS_PLAYERS_DIR, exist_ok=True)
+        slug = player_url.rstrip("/").split("/")[-1]
+        with open(os.path.join(DIAGNOSTICS_PLAYERS_DIR, f"{slug}.html"), "w", encoding="utf-8") as f:
+            f.write(html)
+
+        resultat = extraire_salaires_reels(html)
+    except Exception as e:
+        print(f"❌ Erreur Selenium pour la fiche de {name} : {e}")
+    finally:
+        if driver:
+            try:
+                driver.quit()
+            except Exception:
+                pass
+
+    SALAIRES_REELS_CACHE[player_url] = resultat
+    return resultat
+
+
 def clean_salary(val):
     try:
         val = val.replace(",", "").replace("$", "").strip()
@@ -130,7 +222,7 @@ def clean_salary(val):
     except:
         return 0
 
-def scraper_depuis_html(fichier_html, sigle):
+def scraper_depuis_html(fichier_html, sigle, headless=True):
     print(f"\n📄 Lecture du fichier HTML : {fichier_html}")
     with open(fichier_html, "r", encoding="utf-8") as f:
         html = f.read()
@@ -175,6 +267,9 @@ def scraper_depuis_html(fichier_html, sigle):
             name = a_tag.get_text(strip=True) if a_tag else cells[0].get_text(strip=True)
             if not name or not any(c.isalpha() for c in name):
                 continue
+
+            player_href = a_tag.get("href", "") if a_tag else ""
+            player_url = f"{PUCKPEDIA_BASE_URL}{player_href}" if player_href.startswith("/") else (player_href or None)
 
             age, position, shot = "", "", ""
 
@@ -228,6 +323,7 @@ def scraper_depuis_html(fichier_html, sigle):
             salaries = {}
             statut = ""
             elc_saisons = []
+            retained_saisons = []
 
             for i, year in enumerate(year_labels):
                 cell_index = 1 + i
@@ -251,8 +347,32 @@ def scraper_depuis_html(fichier_html, sigle):
                     ):
                         elc_saisons.append(year)
                         is_elc_player = True
+
+                    # 💸 Détection cap hit réduit par rétention de salaire (icône
+                    # loupe sur PuckPedia) : le montant affiché sur la page
+                    # d'équipe n'est que la portion payée par l'équipe actuelle,
+                    # pas le vrai cap hit du contrat — on veut toujours le plein.
+                    if 'data-title="Retained Salary"' in cell_html:
+                        retained_saisons.append(year)
                 else:
                     salaries[year] = "FA"
+
+            # 💸 Correction : remplacer les saisons à salaire retenu par le vrai
+            # cap hit plein, récupéré depuis la fiche du joueur.
+            saisons_corrigees = []
+            if retained_saisons and player_url:
+                print(f"💸 Salaire retenu détecté pour {name} ({retained_saisons}) — récupération du vrai cap hit sur {player_url}")
+                vrais_salaires = recuperer_salaires_reels(player_url, name, headless=headless)
+                if vrais_salaires:
+                    for year in retained_saisons:
+                        if year in vrais_salaires:
+                            print(f"   {year} : {salaries.get(year)} (réduit) -> {vrais_salaires[year]} (plein)")
+                            salaries[year] = vrais_salaires[year]
+                            saisons_corrigees.append(year)
+                        else:
+                            print(f"   ⚠️ Saison {year} introuvable sur la fiche joueur, valeur réduite conservée")
+                else:
+                    print(f"   ⚠️ Impossible de récupérer la fiche joueur pour {name}, valeur réduite conservée")
 
             # Statut global ELC si au moins une saison est ELC
             if is_elc_player or elc_saisons:
@@ -280,6 +400,11 @@ def scraper_depuis_html(fichier_html, sigle):
                 'Age': age,
                 'Statut': statut,
                 'ELC_Saisons': '|'.join(elc_saisons),
+                # Saisons où le cap hit réduit (rétention) a été remplacé par le
+                # vrai montant plein depuis la fiche du joueur — signale à
+                # l'import de ne pas re-sommer ces saisons avec un fragment
+                # retenu par l'équipe d'origine (double comptage sinon).
+                'Salaire_Reel_Saisons': '|'.join(saisons_corrigees),
                 **salaries
             }
             all_players.append(player_data)
@@ -311,7 +436,7 @@ def scraper_depuis_html(fichier_html, sigle):
         df = df.drop(columns=[first_year + '_sort'])
 
     # ✅ Colonnes finales sans "Tir"
-    final_order = ['Joueur', 'Equipe', 'Statut', 'Position', 'Age', 'ELC_Saisons'] + year_cols
+    final_order = ['Joueur', 'Equipe', 'Statut', 'Position', 'Age', 'ELC_Saisons', 'Salaire_Reel_Saisons'] + year_cols
     for col in final_order:
         if col not in df.columns:
             df[col] = ''
@@ -358,7 +483,7 @@ def scraper_depuis_csv_source(csv_path=DEFAULT_SOURCE_CSV, headless=True):
             continue
 
         try:
-            df = scraper_depuis_html(html_file, sigle)
+            df = scraper_depuis_html(html_file, sigle, headless=headless)
             df.to_csv(os.path.join(TEAMS_OFFLINE_DIR, f"{sigle}.csv"), index=False, sep=';')
             all_table = pd.concat([all_table, df], ignore_index=True)
         except Exception as e:

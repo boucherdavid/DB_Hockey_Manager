@@ -10,6 +10,7 @@ python_script/__pycache__/
 python_script/.env
 python_script/.env*
 python_script/diagnostics/
+python_script/diagnostics_joueurs/
 
 *.pyc
 *.pyo

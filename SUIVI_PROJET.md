@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-05
+
+**[Feat] — Correction automatique du cap hit réduit par rétention de salaire** (`python_script/scrape_puckpedia.py`, `python_script/import_supabase.py`) :
+- Contexte : David a remarqué que Brendan Gallagher (échangé MTL → VAN avec rétention) affichait $3,25M sur la page d'équipe PuckPedia (montant réduit après rétention) au lieu de son vrai cap hit de $6,50M. Règle du pool : on veut toujours le salaire plein du contrat, jamais le montant réduit — sinon un joueur échangé avec rétention avantagerait injustement son pooler en cours de contrat.
+- PuckPedia marque ces cellules avec une icône loupe (`data-title="Retained Salary"`). Fiche HTML réelle obtenue via l'aide de David (Cloudflare bloque les requêtes headless depuis cet environnement) pour confirmer la structure exacte des tableaux `pp_table-contract` sur la fiche du joueur (ligne "Cap Hit", inclut les saisons futures d'un contrat actif — contrairement au tableau de stats saison-par-saison qui s'arrête à la dernière saison jouée).
+- `scrape_puckpedia.py` : détection de l'icône par cellule, nouvelle fonction `recuperer_salaires_reels()` qui va chercher la fiche du joueur et en extrait le cap hit plein par saison, remplace la valeur réduite avant l'écriture du CSV. Nouvelle colonne `Salaire_Reel_Saisons` (saisons corrigées, format pipe comme `ELC_Saisons`) pour tracer quelles saisons ont été corrigées.
+- **Interaction avec un mécanisme existant** : `import_supabase.py` avait déjà `should_sum_retained_fragments`/`sum_contract_fragments` qui reconstitue un salaire plein en additionnant 2 lignes (équipe d'origine qui retient + équipe receveuse réduite) quand un joueur apparaît 2x dans le CSV — ex. Cam Fowler (ANA+STL). Risque de double comptage si les deux mécanismes s'appliquaient au même joueur. Corrigé : `Salaire_Reel_Saisons` fait maintenant sauter la sommation pour les saisons déjà corrigées par le scraper (vérifié dans les deux fonctions).
+- Pas encore validé sur un vrai run (Cloudflare empêche de tester depuis cet environnement) — à valider au prochain `.\run_pipeline_staging.ps1`.
+
 ### 2026-07-03
 
 **[Fix] — Bugs critiques découverts en validant un run staging du pipeline PuckPedia** (`python_script/scrape_puckpedia.py`, `python_script/import_supabase.py`) :

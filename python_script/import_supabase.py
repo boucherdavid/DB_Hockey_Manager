@@ -213,6 +213,14 @@ def should_sum_retained_fragments(entries, current_team, season_cols):
     if current_entry is None:
         return False
 
+    # Si le scraper a déjà remplacé le cap hit réduit par le vrai montant plein
+    # (récupéré depuis la fiche du joueur — voir Salaire_Reel_Saisons), ne pas
+    # le sommer avec un fragment retenu résiduel de l'ancienne équipe :
+    # ce serait un double comptage.
+    corrected_seasons = set(str(current_entry[1].get('Salaire_Reel_Saisons', '') or '').split('|'))
+    if season_cols[0] in corrected_seasons:
+        return False
+
     current_cap = get_cap_value(current_entry[1], season_cols[0])
     if current_cap <= 0:
         return False
@@ -231,7 +239,11 @@ def should_sum_retained_fragments(entries, current_team, season_cols):
 
 def sum_contract_fragments(row_base, entries, season_cols):
     row_base = row_base.copy()
+    # Saisons déjà remplacées par le vrai cap hit plein (voir should_sum_retained_fragments)
+    corrected_seasons = set(str(row_base.get('Salaire_Reel_Saisons', '') or '').split('|'))
     for season in season_cols:
+        if season in corrected_seasons:
+            continue
         total = 0
         statuses = []
         for _, row, _, _ in entries:
