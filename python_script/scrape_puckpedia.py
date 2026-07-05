@@ -83,11 +83,15 @@ def get_driver(headless=True):
     service = Service(executable_path=chrome_path)
     return webdriver.Chrome(service=service, options=options)
 
-def telecharger_html(url, sigle, headless=True, timeout=30):
+def telecharger_html(url, sigle, headless=True, timeout=30, driver=None):
+    """Télécharge le HTML d'une page d'équipe. Si `driver` est fourni, réutilise
+    cette fenêtre Chrome (navigation vers une nouvelle URL) au lieu d'en ouvrir
+    une nouvelle — évite l'accumulation de fenêtres sur un run complet."""
     print(f"\n🌐 Ouverture de la page {url} pour {sigle}")
-    driver = None
+    driver_local = driver is None
     try:
-        driver = get_driver(headless)
+        if driver is None:
+            driver = get_driver(headless)
         driver.set_page_load_timeout(timeout)
         driver.set_script_timeout(timeout)
 
@@ -123,7 +127,7 @@ def telecharger_html(url, sigle, headless=True, timeout=30):
         print(f"❌ Erreur Selenium pour {sigle} : {e}")
 
     finally:
-        if driver:
+        if driver_local and driver:
             try:
                 driver.quit()
             except Exception:
@@ -168,17 +172,20 @@ def extraire_salaires_reels(html):
     return saisons
 
 
-def recuperer_salaires_reels(player_url, name, headless=True, timeout=30):
+def recuperer_salaires_reels(player_url, name, headless=True, timeout=30, driver=None):
     """Télécharge la fiche d'un joueur et retourne ses cap hits pleins par
     saison (utilisé pour corriger un cap hit réduit par rétention de salaire
-    affiché sur une page d'équipe). Mise en cache mémoire pour le run courant."""
+    affiché sur une page d'équipe). Mise en cache mémoire pour le run courant.
+    Si `driver` est fourni, réutilise cette fenêtre Chrome au lieu d'en ouvrir
+    une nouvelle — évite l'accumulation de fenêtres sur un run complet."""
     if player_url in SALAIRES_REELS_CACHE:
         return SALAIRES_REELS_CACHE[player_url]
 
-    driver = None
+    driver_local = driver is None
     resultat = {}
     try:
-        driver = get_driver(headless)
+        if driver is None:
+            driver = get_driver(headless)
         driver.set_page_load_timeout(timeout)
         driver.set_script_timeout(timeout)
         try:
@@ -205,7 +212,7 @@ def recuperer_salaires_reels(player_url, name, headless=True, timeout=30):
     except Exception as e:
         print(f"❌ Erreur Selenium pour la fiche de {name} : {e}")
     finally:
-        if driver:
+        if driver_local and driver:
             try:
                 driver.quit()
             except Exception:
@@ -222,7 +229,7 @@ def clean_salary(val):
     except:
         return 0
 
-def scraper_depuis_html(fichier_html, sigle, headless=True):
+def scraper_depuis_html(fichier_html, sigle, headless=True, driver=None):
     print(f"\n📄 Lecture du fichier HTML : {fichier_html}")
     with open(fichier_html, "r", encoding="utf-8") as f:
         html = f.read()
@@ -362,7 +369,7 @@ def scraper_depuis_html(fichier_html, sigle, headless=True):
             saisons_corrigees = []
             if retained_saisons and player_url:
                 print(f"💸 Salaire retenu détecté pour {name} ({retained_saisons}) — récupération du vrai cap hit sur {player_url}")
-                vrais_salaires = recuperer_salaires_reels(player_url, name, headless=headless)
+                vrais_salaires = recuperer_salaires_reels(player_url, name, headless=headless, driver=driver)
                 if vrais_salaires:
                     for year in retained_saisons:
                         if year in vrais_salaires:
@@ -468,26 +475,35 @@ def scraper_depuis_csv_source(csv_path=DEFAULT_SOURCE_CSV, headless=True):
 
     all_table = pd.DataFrame()
 
-    for _, row in df_urls.iterrows():
-        url = row['URL']
-        sigle = row['Team']
-        print(f"\n🚀 Traitement de {sigle} — {url}")
+    # Une seule fenêtre Chrome réutilisée pour tout le run (équipes + fiches
+    # joueurs pour les salaires retenus) — évite l'accumulation de fenêtres.
+    driver = get_driver(headless)
+    try:
+        for _, row in df_urls.iterrows():
+            url = row['URL']
+            sigle = row['Team']
+            print(f"\n🚀 Traitement de {sigle} — {url}")
 
-        html_file = os.path.join(DIAGNOSTICS_DIR, f"{sigle}_source.html")
+            html_file = os.path.join(DIAGNOSTICS_DIR, f"{sigle}_source.html")
 
-        # Toujours retélécharger : un HTML mis en cache peut dater de mois,
-        # ce qui masquerait silencieusement transactions/signatures récentes.
-        telecharger_html(url, sigle, headless=headless)
-        if not os.path.exists(html_file):
-            print(f"❌ HTML introuvable pour {sigle}")
-            continue
+            # Toujours retélécharger : un HTML mis en cache peut dater de mois,
+            # ce qui masquerait silencieusement transactions/signatures récentes.
+            telecharger_html(url, sigle, headless=headless, driver=driver)
+            if not os.path.exists(html_file):
+                print(f"❌ HTML introuvable pour {sigle}")
+                continue
 
+            try:
+                df = scraper_depuis_html(html_file, sigle, headless=headless, driver=driver)
+                df.to_csv(os.path.join(TEAMS_OFFLINE_DIR, f"{sigle}.csv"), index=False, sep=';')
+                all_table = pd.concat([all_table, df], ignore_index=True)
+            except Exception as e:
+                print(f"❌ Erreur avec {sigle} : {e}")
+    finally:
         try:
-            df = scraper_depuis_html(html_file, sigle, headless=headless)
-            df.to_csv(os.path.join(TEAMS_OFFLINE_DIR, f"{sigle}.csv"), index=False, sep=';')
-            all_table = pd.concat([all_table, df], ignore_index=True)
-        except Exception as e:
-            print(f"❌ Erreur avec {sigle} : {e}")
+            driver.quit()
+        except Exception:
+            pass
 
     all_table.to_csv(OFFLINE_CSV, index=False, sep=';')
     print(f"\n📦 Fichier global sauvegardé : ./PuckPedia_offline.csv")
