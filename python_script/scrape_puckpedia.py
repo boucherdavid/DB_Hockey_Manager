@@ -86,7 +86,9 @@ def get_driver(headless=True):
 def telecharger_html(url, sigle, headless=True, timeout=30, driver=None):
     """Télécharge le HTML d'une page d'équipe. Si `driver` est fourni, réutilise
     cette fenêtre Chrome (navigation vers une nouvelle URL) au lieu d'en ouvrir
-    une nouvelle — évite l'accumulation de fenêtres sur un run complet."""
+    une nouvelle — évite l'accumulation de fenêtres sur un run complet.
+    Retourne True si un HTML frais a bien été écrit, False sinon (le caller ne
+    doit alors PAS réutiliser un fichier existant sans le signaler clairement)."""
     print(f"\n🌐 Ouverture de la page {url} pour {sigle}")
     driver_local = driver is None
     try:
@@ -105,7 +107,7 @@ def telecharger_html(url, sigle, headless=True, timeout=30, driver=None):
                 driver.get(url)
             except Exception as e2:
                 print(f"❌ Échec définitif pour {sigle} : {e2}")
-                return
+                return False
 
         print("⏳ Attente du tableau principal...")
         try:
@@ -115,16 +117,18 @@ def telecharger_html(url, sigle, headless=True, timeout=30, driver=None):
             print("✅ Tableau détecté")
         except Exception as e:
             print(f"⚠️ Tableau non détecté pour {sigle} : {e}")
-            return
+            return False
 
         time.sleep(2)
         html = driver.page_source
         with open(os.path.join(DIAGNOSTICS_DIR, f"{sigle}_source.html"), "w", encoding="utf-8") as f:
             f.write(html)
         print(f"📥 HTML complet sauvegardé pour {sigle}")
+        return True
 
     except Exception as e:
         print(f"❌ Erreur Selenium pour {sigle} : {e}")
+        return False
 
     finally:
         if driver_local and driver:
@@ -195,8 +199,16 @@ def recuperer_salaires_reels(player_url, name, headless=True, timeout=30, driver
             SALAIRES_REELS_CACHE[player_url] = resultat
             return resultat
 
-        time.sleep(3)
+        try:
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'table.pp_table-contract'))
+            )
+        except Exception as e:
+            print(f"⚠️ Tableau de contrat non détecté sur la fiche de {name} : {e}")
+
+        time.sleep(2)
         html = driver.page_source
+        print(f"   [diag] fiche {name} : {len(html)} caractères reçus")
 
         if "cf-turnstile" in html.lower() or "un instant" in html.lower():
             print(f"⚠️ Défi Cloudflare non résolu pour la fiche de {name}")
@@ -209,6 +221,9 @@ def recuperer_salaires_reels(player_url, name, headless=True, timeout=30, driver
             f.write(html)
 
         resultat = extraire_salaires_reels(html)
+        if not resultat:
+            nb_tables = html.count('pp_table-contract')
+            print(f"   [diag] {name} : 0 saison extraite (pp_table-contract trouvé {nb_tables}x dans le HTML)")
     except Exception as e:
         print(f"❌ Erreur Selenium pour la fiche de {name} : {e}")
     finally:
@@ -478,6 +493,7 @@ def scraper_depuis_csv_source(csv_path=DEFAULT_SOURCE_CSV, headless=True):
     # Une seule fenêtre Chrome réutilisée pour tout le run (équipes + fiches
     # joueurs pour les salaires retenus) — évite l'accumulation de fenêtres.
     driver = get_driver(headless)
+    equipes_perimees = []
     try:
         for _, row in df_urls.iterrows():
             url = row['URL']
@@ -488,10 +504,30 @@ def scraper_depuis_csv_source(csv_path=DEFAULT_SOURCE_CSV, headless=True):
 
             # Toujours retélécharger : un HTML mis en cache peut dater de mois,
             # ce qui masquerait silencieusement transactions/signatures récentes.
-            telecharger_html(url, sigle, headless=headless, driver=driver)
-            if not os.path.exists(html_file):
-                print(f"❌ HTML introuvable pour {sigle}")
-                continue
+            frais = telecharger_html(url, sigle, headless=headless, driver=driver)
+
+            if not frais:
+                # Vérifier si la fenêtre est encore vivante ; sinon la recréer
+                # pour ne pas planter en boucle sur toutes les équipes restantes.
+                try:
+                    _ = driver.title
+                except Exception:
+                    print("♻️  Fenêtre Chrome inutilisable, recréation...")
+                    try:
+                        driver.quit()
+                    except Exception:
+                        pass
+                    driver = get_driver(headless)
+                    # Une seconde chance avec la fenêtre fraîche avant d'abandonner l'équipe.
+                    frais = telecharger_html(url, sigle, headless=headless, driver=driver)
+
+            if not frais:
+                if os.path.exists(html_file):
+                    print(f"⚠️  ATTENTION : échec du téléchargement pour {sigle} — utilisation du HTML déjà présent sur disque (potentiellement PÉRIMÉ, pas forcément les données actuelles).")
+                    equipes_perimees.append(sigle)
+                else:
+                    print(f"❌ HTML introuvable pour {sigle}, équipe ignorée")
+                    continue
 
             try:
                 df = scraper_depuis_html(html_file, sigle, headless=headless, driver=driver)
@@ -507,6 +543,10 @@ def scraper_depuis_csv_source(csv_path=DEFAULT_SOURCE_CSV, headless=True):
 
     all_table.to_csv(OFFLINE_CSV, index=False, sep=';')
     print(f"\n📦 Fichier global sauvegardé : ./PuckPedia_offline.csv")
+
+    if equipes_perimees:
+        print(f"\n⚠️  {len(equipes_perimees)} équipe(s) avec données potentiellement PÉRIMÉES (échec de retéléchargement) : {equipes_perimees}")
+        print("    Relancer le scraping pour ces équipes avant de faire confiance aux données.")
 
     if 'Equipe' in all_table.columns:
         print(f"📊 Total équipes traitées : {len(all_table['Equipe'].unique())}")

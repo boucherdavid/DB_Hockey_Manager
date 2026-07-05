@@ -65,6 +65,13 @@ Je l'utiliserai pour:
 - **Interaction avec un mécanisme existant** : `import_supabase.py` avait déjà `should_sum_retained_fragments`/`sum_contract_fragments` qui reconstitue un salaire plein en additionnant 2 lignes (équipe d'origine qui retient + équipe receveuse réduite) quand un joueur apparaît 2x dans le CSV — ex. Cam Fowler (ANA+STL). Risque de double comptage si les deux mécanismes s'appliquaient au même joueur. Corrigé : `Salaire_Reel_Saisons` fait maintenant sauter la sommation pour les saisons déjà corrigées par le scraper (vérifié dans les deux fonctions).
 - Pas encore validé sur un vrai run (Cloudflare empêche de tester depuis cet environnement) — à valider au prochain `.\run_pipeline_staging.ps1`.
 
+**[Fix] — Récupération d'un plantage de fenêtre Chrome partagée + diagnostics salaire retenu** (`python_script/scrape_puckpedia.py`) :
+- Premier run réel avec la fenêtre partagée (session précédente) : la fenêtre Chrome est morte après ~13 équipes (`WinError 10061`, chromedriver ne répondait plus) et **toutes les équipes suivantes sont retombées silencieusement sur le HTML déjà présent sur disque** (potentiellement périmé) — exactement le bug corrigé plus tôt, réintroduit par un angle différent.
+- Toutes les corrections de salaire retenu ont aussi échoué ("Impossible de récupérer la fiche joueur"), y compris pour des équipes traitées *avant* le plantage — cause encore inconnue.
+- Fix : `telecharger_html()` retourne maintenant explicitement succès/échec ; en cas d'échec, vérifie si la fenêtre est morte (`driver.title`) et la recrée avant de réessayer une fois, plutôt que de laisser toutes les équipes restantes échouer en boucle. Si on doit quand même retomber sur un fichier existant, c'est maintenant annoncé clairement dans les logs (liste des équipes concernées en résumé final) au lieu d'être silencieux.
+- `recuperer_salaires_reels()` : ajout de diagnostics (taille du HTML reçu, attente explicite du tableau de contrat au lieu d'un `sleep` fixe, nombre de `pp_table-contract` trouvés si l'extraction échoue) pour comprendre la cause réelle au prochain run.
+- À revalider au prochain `.\run_pipeline_staging.ps1`.
+
 ### 2026-07-03
 
 **[Fix] — Bugs critiques découverts en validant un run staging du pipeline PuckPedia** (`python_script/scrape_puckpedia.py`, `python_script/import_supabase.py`) :
