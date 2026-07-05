@@ -82,6 +82,12 @@ def get_driver(headless=True):
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1920,1080")
+    # Les pages PuckPedia contiennent des pubs/vidéos tierces qui ne terminent
+    # parfois jamais leur chargement — la stratégie par défaut ("normal")
+    # attend TOUTES les ressources et peut bloquer driver.get() indéfiniment.
+    # "eager" n'attend que le DOM (le tableau qu'on scrape est déjà là) ;
+    # on attend explicitement l'élément voulu via WebDriverWait ensuite.
+    options.page_load_strategy = 'eager'
 
     chrome_path = which("chromedriver")
     service = Service(executable_path=chrome_path)

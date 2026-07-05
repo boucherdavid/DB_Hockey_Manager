@@ -58,6 +58,13 @@ Je l'utiliserai pour:
 
 ### 2026-07-05
 
+**[Fix] — Chargement de page PuckPedia bloqué en boucle (fenêtres Chrome multiples) + log corrompu** (`python_script/scrape_puckpedia.py`, `run_pipeline_staging.ps1`, `run_pipeline_prod.ps1`) :
+- Le log confirmait que le timeout matériel fonctionnait (fenêtre tuée/recréée après 40s), mais **presque chaque équipe** restait bloquée au premier essai — donc une nouvelle fenêtre Chrome s'ouvrait à répétition tout au long du run, pas juste occasionnellement.
+- Cause probable : les pages PuckPedia contiennent des pubs/vidéos tierces (bannières, lecteur vidéo intégré) qui ne terminent parfois jamais leur chargement réseau — la stratégie de chargement par défaut de Chrome ("normal") attend TOUTES les ressources avant de considérer la page chargée, ce qui bloque `driver.get()` indéfiniment malgré le `page_load_timeout` configuré.
+- Fix : `options.page_load_strategy = 'eager'` dans `get_driver()` — Chrome considère la page chargée dès que le DOM est prêt, sans attendre les ressources tierces. Le tableau qu'on scrape est déjà présent à ce stade ; `WebDriverWait` continue d'attendre explicitement l'élément voulu ensuite. Le mécanisme de timeout matériel + tuer/recréer (session précédente) reste en filet de sécurité si ça bloque quand même.
+- **Bonus découvert en cours de route** : le fichier log généré par `Tee-Object` était corrompu (caractères espacés, accents/emojis remplacés par du charabia). Cause : PowerShell décode le stdout du process Python avec l'encodage console par défaut (pas UTF-8) malgré `sys.stdout.reconfigure(encoding='utf-8')` côté Python, et `Tee-Object`/`Out-File` écrit en UTF-16 par défaut. Fix : `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` + `$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'` ajoutés dans les deux scripts `run_pipeline_*.ps1`.
+- À revalider au prochain `.\run_pipeline_staging.ps1` — s'attendre à voir beaucoup moins (idéalement zéro) de fenêtres Chrome supplémentaires en cours de run.
+
 **[Fix] — Timeout matériel pour débloquer un chargement de page figé** (`python_script/scrape_puckpedia.py`) :
 - Contexte : le scraping restait figé après avoir ouvert la fenêtre de la première équipe (page normale affichée, mais le script ne progresse jamais) — le `page_load_timeout` de Selenium ne s'est pas déclenché, probablement à cause d'une ressource tierce (pub, script tiers) qui ne termine jamais son chargement selon Chrome.
 - Ajout de `naviguer_avec_timeout()` : lance `driver.get()` dans un thread daemon et n'attend que le temps imparti (`page_load_timeout + 10s`) ; si le thread est toujours vivant après ce délai, tue le processus chromedriver (`tuer_driver()`) pour le débloquer plutôt que d'attendre indéfiniment.

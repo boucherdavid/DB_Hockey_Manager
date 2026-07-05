@@ -32,6 +32,12 @@ if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir | O
 $timestamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
 $logFile = Join-Path $logsDir "run_pipeline_staging_$timestamp.log"
 
+# Python ecrit son stdout en UTF-8 (scripts reconfigures) ; sans ceci,
+# PowerShell le decode avec l'encodage console par defaut (pas UTF-8) et
+# Tee-Object/Out-File ecrit le fichier en UTF-16 par defaut -> log corrompu.
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+
 Write-Host "=== Pipeline hockey pool -- STAGING ===" -ForegroundColor Cyan
 Write-Host "Cible: $($env:SUPABASE_URL)" -ForegroundColor Yellow
 Write-Host "Log  : $logFile" -ForegroundColor Yellow

@@ -42,5 +42,11 @@ $timestamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
 $logFile = Join-Path $logsDir "run_pipeline_prod_$timestamp.log"
 Write-Host "Log  : $logFile" -ForegroundColor Yellow
 
+# Python ecrit son stdout en UTF-8 (scripts reconfigures) ; sans ceci,
+# PowerShell le decode avec l'encodage console par defaut (pas UTF-8) et
+# Tee-Object/Out-File ecrit le fichier en UTF-16 par defaut -> log corrompu.
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+
 Set-Location $scriptsDir
 & $venvPython run_pipeline.py @args | Tee-Object -FilePath $logFile
