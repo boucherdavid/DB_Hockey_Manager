@@ -11,6 +11,7 @@ python_script/.env
 python_script/.env*
 python_script/diagnostics/
 python_script/diagnostics_joueurs/
+python_script/logs/
 
 *.pyc
 *.pyo

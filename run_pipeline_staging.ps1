@@ -27,8 +27,14 @@ if (-not (Test-Path $venvPython)) {
     Write-Error "Venv introuvable: $venvPython (voir python_script/venv/)"
 }
 
+$logsDir = Join-Path $scriptsDir 'logs'
+if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir | Out-Null }
+$timestamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
+$logFile = Join-Path $logsDir "run_pipeline_staging_$timestamp.log"
+
 Write-Host "=== Pipeline hockey pool -- STAGING ===" -ForegroundColor Cyan
 Write-Host "Cible: $($env:SUPABASE_URL)" -ForegroundColor Yellow
+Write-Host "Log  : $logFile" -ForegroundColor Yellow
 
 Set-Location $scriptsDir
-& $venvPython run_pipeline.py @args
+& $venvPython run_pipeline.py @args | Tee-Object -FilePath $logFile
