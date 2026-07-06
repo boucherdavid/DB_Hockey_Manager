@@ -106,11 +106,20 @@ def pos_group_from_db(position: str | None) -> str | None:
 
 def fetch_nhl_id_map(nhl_season: str) -> tuple[dict[str, int], dict[int, NhlEntry]]:
     """Retourne (id_map, detail_map).
-    id_map  : normName → nhl_id (correspondance exacte)
+    id_map  : normName → nhl_id (correspondance exacte, UNIQUEMENT si le nom
+              n'est pas ambigu — voir ambiguous_names)
     detail_map : nhl_id → {nhl_id, key, teams, pos_group}
+
+    Si un nom correspond à 2+ joueurs NHL différents (ex. les deux Sebastian
+    Aho), il est retiré de id_map plutôt que silencieusement écrasé par le
+    dernier trouvé — sinon le mauvais nhl_id peut être assigné à un joueur
+    (et entrer en conflit avec la contrainte unique players.nhl_id_key si
+    l'autre homonyme a déjà le sien). Le nom ambigu retombe alors sur le
+    filtre équipe+position déjà utilisé pour les surnoms (Mitch/Mitchell...).
     """
     id_map: dict[str, int] = {}
     detail_map: dict[int, NhlEntry] = {}
+    ambiguous_names: set[str] = set()
 
     for player_type, name_field, pos_field in [
         ('skater', 'skaterFullName', 'positionCode'),
@@ -141,6 +150,8 @@ def fetch_nhl_id_map(nhl_season: str) -> tuple[dict[str, int], dict[int, NhlEntr
             key = normaliser(f'{fn} {ln}')
             if not key:
                 continue
+            if key in id_map and id_map[key] != pid:
+                ambiguous_names.add(key)
             id_map[key] = pid
 
             # Agréger les équipes de toutes les lignes (joueur multi-équipes)
@@ -156,6 +167,10 @@ def fetch_nhl_id_map(nhl_season: str) -> tuple[dict[str, int], dict[int, NhlEntr
             detail_map[pid] = {'nhl_id': pid, 'key': key, 'teams': teams, 'pos_group': pos_g}
 
         print(f'[INFO] {player_type.capitalize()}s chargés depuis NHL API : {len(by_id)}')
+
+    for name in ambiguous_names:
+        print(f'[INFO] Nom ambigu dans l\'API NHL ({name}) — départagé par équipe/position plutôt que par correspondance directe')
+        id_map.pop(name, None)
 
     return id_map, detail_map
 
@@ -244,9 +259,12 @@ def main():
 
     # Index inversé : last_name_normalisé → [nhl_id, ...]
     # Utilisé pour le fallback surnom (Mitch/Mitchell, Alex/Alexander, etc.)
+    # ET pour les noms ambigus retirés de id_map (ex. les deux Sebastian Aho) —
+    # construit depuis detail_map (garde TOUS les candidats, même ambigus),
+    # pas depuis id_map (qui les a retirés pour éviter un mauvais matching direct).
     lastname_index: dict[str, list[int]] = {}
-    for key, pid in id_map.items():
-        parts = key.split(' ', 1)
+    for pid, detail in detail_map.items():
+        parts = detail['key'].split(' ', 1)
         if len(parts) == 2:
             lastname_index.setdefault(parts[1], []).append(pid)
 
