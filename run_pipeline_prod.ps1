@@ -49,4 +49,8 @@ Write-Host "Log  : $logFile" -ForegroundColor Yellow
 $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
 
 Set-Location $scriptsDir
-& $venvPython run_pipeline.py @args | Tee-Object -FilePath $logFile
+try {
+    & $venvPython run_pipeline.py @args | Tee-Object -FilePath $logFile
+} finally {
+    Set-Location $projectRoot
+}

@@ -43,4 +43,8 @@ Write-Host "Cible: $($env:SUPABASE_URL)" -ForegroundColor Yellow
 Write-Host "Log  : $logFile" -ForegroundColor Yellow
 
 Set-Location $scriptsDir
-& $venvPython run_pipeline.py @args | Tee-Object -FilePath $logFile
+try {
+    & $venvPython run_pipeline.py @args | Tee-Object -FilePath $logFile
+} finally {
+    Set-Location $projectRoot
+}
