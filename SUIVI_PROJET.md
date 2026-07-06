@@ -56,7 +56,26 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-06
+
+**[Fix] — `backfill_nhl_ids.py` assignait parfois le nhl_id du mauvais homonyme** (`python_script/backfill_nhl_ids.py`) :
+- Contexte : le run staging du 2026-07-05 (validé — voir plus bas) a montré une erreur `duplicate key value violates unique constraint "players_nhl_id_key"` pour Sebastian Aho (id=2735) — la contrainte unique a bloqué l'écriture, donc aucune corruption, mais révélait un bug latent.
+- Cause : `id_map` (nom normalisé → nhl_id) écrasait silencieusement une entrée en cas de collision de nom (les deux Sebastian Aho présents dans l'API stats NHL saison 2025-26), assignant potentiellement le nhl_id du mauvais joueur à `id_map.get(key)` sans jamais passer par le filtre équipe+position déjà présent dans ce script pour le fallback des surnoms (Mitch/Mitchell, etc.).
+- David a demandé si le fix par âge (ajouté à `import_supabase.py` la semaine dernière) réglait aussi ce cas — non, `backfill_nhl_ids.py` est un script séparé avec sa propre logique, aucune des deux corrections précédentes ne le couvrait.
+- Fix : détection des noms ambigus (2+ nhl_id différents pour le même nom normalisé), retirés de `id_map` pour forcer le passage par le filtre équipe+position existant (suffisant ici : Aho CAR = attaquant, l'autre = défenseur). `lastname_index` reconstruit depuis `detail_map` (garde tous les candidats) plutôt que `id_map` (qui les a retirés).
+- Pas de nouvelle logique d'âge nécessaire — réutilisation du mécanisme existant.
+
 ### 2026-07-05
+
+**[Validation] — Run staging complet après les correctifs de la semaine** (`python_script/logs/run_pipeline_staging_2026-07-05_14-25-33.log`) :
+- 0 fenêtre Chrome recréée (le fix `page_load_strategy='eager'` a réglé les blocages de chargement).
+- 32/32 équipes traitées fraîchement, aucun fallback sur données périmées.
+- Mason McTavish apparaît maintenant sous STL — confirme le fix du scraper figé depuis mars.
+- 11 corrections de salaire retenu appliquées avec succès (Gallagher, Karlsson, Hertl, Kadri, Jones, Myers, Hathaway, Korpisalo, Carlo, Coleman, Wotherspoon) — valeurs réduit→plein cohérentes.
+- Les deux Sebastian Aho correctement gardés distincts (`Homonyme NHL confirmé par l'âge, âges 28.0/30.0`) — le fix par âge fonctionne pour `import_supabase.py`.
+- Import : 69 insérés, 1641 mis à jour, 4277 contrats, 12 désactivés.
+- Un seul problème trouvé (voir section suivante) : `backfill_nhl_ids.py` a tenté d'assigner un nhl_id déjà pris — rejeté proprement par la BD, corrigé le lendemain.
+- David a demandé de toujours valider le log le plus récent dès qu'il annonce avoir terminé un run — noté comme pratique systématique pour les prochaines sessions.
 
 **[Fix] — Chargement de page PuckPedia bloqué en boucle (fenêtres Chrome multiples) + log corrompu** (`python_script/scrape_puckpedia.py`, `run_pipeline_staging.ps1`, `run_pipeline_prod.ps1`) :
 - Le log confirmait que le timeout matériel fonctionnait (fenêtre tuée/recréée après 40s), mais **presque chaque équipe** restait bloquée au premier essai — donc une nouvelle fenêtre Chrome s'ouvrait à répétition tout au long du run, pas juste occasionnellement.
