@@ -224,6 +224,28 @@ def main():
         for t in supabase.table('teams').select('id, code').execute().data
     }
 
+    # nhl_id déjà pris par un AUTRE joueur en base — un match par nom exact
+    # peut correspondre à un homonyme dont le nhl_id a déjà été assigné à un
+    # joueur différent (ex. les deux Sebastian Aho, un seul actif dans les
+    # stats NHL de la saison, l'autre déjà en base sous un id différent) ;
+    # sans cette vérification on retente le même nhl_id et on viole la
+    # contrainte unique players.nhl_id_key.
+    nhl_ids_deja_pris: set = set()
+    offset_n = 0
+    while True:
+        batch = (
+            supabase.table('players')
+            .select('nhl_id')
+            .not_.is_('nhl_id', 'null')
+            .range(offset_n, offset_n + 999)
+            .execute()
+            .data
+        )
+        nhl_ids_deja_pris.update(p['nhl_id'] for p in batch)
+        if len(batch) < 1000:
+            break
+        offset_n += 1000
+
     # Joueurs sans nhl_id (avec team_id et position pour le fallback)
     print(f'\n[INFO] Recherche des joueurs sans nhl_id (saison {season_label})...')
     offset = 0
@@ -271,9 +293,12 @@ def main():
     for j in joueurs:
         key = normaliser(f"{j['first_name']} {j['last_name']}")
         nhl_id = id_map.get(key)
-        if nhl_id:
+        if nhl_id and nhl_id not in nhl_ids_deja_pris:
             trouvés.append((j['id'], nhl_id, j['first_name'], j['last_name'], False))
+            nhl_ids_deja_pris.add(nhl_id)  # évite qu'un autre joueur de CE run reprenne le même nhl_id
             continue
+        if nhl_id and nhl_id in nhl_ids_deja_pris:
+            print(f"[INFO] {j['first_name']} {j['last_name']} (id={j['id']}) : nhl_id {nhl_id} déjà pris par un autre joueur en base — passage au filtre équipe/position")
 
         # Fallback : même nom de famille + premier prénom est un préfixe de l'autre (≥4 chars)
         # + même équipe + même groupe de position (F/D/G)
@@ -286,6 +311,8 @@ def main():
         candidates = lastname_index.get(ln_key, [])
         match = None
         for cand_id in candidates:
+            if cand_id in nhl_ids_deja_pris:
+                continue
             detail = detail_map.get(cand_id)
             if not detail:
                 continue
@@ -308,6 +335,7 @@ def main():
                 break
         if match:
             trouvés.append((j['id'], match, j['first_name'], j['last_name'], True))
+            nhl_ids_deja_pris.add(match)  # évite qu'un autre joueur de CE run reprenne le même nhl_id
         else:
             échecs.append((j['id'], j['first_name'], j['last_name']))
 
