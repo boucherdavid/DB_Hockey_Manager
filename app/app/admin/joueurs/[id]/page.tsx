@@ -11,5 +11,5 @@ export default async function ModifierJoueurPage({ params }: { params: Promise<{
   const { data: pooler } = await supabase.from('poolers').select('is_admin').eq('id', user.id).single()
   if (!pooler?.is_admin) redirect('/')
 
-  redirect('/admin/joueurs')
+  redirect('/admin/pool?tab=joueurs')
 }

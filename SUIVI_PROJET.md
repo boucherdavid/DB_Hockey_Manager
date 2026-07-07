@@ -58,6 +58,14 @@ Je l'utiliserai pour:
 
 ### 2026-07-06
 
+**[Feat] — Réorganisation du menu Admin : Données joueurs et Classement des prospects déplacés dans Gestion du pool** (`app/components/Navbar.tsx`, `app/app/admin/pool/page.tsx`, `app/app/admin/joueurs/*`, `app/app/admin/draft-center/*`) :
+- Contexte : David voulait alléger le menu déroulant Admin en déplaçant "Données joueurs" et "Classement des prospects" comme onglets de "Gestion du pool" (qui a déjà un système d'onglets — Poolers/Configuration/Communication/Suivi), et ajouter en bas du menu Admin un accès direct aux onglets "Messages" (Communication) et "Suivi", pour éviter de devoir naviguer par la page puis choisir l'onglet.
+- `admin/pool/page.tsx` : ajout de 2 onglets (`joueurs`, `prospects`) réutilisant le contenu et les composants existants (`PlayerMerge`, `AddProspectForm`, `DraftProspectActions`, `AdminDraftYearSelect`) — aucune logique dupliquée, juste déplacée dans le bloc conditionnel par onglet.
+- `admin/joueurs/page.tsx` et `admin/draft-center/page.tsx` (anciennes pages) transformées en redirections vers `/admin/pool?tab=joueurs` / `/admin/pool?tab=prospects` (le second préserve `?year=`) — les liens/favoris existants continuent de fonctionner. Les routes `[id]`/`nouveau` (déjà désactivées) et la fiche d'édition d'un prospect restent des routes séparées, juste leur lien de retour a été mis à jour.
+- `AdminDraftYearSelect.tsx` : le sélecteur d'année pousse maintenant vers `/admin/pool?tab=prospects&year=X`.
+- Navbar : dropdown Admin (desktop + mobile) réorganisé — "Pool des séries" remonté avant un premier séparateur, puis un second séparateur avec "Messages" (badge des nouveaux messages déplacé ici depuis "Gestion du pool") et "Suivi" en accès direct.
+- Vérifié par David en direct dans le navigateur (je n'ai pas pu tester moi-même — pas d'outil d'automatisation navigateur disponible dans cet environnement, et la session admin authentifiée est nécessaire).
+
 **[Fix] — `backfill_nhl_ids.py` assignait parfois le nhl_id du mauvais homonyme** (`python_script/backfill_nhl_ids.py`) :
 - Contexte : le run staging du 2026-07-05 (validé — voir plus bas) a montré une erreur `duplicate key value violates unique constraint "players_nhl_id_key"` pour Sebastian Aho (id=2735) — la contrainte unique a bloqué l'écriture, donc aucune corruption, mais révélait un bug latent.
 - Cause : `id_map` (nom normalisé → nhl_id) écrasait silencieusement une entrée en cas de collision de nom (les deux Sebastian Aho présents dans l'API stats NHL saison 2025-26), assignant potentiellement le nhl_id du mauvais joueur à `id_map.get(key)` sans jamais passer par le filtre équipe+position déjà présent dans ce script pour le fallback des surnoms (Mitch/Mitchell, etc.).
