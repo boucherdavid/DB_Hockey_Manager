@@ -56,6 +56,12 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-08
+
+**[Chore] — Désactivation du workflow GitHub Actions "Mise à jour stats pool des séries"** (`.github/workflows/playoff_stats.yml`) :
+- Contexte : le pool des séries 2026 est terminé, le cron quotidien (`import_playoff_stats.py`) générait des courriels d'erreur sans plus d'utilité.
+- Action : `gh workflow disable` sur le workflow (id 274163650) — désactivé côté GitHub, le fichier reste dans le repo pour réactivation lors des prochaines séries. Pas de suppression de fichier ni de modification de code.
+
 ### 2026-07-06
 
 **[Feat] — Réorganisation du menu Admin : Données joueurs et Classement des prospects déplacés dans Gestion du pool** (`app/components/Navbar.tsx`, `app/app/admin/pool/page.tsx`, `app/app/admin/joueurs/*`, `app/app/admin/draft-center/*`) :
