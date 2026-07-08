@@ -58,6 +58,14 @@ Je l'utiliserai pour:
 
 ### 2026-07-08
 
+**[Data] — Run pipeline complet (nouvelles signatures d'agents libres)** (`python_script/PuckPedia_offline.csv`, `python_script/PuckPedia_update.csv`, `python_script/teams_offline/*.csv`) :
+- Contexte : David a signalé de nouvelles signatures non captées dans les CSV en attente (datant du 2026-07-06, jamais committés).
+- Run staging complet (`run_pipeline_staging.ps1`, scraping + import) : 32/32 équipes fraîches, 1710 joueurs mis à jour, 4311 contrats upserted, 22 corrections de salaire retenu, 15 groupes de joueurs échangés (Carlo, Kadri, Coleman, S. Jones, Duchene, Myers, Hathaway, Gallagher, Korpisalo, Veleno, White, Karlsson, Wotherspoon, Hertl, Ekman-Larsson) tous résolus vers la bonne équipe actuelle. Aucune erreur.
+- Validation staging : faute d'outil d'automatisation navigateur dans cet environnement (et `WebFetch` ne peut pas atteindre `localhost`), validation faite par requête directe en lecture sur la BD staging (`players` + `teams`) pour les 15 joueurs échangés — tous corrects, aucun homonyme mal assigné.
+- CSV committés (`chore(data): mise à jour des données PuckPedia (pipeline 2026-07-08)`).
+- Run prod (`--no-scrape`, réutilise les CSV déjà validés plutôt que de rescrapper) : mêmes résultats que staging, aucune erreur, 72.2s.
+- **Note technique** : `run_pipeline_prod.ps1` utilise `Read-Host` pour la confirmation manuelle — incompatible avec un terminal non-interactif (échoue immédiatement, aucune donnée touchée). Contournement : variables d'env chargées manuellement depuis `python_script/.env` + appel direct du script Python, après confirmation explicite de David dans la conversation. Pas de changement au script lui-même.
+
 **[Chore] — Désactivation du workflow GitHub Actions "Mise à jour stats pool des séries"** (`.github/workflows/playoff_stats.yml`) :
 - Contexte : le pool des séries 2026 est terminé, le cron quotidien (`import_playoff_stats.py`) générait des courriels d'erreur sans plus d'utilité.
 - Action : `gh workflow disable` sur le workflow (id 274163650) — désactivé côté GitHub, le fichier reste dans le repo pour réactivation lors des prochaines séries. Pas de suppression de fichier ni de modification de code.
