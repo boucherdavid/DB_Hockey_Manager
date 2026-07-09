@@ -70,7 +70,7 @@ export default async function AdminEffectifsPage({
     const db = createAdminClient()
     const [sr, pr] = await Promise.all([
       db.from('pool_seasons').select('id, season').eq('is_active', true).eq('is_playoff', false).single(),
-      db.from('poolers').select('id, name').eq('is_admin', false).order('name'),
+      db.from('poolers').select('id, name').order('name'),
     ])
     saisonHist = sr.data
     poolersHist = pr.data ?? []
