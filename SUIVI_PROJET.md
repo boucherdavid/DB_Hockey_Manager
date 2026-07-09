@@ -56,6 +56,14 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-09
+
+**[Docs] — Procédure de saisie de l'historique des mouvements** (`docs/saisie-historique-mouvements.md`) :
+- Contexte : David commence la saisie de l'historique des mouvements de roster à partir de `excel/Mouvements_consolides.xlsx`. Question posée : quelle procédure suivre.
+- Investigation : `/admin/mouvements` (référencé dans une note du 2026-06-27) n'est plus le chemin de navigation actuel — le Navbar pointe vers `/admin/effectifs`, une page à onglets (`Mouvements`, `Transactions`, `Historique`, `Données`). L'onglet **Mouvements** (`GestionEffectifsManager`) est pour la gestion courante — il bloque toute soumission qui ne respecte pas la composition 12A/6D/2G + 2 réservistes + cap, donc mal adapté à une reconstruction historique. L'onglet **Historique** (`HistoriqueManager`/`historique-actions.ts`, commit `01cafb1`) a été construit spécifiquement pour ce cas : aucune validation de roster, écrit directement `added_at`/`removed_at` sur `pooler_rosters` sans passer par `roster_change_log`.
+- Doc créée pour tracer la procédure (David a précisé qu'il ne referait probablement pas cette opération, mais voulait une trace) : préparation via `extract_mouvements.py`/`sort_mouvements.py`, choix de l'onglet Historique, saisie chronologique stricte (les dropdowns ne montrent que le roster réellement actif en base), les 4 types de transaction (échange même pooler, échange entre poolers, ajout seul, retrait seul), et les pièges (aucun garde-fou de cap/doublon, pas de compteur agents libres/LTIR alimenté).
+- Pas de changement de code.
+
 ### 2026-07-08
 
 **[Data] — Run pipeline complet (nouvelles signatures d'agents libres)** (`python_script/PuckPedia_offline.csv`, `python_script/PuckPedia_update.csv`, `python_script/teams_offline/*.csv`) :
