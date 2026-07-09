@@ -58,6 +58,11 @@ Je l'utiliserai pour:
 
 ### 2026-07-09
 
+**[Fix] — Poolers admin exclus du sélecteur de l'onglet Historique** (`app/app/admin/effectifs/page.tsx`, `app/app/admin/historique/page.tsx`) :
+- Contexte : en suivant la procédure de saisie de l'historique (voir entrée précédente), David a remarqué qu'il n'apparaissait pas dans la liste déroulante des poolers de l'onglet Historique.
+- Cause : `db.from('poolers').select('id, name').eq('is_admin', false)` — filtre qui exclut les poolers marqués admin. Or David est à la fois admin **et** un des 8 poolers actifs (roster/équipe propre), donc incorrectement exclu.
+- Fix : retrait du filtre `is_admin` dans les deux pages qui alimentent `HistoriqueManager` (page vivante `/admin/effectifs?tab=historique` et l'ancienne route orpheline `/admin/historique`, corrigée par cohérence même si non liée dans le Navbar).
+
 **[Docs] — Procédure de saisie de l'historique des mouvements** (`docs/saisie-historique-mouvements.md`) :
 - Contexte : David commence la saisie de l'historique des mouvements de roster à partir de `excel/Mouvements_consolides.xlsx`. Question posée : quelle procédure suivre.
 - Investigation : `/admin/mouvements` (référencé dans une note du 2026-06-27) n'est plus le chemin de navigation actuel — le Navbar pointe vers `/admin/effectifs`, une page à onglets (`Mouvements`, `Transactions`, `Historique`, `Données`). L'onglet **Mouvements** (`GestionEffectifsManager`) est pour la gestion courante — il bloque toute soumission qui ne respecte pas la composition 12A/6D/2G + 2 réservistes + cap, donc mal adapté à une reconstruction historique. L'onglet **Historique** (`HistoriqueManager`/`historique-actions.ts`, commit `01cafb1`) a été construit spécifiquement pour ce cas : aucune validation de roster, écrit directement `added_at`/`removed_at` sur `pooler_rosters` sans passer par `roster_change_log`.
