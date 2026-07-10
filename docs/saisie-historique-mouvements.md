@@ -33,7 +33,7 @@ mais ils ont des usages très différents :
 |---|---|---|
 | Usage prévu | Gestion courante en direct | Reconstruction d'un historique passé |
 | Validation cap/composition (12A/6D/2G, ≥2 réservistes) | **Bloque** la soumission si non respecté | Aucune validation |
-| Budget agents libres / LTIR (`roster_change_log`) | Compté et limité | Ignoré (aucune écriture dans `roster_change_log`) |
+| Budget agents libres / LTIR | Compté et limité | Ignoré (écrit dans `roster_change_log` avec des `change_type` préfixés `hist_`, jamais comptés dans les budgets `signature_agent_libre`/`signature_ltir`) |
 | Types de mouvement | swap actif/réserve, activation recrue, LTIR, retour LTIR, signature, ballotage, libération | Échange même pooler, échange entre poolers (trade), ajout seul, retrait seul |
 | Date appliquée à `added_at` / `removed_at` | Oui, via checkbox "Forcer une date effective" | Oui, toujours (champ Date obligatoire) |
 
@@ -75,7 +75,17 @@ du pool.
    - Cliquer **Enregistrer la transaction**.
 4. Le panneau "Journal des transactions" (à droite) confirme chaque
    ajout/retrait immédiatement — vérifier après chaque lot pour repérer une
-   erreur de saisie rapidement plutôt qu'à la fin.
+   erreur de saisie rapidement plutôt qu'à la fin. Le journal affiche deux
+   dates distinctes : **Date effective** (la date choisie à l'étape 3, celle
+   qui alimente `added_at`/`removed_at`) et **Saisi le** (le moment réel de
+   la soumission, colonne `created_at` de `roster_change_log`) — utile
+   puisque la saisie historique se fait dans le désordre par rapport à
+   aujourd'hui, donc trier par date effective ne remonte pas forcément
+   l'entrée qu'on vient de faire. Le journal peut être filtré par type de
+   transaction (boutons au-dessus du tableau).
+5. Le message vert "✓ Transaction enregistrée" confirme la soumission et le
+   formulaire se réinitialise (pooler et date conservés, champs joueur
+   vidés) pour enchaîner rapidement sur la ligne suivante du fichier.
 
 ---
 
@@ -101,8 +111,13 @@ du pool.
   passé chez ce pooler plus tôt dans la saison) — comportement voulu : un
   joueur qui quitte puis revient chez un pooler a deux fenêtres de tenure
   distinctes, chacune avec ses propres `added_at`/`removed_at`.
-- Aucune écriture dans `roster_change_log` depuis cet onglet : les
-  compteurs de signatures agents libres/LTIR visibles dans l'onglet
-  Mouvements ne reflètent pas les mouvements saisis ici. Normal pour du
+- L'onglet écrit bien dans `roster_change_log` (types `hist_swap`,
+  `hist_trade`, `hist_ajout`, `hist_retrait`) pour permettre le journal à
+  deux dates, mais ces types ne sont jamais comptés dans les budgets
+  agents libres/LTIR (filtrés sur `signature_agent_libre`/`signature_ltir`
+  ailleurs dans le code) ni dans le délai de réactivation. Normal pour du
   backfill historique — à garder en tête si les compteurs de la saison
   courante semblent incomplets après une saisie historique tardive.
+- Nécessite la colonne `roster_change_log.created_at` (migration
+  `supabase_migrations/roster_change_log_created_at.sql`, ajoutée le
+  2026-07-09/10). Sans cette colonne, la soumission échoue.

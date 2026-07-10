@@ -20,6 +20,16 @@ const TX_TYPES: { value: HistTxType; label: string }[] = [
   { value: 'retrait', label: 'Retrait seulement' },
 ]
 
+const TX_TYPE_LABEL: Record<HistTxType, string> = Object.fromEntries(
+  TX_TYPES.map(t => [t.value, t.label]),
+) as Record<HistTxType, string>
+
+function formatDateTime(iso: string) {
+  return new Intl.DateTimeFormat('fr-CA', {
+    dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Toronto',
+  }).format(new Date(iso))
+}
+
 function PlayerSearch({
   label,
   onSelect,
@@ -138,6 +148,9 @@ export default function HistoriqueManager({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [log, setLog] = useState<HistLogEntry[]>(initialLog)
+  const [logFilter, setLogFilter] = useState<HistTxType | 'all'>('all')
+
+  const poolerName = poolers.find(p => p.id === poolerAId)?.name ?? ''
 
   const refreshLog = useCallback(async () => {
     const l = await getHistLogAction(poolSeasonId)
@@ -157,12 +170,18 @@ export default function HistoriqueManager({
     getHistRosterAction(poolerBId, poolSeasonId).then(setRosterB)
   }, [poolerBId, poolSeasonId])
 
-  function reset() {
+  // Vide les champs de sélection joueur (garde pooler + date pour enchaîner rapidement)
+  function resetSelections() {
     setPlayerOutAId(null)
     setPlayerInA(null)
     setPlayerInAType('actif')
     setPlayerInBType('actif')
     setError(null)
+  }
+
+  // Reset complet déclenché par un changement de contexte (type ou pooler A)
+  function reset() {
+    resetSelections()
     setSuccess(false)
   }
 
@@ -185,7 +204,7 @@ export default function HistoriqueManager({
         setError(result.error)
       } else {
         setSuccess(true)
-        reset()
+        resetSelections()
         // Recharger les rosters et le log
         if (poolerAId) getHistRosterAction(poolerAId, poolSeasonId).then(setRosterA)
         if (poolerBId) getHistRosterAction(poolerBId, poolSeasonId).then(setRosterB)
@@ -328,7 +347,11 @@ export default function HistoriqueManager({
         )}
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
-        {success && <p className="text-green-600 text-sm">✓ Transaction enregistrée.</p>}
+        {success && (
+          <p className="text-green-700 text-sm bg-green-50 border border-green-200 rounded px-3 py-2">
+            ✓ Transaction enregistrée — prêt pour la suivante ({poolerName || '—'}, {date}).
+          </p>
+        )}
 
         <button
           onClick={handleSubmit}
@@ -341,42 +364,69 @@ export default function HistoriqueManager({
 
       {/* Journal */}
       <div className="bg-white rounded-lg shadow p-5 space-y-3">
-        <h2 className="font-semibold text-gray-800">Journal des transactions</h2>
-        {log.length === 0 ? (
-          <p className="text-sm text-gray-400">Aucune transaction enregistrée.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-gray-500 border-b">
-                  <th className="pb-1 pr-2">Date</th>
-                  <th className="pb-1 pr-2">Action</th>
-                  <th className="pb-1 pr-2">Pooler</th>
-                  <th className="pb-1">Joueur</th>
-                </tr>
-              </thead>
-              <tbody>
-                {log.map((e, i) => (
-                  <tr key={i} className="border-b border-gray-50">
-                    <td className="py-1 pr-2 text-gray-500 whitespace-nowrap">
-                      {e.date.slice(0, 10)}
-                    </td>
-                    <td className="py-1 pr-2">
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${e.action === 'ajout' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {e.action === 'ajout' ? '+ Ajout' : '− Retrait'}
-                      </span>
-                    </td>
-                    <td className="py-1 pr-2 text-gray-700">{e.poolerName}</td>
-                    <td className="py-1 text-gray-800">
-                      {e.playerName}
-                      <span className="text-gray-400 text-xs ml-1">{e.teamCode}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="font-semibold text-gray-800">Journal des transactions</h2>
+          <div className="flex flex-wrap gap-1">
+            <button
+              onClick={() => setLogFilter('all')}
+              className={`px-2 py-0.5 rounded text-xs border ${logFilter === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-300 hover:border-slate-500'}`}
+            >
+              Tous
+            </button>
+            {TX_TYPES.map(t => (
+              <button
+                key={t.value}
+                onClick={() => setLogFilter(t.value)}
+                className={`px-2 py-0.5 rounded text-xs border ${logFilter === t.value ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-300 hover:border-slate-500'}`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+        {(() => {
+          const filtered = logFilter === 'all' ? log : log.filter(e => e.txType === logFilter)
+          if (filtered.length === 0) {
+            return <p className="text-sm text-gray-400">Aucune transaction enregistrée.</p>
+          }
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 border-b">
+                    <th className="pb-1 pr-2">Date effective</th>
+                    <th className="pb-1 pr-2">Saisi le</th>
+                    <th className="pb-1 pr-2">Type</th>
+                    <th className="pb-1 pr-2">Pooler</th>
+                    <th className="pb-1">Joueur</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((e, i) => (
+                    <tr key={i} className="border-b border-gray-50">
+                      <td className="py-1 pr-2 text-gray-500 whitespace-nowrap">
+                        {e.effectiveDate.slice(0, 10)}
+                      </td>
+                      <td className="py-1 pr-2 text-gray-400 whitespace-nowrap">
+                        {formatDateTime(e.loggedAt)}
+                      </td>
+                      <td className="py-1 pr-2">
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${e.newType ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {TX_TYPE_LABEL[e.txType] ?? e.txType}
+                        </span>
+                      </td>
+                      <td className="py-1 pr-2 text-gray-700">{e.poolerName}</td>
+                      <td className="py-1 text-gray-800">
+                        {e.playerName}
+                        <span className="text-gray-400 text-xs ml-1">{e.teamCode}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })()}
       </div>
     </div>
   )

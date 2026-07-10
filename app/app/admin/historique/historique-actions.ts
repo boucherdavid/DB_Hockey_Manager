@@ -79,6 +79,15 @@ export async function submitHistChangeAction(
 ): Promise<{ error?: string }> {
   const db = createAdminClient()
   const ts = `${input.date}T12:00:00Z`
+  const changeType = `hist_${input.txType}`
+
+  async function log(playerId: number, poolerId: string, newType: string | null, oldType: string | null = null) {
+    await db.from('roster_change_log').insert({
+      player_id: playerId, pooler_id: poolerId, pool_season_id: input.poolSeasonId,
+      change_type: changeType, old_type: oldType, new_type: newType,
+      changed_by: null, changed_at: ts, is_admin_override: true,
+    })
+  }
 
   // Retirer le joueur du pooler A
   if (input.playerOutAId) {
@@ -90,6 +99,7 @@ export async function submitHistChangeAction(
       .eq('pool_season_id', input.poolSeasonId)
       .is('removed_at', null)
     if (error) return { error: `Retrait A : ${error.message}` }
+    await log(input.playerOutAId, input.poolerAId, null)
   }
 
   // Ajouter un joueur chez le pooler A
@@ -103,6 +113,7 @@ export async function submitHistChangeAction(
       added_at: ts,
     })
     if (error) return { error: `Ajout A : ${error.message}` }
+    await log(input.playerInAId, input.poolerAId, input.playerInAType)
   }
 
   // Échange entre poolers : côté B
@@ -118,6 +129,7 @@ export async function submitHistChangeAction(
         .eq('pool_season_id', input.poolSeasonId)
         .is('removed_at', null)
       if (error) return { error: `Retrait B : ${error.message}` }
+      await log(input.playerInAId, input.poolerBId, null)
     }
     // Ajouter playerOutA chez le pooler B (il arrive de A)
     if (input.playerOutAId) {
@@ -130,40 +142,42 @@ export async function submitHistChangeAction(
         added_at: ts,
       })
       if (error) return { error: `Ajout B : ${error.message}` }
+      await log(input.playerOutAId, input.poolerBId, input.playerInBType)
     }
   }
 
   revalidatePath('/admin/historique')
+  revalidatePath('/admin/effectifs')
   return {}
 }
 
 export type HistLogEntry = {
-  action: 'ajout' | 'retrait'
+  txType: HistTxType
   poolerName: string
   playerName: string
   teamCode: string | null
-  playerType: string
-  date: string
+  newType: string | null
+  effectiveDate: string   // changed_at — date du mouvement dans le pool
+  loggedAt: string        // created_at — moment réel de la saisie
 }
 
 export async function getHistLogAction(poolSeasonId: number): Promise<HistLogEntry[]> {
   const db = createAdminClient()
   const { data } = await db
-    .from('pooler_rosters')
-    .select('player_type, added_at, removed_at, players(first_name, last_name, teams(code)), poolers(name)')
+    .from('roster_change_log')
+    .select('change_type, new_type, changed_at, created_at, players(first_name, last_name, teams(code)), poolers(name)')
     .eq('pool_season_id', poolSeasonId)
-    .order('added_at', { ascending: false })
-    .limit(60)
+    .like('change_type', 'hist_%')
+    .order('created_at', { ascending: false })
+    .limit(100)
 
-  const entries: HistLogEntry[] = []
-  for (const r of (data ?? []) as any[]) {
-    const playerName = `${r.players?.first_name ?? ''} ${r.players?.last_name ?? ''}`.trim()
-    const poolerName = (r.poolers as any)?.name ?? ''
-    const teamCode = r.players?.teams?.code ?? null
-    entries.push({ action: 'ajout', poolerName, playerName, teamCode, playerType: r.player_type, date: r.added_at })
-    if (r.removed_at) {
-      entries.push({ action: 'retrait', poolerName, playerName, teamCode, playerType: r.player_type, date: r.removed_at })
-    }
-  }
-  return entries.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50)
+  return ((data ?? []) as any[]).map(r => ({
+    txType: (r.change_type as string).replace('hist_', '') as HistTxType,
+    poolerName: r.poolers?.name ?? '',
+    playerName: `${r.players?.first_name ?? ''} ${r.players?.last_name ?? ''}`.trim(),
+    teamCode: r.players?.teams?.code ?? null,
+    newType: r.new_type,
+    effectiveDate: r.changed_at,
+    loggedAt: r.created_at,
+  }))
 }
