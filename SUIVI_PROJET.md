@@ -56,6 +56,17 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-09/10
+
+**[Feat/Fix] — Onglet Historique : journal à deux dates, filtre par type, fix confirmation** (`app/app/admin/historique/HistoriqueManager.tsx`, `app/app/admin/historique/historique-actions.ts`, `supabase_migrations/roster_change_log_created_at.sql`, `docs/saisie-historique-mouvements.md`) :
+- Contexte : en pleine saisie de l'historique (voir entrée précédente), David a signalé 3 problèmes sur l'onglet Historique : (1) le journal ne montrait pas ses saisies récentes — enterrées sous des entrées plus "récentes" en date effective (ex. lot du 2026-06-10) car le tri se faisait sur `added_at`/`removed_at`, pas sur le moment réel de la saisie ; (2) pas de filtre par type de transaction ; (3) le message de succès à la soumission ne s'affichait jamais.
+- Cause du (3), trouvée en lisant le code : `handleSubmit()` faisait `setSuccess(true)` puis appelait `reset()` qui faisait `setSuccess(false)` — React batch les deux dans le même rendu, donc `success` finissait toujours à `false`. Vrai bug, pas juste un manque de feedback.
+- Fix (1)+(2) : ni `pooler_rosters` ni `roster_change_log` n'avaient de colonne distinguant "date effective" de "date de saisie". Migration `roster_change_log_created_at.sql` (`created_at TIMESTAMPTZ DEFAULT NOW()`), exécutée par David en staging et prod. `submitHistChangeAction` écrit maintenant dans `roster_change_log` (nouveaux `change_type` préfixés `hist_` — `hist_swap`/`hist_trade`/`hist_ajout`/`hist_retrait` — jamais comptés dans les budgets agents libres/LTIR existants, qui filtrent sur `signature_agent_libre`/`signature_ltir`). `getHistLogAction` réécrit pour lire `roster_change_log` au lieu de dériver de `pooler_rosters`, avec tri par `created_at desc` (date de saisie) et filtre client par `change_type`.
+- Fix (3) : séparation de `reset()` (déclenché par changement de type/pooler, vide tout y compris `success`) et `resetSelections()` (déclenché après soumission réussie, vide seulement les champs joueur — garde pooler + date pour enchaîner, décision confirmée avec David).
+- Conséquence attendue et acceptée : les entrées du journal saisies avant ce fix (lot du 2026-06-10, entrées du 2026-07-09) ne réapparaissent pas dans la nouvelle vue — elles restent correctes dans `pooler_rosters`, seul l'affichage du journal repart à neuf.
+- Doc `docs/saisie-historique-mouvements.md` mise à jour en conséquence.
+- `npx tsc --noEmit` et `npx eslint` validés sur les fichiers touchés — aucune nouvelle erreur (les erreurs `any`/`set-state-in-effect` restantes sont préexistantes, hors scope).
+
 ### 2026-07-09
 
 **[Fix] — Poolers admin exclus du sélecteur de l'onglet Historique** (`app/app/admin/effectifs/page.tsx`, `app/app/admin/historique/page.tsx`) :
