@@ -56,6 +56,16 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-11
+
+**[Fix] — `app/.env.local` pointait sur staging au lieu de prod + `stop_app.ps1` cassé** (`app/.env.local`, `app/.env.local.prod`, `stop_app.ps1`) :
+- Contexte : David a saisi une transaction dans l'onglet Historique et ne la retrouvait pas dans le journal. Investigation : `roster_change_log` prod ne contenait aucune ligne `hist_%`, mais staging en avait 2 fraîches — le serveur dev local était configuré sur staging (`pwblgjdmuaoyfixeyltg`), probablement depuis un `start_staging.ps1` interrompu sans Ctrl+C (le `.env.local.prod` de secours datait du 8 mai et contenait déjà des valeurs staging, donc lui-même inutilisable comme sauvegarde).
+- Corrigé `app/.env.local` et `app/.env.local.prod` avec les vraies valeurs prod (`unnghyqtbkopflqgfori`) : URL et `SUPABASE_SERVICE_ROLE_KEY` repris de `python_script/.env`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` fourni par David depuis le dashboard Supabase (onglet Legacy anon/service_role — vérifié par le payload JWT décodé : bon `ref`, mêmes `iat`/`exp` que la clé service_role).
+- David a demandé de valider en staging avant de continuer en prod → basculé via `start_staging.ps1` (qui sauvegarde maintenant correctement la config prod réparée).
+- Bug trouvé en cours de route : `stop_app.ps1` utilisait `$pid` comme nom de variable — `$pid` est une variable automatique PowerShell en lecture seule (PID du process courant), donc l'affectation échouait silencieusement à **chaque** appel du script, l'empêchant d'arrêter quoi que ce soit. Renommé en `$targetPid`. Testé après fix : fonctionne, et confirme au passage que le `finally` de `start_staging.ps1` restaure bien `.env.local` vers prod même quand le serveur est tué depuis un autre terminal (pas seulement via Ctrl+C dans la fenêtre d'origine).
+- État à la fin de la session : aucun serveur local actif, `.env.local` repointé sur prod (restauré automatiquement par le `finally`). La transaction test de David reste dans staging (inoffensif) — à ressaisir en prod une fois la validation staging terminée.
+- `.env.local`/`.env.local.prod` sont gitignorés, aucune clé commitée.
+
 ### 2026-07-09/10
 
 **[Feat/Fix] — Onglet Historique : journal à deux dates, filtre par type, fix confirmation** (`app/app/admin/historique/HistoriqueManager.tsx`, `app/app/admin/historique/historique-actions.ts`, `supabase_migrations/roster_change_log_created_at.sql`, `docs/saisie-historique-mouvements.md`) :
