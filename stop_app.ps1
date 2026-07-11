@@ -9,16 +9,16 @@ if (-not $connections) {
 }
 
 foreach ($connection in $connections) {
-    $pid = $connection.OwningProcess
-    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $pid"
+    $targetPid = $connection.OwningProcess
+    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $targetPid"
 
-    Write-Host "Arret du PID $pid"
+    Write-Host "Arret du PID $targetPid"
     if ($process) {
         Write-Host "Processus: $($process.Name)"
         Write-Host "Commande : $($process.CommandLine)"
     }
 
-    Stop-Process -Id $pid -Force
+    Stop-Process -Id $targetPid -Force
 }
 
 Write-Host 'Le port 3000 est maintenant libre.'
