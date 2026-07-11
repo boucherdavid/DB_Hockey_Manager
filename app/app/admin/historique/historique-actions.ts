@@ -82,11 +82,12 @@ export async function submitHistChangeAction(
   const changeType = `hist_${input.txType}`
 
   async function log(playerId: number, poolerId: string, newType: string | null, oldType: string | null = null) {
-    await db.from('roster_change_log').insert({
+    const { error } = await db.from('roster_change_log').insert({
       player_id: playerId, pooler_id: poolerId, pool_season_id: input.poolSeasonId,
       change_type: changeType, old_type: oldType, new_type: newType,
       changed_by: null, changed_at: ts, is_admin_override: true,
     })
+    if (error) console.error('submitHistChangeAction log:', error.message)
   }
 
   // Retirer le joueur du pooler A
@@ -163,13 +164,20 @@ export type HistLogEntry = {
 
 export async function getHistLogAction(poolSeasonId: number): Promise<HistLogEntry[]> {
   const db = createAdminClient()
-  const { data } = await db
+  // poolers!roster_change_log_pooler_id_fkey : roster_change_log a 2 FK vers poolers
+  // (pooler_id et changed_by) — PostgREST refuse un embed "poolers(...)" ambigu.
+  const { data, error } = await db
     .from('roster_change_log')
-    .select('change_type, new_type, changed_at, created_at, players(first_name, last_name, teams(code)), poolers(name)')
+    .select('change_type, new_type, changed_at, created_at, players(first_name, last_name, teams(code)), poolers!roster_change_log_pooler_id_fkey(name)')
     .eq('pool_season_id', poolSeasonId)
     .like('change_type', 'hist_%')
     .order('created_at', { ascending: false })
     .limit(100)
+
+  if (error) {
+    console.error('getHistLogAction:', error.message)
+    return []
+  }
 
   return ((data ?? []) as any[]).map(r => ({
     txType: (r.change_type as string).replace('hist_', '') as HistTxType,
