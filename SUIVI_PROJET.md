@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-11 (suite)
+
+**[Fix] — Journal Historique toujours vide malgré des lignes bien écrites** (`app/app/admin/historique/historique-actions.ts`) :
+- Contexte : après le fix env staging/prod (voir plus haut), David a refait sa transaction en staging — toujours absente du journal. Vérification directe en base : les lignes `hist_swap` étaient bien présentes dans `roster_change_log`, donc l'écriture fonctionnait — le problème était côté lecture.
+- Cause trouvée en reproduisant la requête de `getHistLogAction` directement (Python/postgrest) : `roster_change_log` a deux FK vers `poolers` (`pooler_id` et `changed_by`), donc l'embed `poolers(name)` est ambigu pour PostgREST (erreur `PGRST201`). Le code faisait `const { data } = await db.from(...).select(...)` sans jamais vérifier `error` — la requête échouait silencieusement et `(data ?? [])` retombait sur un tableau vide, exactement le symptôme observé.
+- Fix : `poolers!roster_change_log_pooler_id_fkey(name)` pour lever l'ambiguïté. Ajout de la vérification d'erreur dans `getHistLogAction` et dans le helper `log()` de `submitHistChangeAction` (qui avait le même angle mort) pour que ce genre d'échec ne redevienne pas silencieux.
+- Validé en rejouant la requête corrigée directement contre staging : les 4 lignes `hist_swap` de David reviennent correctement, pooler "David" bien résolu.
+- Bug de code introduit dans le commit `3209e5d` de la veille (le typecheck/eslint ne peuvent pas détecter une ambiguïté de relation PostgREST au runtime) — leçon : vérifier systématiquement `error` sur les requêtes Supabase avec embed multi-FK, et idéalement tester une lecture réelle après un changement de ce type plutôt que de se fier au seul typecheck.
+
 ### 2026-07-11
 
 **[Fix] — `app/.env.local` pointait sur staging au lieu de prod + `stop_app.ps1` cassé** (`app/.env.local`, `app/.env.local.prod`, `stop_app.ps1`) :
