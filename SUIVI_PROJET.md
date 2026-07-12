@@ -56,6 +56,17 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-12 (suite)
+
+**[Fix+Feat] — "Échange même pooler" faisait un retrait complet au lieu d'un ajustement actif/réserve ; ajout de "Changement de type"** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`) :
+- Contexte : David a remarqué en consultant son alignement réel que Dustin Wolf affichait 3 périodes (159 pts au lieu de 53) et que Spencer Knight, censé être réserviste, apparaissait actif.
+- Investigation complète de l'historique `pooler_rosters`/`roster_change_log` pour ces 2 joueurs chez David : le vrai ajustement actif/réserve que David avait fait le 9 juillet (via l'onglet Mouvements — Wolf→réserve, Knight→actif) était légitime. Mais notre test "Échange même pooler" de la veille (censé représenter "Wolf remplace Knight le 8 octobre") avait fait un **retrait complet** de Knight (pas un passage en réserve), écrasant sa vraie fiche continue depuis le 7 octobre. En plus, Wolf était déjà chez David depuis le 7 octobre (pas le 8) — le test n'était donc pas un vrai fait historique, juste une validation de l'outil.
+- **Cause racine** : l'onglet Historique n'avait que 4 types (swap/trade/ajout/retrait), tous des départs/arrivées complets du pool — aucun moyen d'entrer un simple changement de statut (actif↔réserviste↔recrue) sans retirer le joueur, ce qui casse sa fenêtre `added_at`/`removed_at` continue utilisée par `buildStandings()`.
+- Nettoyage en staging : suppression des lignes `pooler_rosters` fantômes créées par nos 2 tests (id 339, 340) et des entrées `roster_change_log` correspondantes (369, 374), restauration de Wolf (id=33, réserviste, continu depuis le 7 oct) et Knight (id=34, actif, continu depuis le 7 oct) à leur état réel (`removed_at=null`).
+- **Nouvelle action "Changement de type"** dans Historique : un joueur + son nouveau type (actif/réserviste/recrue), simple `UPDATE player_type` sur la ligne existante — pas de retrait/ajout. David a confirmé avoir besoin de ce type de mouvement pour beaucoup de son historique (montées de recrues, ajustements actif/réserve). Choix : une action générique plutôt que de dupliquer les paires "swap"/"activate_rookie" de Mouvements — plus flexible pour de la reconstruction historique libre (2 saisies indépendantes couvrent n'importe quelle combinaison).
+- Requêtes validées directement contre staging (Python) avant de pousser le code.
+- Toujours en attente : nettoyage optionnel des entrées `roster_change_log` de troubleshooting (id 366-368, 371-372, type 'retrait'/'deactivation'/'activation' avec `changed_at` = aujourd'hui) — n'affectent pas l'état actuel du roster, juste du bruit dans l'audit trail. Pas fait, David n'a pas demandé.
+
 ### 2026-07-12
 
 **[Fix] — Doublon Dustin Wolf en staging (données de test) nettoyé** (base staging, aucun code) :

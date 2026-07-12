@@ -64,10 +64,21 @@ du pool.
    - Choisir le **type de transaction** :
      - **Échange même pooler** — sortie + entrée chez le même pooler
        (remplacement 1 pour 1, ex. libération + signature simultanée).
+       ⚠️ Le joueur sortant est **retiré complètement du pool**
+       (`is_active=false`, `removed_at` posé) — ce n'est **pas** un
+       ajustement actif↔réserviste (le joueur reste dans l'équipe). Pour
+       ça, utiliser **Changement de type** ci-dessous.
      - **Échange entre poolers** — trade A ↔ B (un joueur part de A vers B,
        un autre part de B vers A).
      - **Ajout seulement** — signature sans coupure correspondante.
      - **Retrait seulement** — coupure sans remplacement.
+     - **Changement de type** — un joueur déjà dans l'équipe change de
+       statut (actif ↔ réserviste ↔ recrue) **sans quitter le pool** :
+       `player_type` est mis à jour sur sa ligne existante, `added_at`
+       reste intact. À utiliser pour les ajustements d'alignement
+       (monter/descendre un joueur) et les mouvements de recrues
+       (promotion, retour en banque) — la majorité des mouvements
+       d'un historique de saison normale, en fait.
    - Choisir la **date** exacte du mouvement (devient `added_at`/`removed_at`
      à midi UTC ce jour-là).
    - Sélectionner le/les pooler(s) et joueur(s) concernés (recherche par nom
