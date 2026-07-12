@@ -5,6 +5,7 @@ import {
   searchHistPlayersAction,
   submitHistChangeAction,
   getHistLogAction,
+  checkHistReactivationDelayAction,
   type HistRosterEntry,
   type HistPlayerResult,
   type HistLogEntry,
@@ -150,6 +151,10 @@ export default function HistoriqueManager({
   const [log, setLog] = useState<HistLogEntry[]>(initialLog)
   const [logFilter, setLogFilter] = useState<HistTxType | 'all'>('all')
 
+  // Avertissement (non bloquant) : délai de réactivation
+  const [reactivationWarningA, setReactivationWarningA] = useState<string | null>(null)
+  const [reactivationWarningB, setReactivationWarningB] = useState<string | null>(null)
+
   const poolerName = poolers.find(p => p.id === poolerAId)?.name ?? ''
 
   const refreshLog = useCallback(async () => {
@@ -170,6 +175,20 @@ export default function HistoriqueManager({
     getHistRosterAction(poolerBId, poolSeasonId).then(setRosterB)
   }, [poolerBId, poolSeasonId])
 
+  // Avertissement délai de réactivation — côté A (joueur ajouté chez poolerA)
+  useEffect(() => {
+    if (txType === 'retrait' || !poolerAId || !playerInA || !date) { setReactivationWarningA(null); return }
+    checkHistReactivationDelayAction(poolerAId, playerInA.id, poolSeasonId, date)
+      .then(r => setReactivationWarningA(r.warning))
+  }, [poolerAId, playerInA, poolSeasonId, date, txType])
+
+  // Avertissement délai de réactivation — côté B (joueur ajouté chez poolerB, trade seulement)
+  useEffect(() => {
+    if (txType !== 'trade' || !poolerBId || !playerOutAId || !date) { setReactivationWarningB(null); return }
+    checkHistReactivationDelayAction(poolerBId, playerOutAId, poolSeasonId, date)
+      .then(r => setReactivationWarningB(r.warning))
+  }, [poolerBId, playerOutAId, poolSeasonId, date, txType])
+
   // Vide les champs de sélection joueur (garde pooler + date pour enchaîner rapidement)
   function resetSelections() {
     setPlayerOutAId(null)
@@ -177,6 +196,8 @@ export default function HistoriqueManager({
     setPlayerInAType('actif')
     setPlayerInBType('actif')
     setError(null)
+    setReactivationWarningA(null)
+    setReactivationWarningB(null)
   }
 
   // Reset complet déclenché par un changement de contexte (type ou pooler A)
@@ -298,6 +319,11 @@ export default function HistoriqueManager({
                 </label>
               ))}
             </div>
+            {reactivationWarningA && (
+              <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                ⚠ {reactivationWarningA}
+              </p>
+            )}
           </div>
         )}
 
@@ -343,6 +369,11 @@ export default function HistoriqueManager({
                 </label>
               ))}
             </div>
+            {reactivationWarningB && (
+              <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                ⚠ {reactivationWarningB}
+              </p>
+            )}
           </div>
         )}
 
@@ -419,6 +450,14 @@ export default function HistoriqueManager({
                       <td className="py-1 text-gray-800">
                         {e.playerName}
                         <span className="text-gray-400 text-xs ml-1">{e.teamCode}</span>
+                        {e.reactivationWarning && (
+                          <span
+                            className="ml-1 text-orange-600 cursor-help"
+                            title={e.reactivationWarning}
+                          >
+                            ⚠
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
