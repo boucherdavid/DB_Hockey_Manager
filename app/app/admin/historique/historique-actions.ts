@@ -109,6 +109,10 @@ export type HistChangeInput = {
   playerInBType: 'actif' | 'reserviste'
   // type_change seulement — nouveau player_type du joueur playerOutAId, sans le retirer du pool
   typeChangeTo: 'actif' | 'reserviste' | 'recrue' | null
+  // type_change seulement — 2e joueur optionnel, pour un échange (ex: un descend, un monte)
+  // dans la même transaction plutôt que 2 saisies séparées
+  typeChangeSecondPlayerId: number | null
+  typeChangeSecondTo: 'actif' | 'reserviste' | 'recrue' | null
 }
 
 export async function submitHistChangeAction(
@@ -128,27 +132,41 @@ export async function submitHistChangeAction(
   }
 
   // Changement de type (actif ↔ réserviste ↔ recrue) sans retrait/ajout — cas à part,
-  // le joueur reste dans le pool.
+  // le(s) joueur(s) restent dans le pool. Un 2e joueur optionnel permet un échange
+  // (un descend, un monte) en une seule transaction.
   if (input.txType === 'type_change') {
     if (!input.playerOutAId || !input.typeChangeTo) return { error: 'Joueur ou type manquant' }
-    const { data: existing } = await db
-      .from('pooler_rosters')
-      .select('player_type')
-      .eq('pooler_id', input.poolerAId)
-      .eq('player_id', input.playerOutAId)
-      .eq('pool_season_id', input.poolSeasonId)
-      .is('removed_at', null)
-      .maybeSingle()
-    if (!existing) return { error: 'Entrée introuvable dans le roster actuel' }
-    const { error } = await db
-      .from('pooler_rosters')
-      .update({ player_type: input.typeChangeTo })
-      .eq('pooler_id', input.poolerAId)
-      .eq('player_id', input.playerOutAId)
-      .eq('pool_season_id', input.poolSeasonId)
-      .is('removed_at', null)
-    if (error) return { error: `Changement de type : ${error.message}` }
-    await log(input.playerOutAId, input.poolerAId, input.typeChangeTo, existing.player_type)
+
+    async function applyTypeChange(playerId: number, newType: string) {
+      const { data: existing } = await db
+        .from('pooler_rosters')
+        .select('player_type')
+        .eq('pooler_id', input.poolerAId)
+        .eq('player_id', playerId)
+        .eq('pool_season_id', input.poolSeasonId)
+        .is('removed_at', null)
+        .maybeSingle()
+      if (!existing) return `Entrée introuvable dans le roster actuel (joueur ${playerId})`
+      const { error } = await db
+        .from('pooler_rosters')
+        .update({ player_type: newType })
+        .eq('pooler_id', input.poolerAId)
+        .eq('player_id', playerId)
+        .eq('pool_season_id', input.poolSeasonId)
+        .is('removed_at', null)
+      if (error) return `Changement de type : ${error.message}`
+      await log(playerId, input.poolerAId, newType, existing.player_type)
+      return null
+    }
+
+    const err1 = await applyTypeChange(input.playerOutAId, input.typeChangeTo)
+    if (err1) return { error: err1 }
+
+    if (input.typeChangeSecondPlayerId && input.typeChangeSecondTo) {
+      const err2 = await applyTypeChange(input.typeChangeSecondPlayerId, input.typeChangeSecondTo)
+      if (err2) return { error: err2 }
+    }
+
     revalidatePath('/admin/historique')
     revalidatePath('/admin/effectifs')
     return {}

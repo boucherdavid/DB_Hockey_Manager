@@ -144,6 +144,8 @@ export default function HistoriqueManager({
   const [playerInA, setPlayerInA] = useState<HistPlayerResult | null>(null)
   const [playerInAType, setPlayerInAType] = useState<'actif' | 'reserviste'>('actif')
   const [typeChangeTo, setTypeChangeTo] = useState<'actif' | 'reserviste' | 'recrue' | null>(null)
+  const [typeChangeSecondPlayerId, setTypeChangeSecondPlayerId] = useState<number | null>(null)
+  const [typeChangeSecondTo, setTypeChangeSecondTo] = useState<'actif' | 'reserviste' | 'recrue' | null>(null)
 
   // Côté B (trade)
   const [poolerBId, setPoolerBId] = useState('')
@@ -200,6 +202,8 @@ export default function HistoriqueManager({
     setPlayerInAType('actif')
     setPlayerInBType('actif')
     setTypeChangeTo(null)
+    setTypeChangeSecondPlayerId(null)
+    setTypeChangeSecondTo(null)
     setError(null)
     setReactivationWarningA(null)
     setReactivationWarningB(null)
@@ -226,6 +230,8 @@ export default function HistoriqueManager({
         poolerBId: txType === 'trade' ? poolerBId : null,
         playerInBType,
         typeChangeTo: txType === 'type_change' ? typeChangeTo : null,
+        typeChangeSecondPlayerId: txType === 'type_change' ? typeChangeSecondPlayerId : null,
+        typeChangeSecondTo: txType === 'type_change' ? typeChangeSecondTo : null,
       })
       if (result.error) {
         setError(result.error)
@@ -245,7 +251,7 @@ export default function HistoriqueManager({
     txType === 'trade'       ? (!!playerOutAId && !!playerInA && !!poolerBId) :
     txType === 'ajout'       ? !!playerInA :
     txType === 'retrait'     ? !!playerOutAId :
-    txType === 'type_change' ? !!playerOutAId && !!typeChangeTo : false
+    txType === 'type_change' ? !!playerOutAId && !!typeChangeTo && (!typeChangeSecondPlayerId || !!typeChangeSecondTo) : false
   )
 
   return (
@@ -299,7 +305,7 @@ export default function HistoriqueManager({
             <RosterSelect
               label={
                 txType === 'trade' ? 'Joueur A envoie (quitte A → va chez B)' :
-                txType === 'type_change' ? 'Joueur' : 'Joueur retiré / cédé'
+                txType === 'type_change' ? 'Joueur 1' : 'Joueur retiré / cédé'
               }
               roster={rosterA}
               value={playerOutAId}
@@ -308,21 +314,46 @@ export default function HistoriqueManager({
           </div>
         )}
 
-        {/* Nouveau type (type_change seulement) — le joueur reste dans le pool */}
+        {/* Nouveau type (type_change seulement) — le(s) joueur(s) restent dans le pool */}
         {txType === 'type_change' && (
-          <div className="space-y-1">
-            <label className="text-xs text-gray-500">Nouveau type</label>
-            <div className="flex gap-3">
-              {PLAYER_TYPES.map(t => (
-                <label key={t} className="flex items-center gap-1 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={typeChangeTo === t}
-                    onChange={() => setTypeChangeTo(t)}
-                  />
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </label>
-              ))}
+          <div className="space-y-4 border rounded p-3 bg-gray-50">
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500">Nouveau type — Joueur 1</label>
+              <div className="flex gap-3">
+                {PLAYER_TYPES.map(t => (
+                  <label key={t} className="flex items-center gap-1 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={typeChangeTo === t}
+                      onChange={() => setTypeChangeTo(t)}
+                    />
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t pt-3 space-y-1">
+              <RosterSelect
+                label="Joueur 2 (optionnel — pour un échange actif/réserve/recrue en une seule transaction)"
+                roster={rosterA.filter(r => r.playerId !== playerOutAId)}
+                value={typeChangeSecondPlayerId}
+                onChange={setTypeChangeSecondPlayerId}
+              />
+              {typeChangeSecondPlayerId && (
+                <div className="flex gap-3 pt-1">
+                  {PLAYER_TYPES.map(t => (
+                    <label key={t} className="flex items-center gap-1 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={typeChangeSecondTo === t}
+                        onChange={() => setTypeChangeSecondTo(t)}
+                      />
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
