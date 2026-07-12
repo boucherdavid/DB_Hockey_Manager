@@ -19,7 +19,10 @@ const TX_TYPES: { value: HistTxType; label: string }[] = [
   { value: 'trade',  label: 'Échange entre poolers' },
   { value: 'ajout',  label: 'Ajout seulement' },
   { value: 'retrait', label: 'Retrait seulement' },
+  { value: 'type_change', label: 'Changement de type' },
 ]
+
+const PLAYER_TYPES = ['actif', 'reserviste', 'recrue'] as const
 
 const TX_TYPE_LABEL: Record<HistTxType, string> = Object.fromEntries(
   TX_TYPES.map(t => [t.value, t.label]),
@@ -140,6 +143,7 @@ export default function HistoriqueManager({
   const [playerOutAId, setPlayerOutAId] = useState<number | null>(null)
   const [playerInA, setPlayerInA] = useState<HistPlayerResult | null>(null)
   const [playerInAType, setPlayerInAType] = useState<'actif' | 'reserviste'>('actif')
+  const [typeChangeTo, setTypeChangeTo] = useState<'actif' | 'reserviste' | 'recrue' | null>(null)
 
   // Côté B (trade)
   const [poolerBId, setPoolerBId] = useState('')
@@ -195,6 +199,7 @@ export default function HistoriqueManager({
     setPlayerInA(null)
     setPlayerInAType('actif')
     setPlayerInBType('actif')
+    setTypeChangeTo(null)
     setError(null)
     setReactivationWarningA(null)
     setReactivationWarningB(null)
@@ -220,6 +225,7 @@ export default function HistoriqueManager({
         playerInAType,
         poolerBId: txType === 'trade' ? poolerBId : null,
         playerInBType,
+        typeChangeTo: txType === 'type_change' ? typeChangeTo : null,
       })
       if (result.error) {
         setError(result.error)
@@ -235,10 +241,11 @@ export default function HistoriqueManager({
   }
 
   const canSubmit = !!poolerAId && !!date && (
-    txType === 'swap'   ? (!!playerOutAId && !!playerInA) :
-    txType === 'trade'  ? (!!playerOutAId && !!playerInA && !!poolerBId) :
-    txType === 'ajout'  ? !!playerInA :
-    txType === 'retrait'? !!playerOutAId : false
+    txType === 'swap'        ? (!!playerOutAId && !!playerInA) :
+    txType === 'trade'       ? (!!playerOutAId && !!playerInA && !!poolerBId) :
+    txType === 'ajout'       ? !!playerInA :
+    txType === 'retrait'     ? !!playerOutAId :
+    txType === 'type_change' ? !!playerOutAId && !!typeChangeTo : false
   )
 
   return (
@@ -286,11 +293,14 @@ export default function HistoriqueManager({
           </select>
         </div>
 
-        {/* Player OUT (swap / trade / retrait) */}
+        {/* Player OUT (swap / trade / retrait / type_change) */}
         {txType !== 'ajout' && (
           <div className="space-y-1">
             <RosterSelect
-              label={txType === 'trade' ? 'Joueur A envoie (quitte A → va chez B)' : 'Joueur retiré / cédé'}
+              label={
+                txType === 'trade' ? 'Joueur A envoie (quitte A → va chez B)' :
+                txType === 'type_change' ? 'Joueur' : 'Joueur retiré / cédé'
+              }
               roster={rosterA}
               value={playerOutAId}
               onChange={setPlayerOutAId}
@@ -298,8 +308,27 @@ export default function HistoriqueManager({
           </div>
         )}
 
+        {/* Nouveau type (type_change seulement) — le joueur reste dans le pool */}
+        {txType === 'type_change' && (
+          <div className="space-y-1">
+            <label className="text-xs text-gray-500">Nouveau type</label>
+            <div className="flex gap-3">
+              {PLAYER_TYPES.map(t => (
+                <label key={t} className="flex items-center gap-1 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={typeChangeTo === t}
+                    onChange={() => setTypeChangeTo(t)}
+                  />
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Player IN (swap / trade / ajout) */}
-        {txType !== 'retrait' && (
+        {txType !== 'retrait' && txType !== 'type_change' && (
           <div className="space-y-3">
             <PlayerSearch
               label={txType === 'trade' ? 'Joueur A reçoit (vient de B)' : 'Joueur acquis / activé'}
