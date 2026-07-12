@@ -56,6 +56,20 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-12
+
+**[Fix] — Doublon Dustin Wolf en staging (données de test) nettoyé** (base staging, aucun code) :
+- Contexte : le bug de l'embed ambigu (entrée précédente) avait fait "disparaître" une première soumission "Échange même pooler" du journal, poussant David à la ressaisir — créant un vrai doublon `pooler_rosters` (Dustin Wolf actif ET réserviste chez David, même date).
+- David a confirmé que "Actif" était la version correcte. Supprimé directement en base (staging) : `pooler_rosters` id=338 (réserviste, en trop) et les 2 entrées `roster_change_log` redondantes (370, 373 — dont une sans effet réel puisque la 1re soumission avait déjà retiré Spencer Knight).
+- Validé après coup : un seul Wolf actif restant, journal propre à 2 lignes.
+
+**[Feat] — Avertissement non bloquant sur le délai de réactivation (onglet Historique)** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`, `docs/saisie-historique-mouvements.md`) :
+- Contexte : David a demandé si le délai de réactivation (3 jours entre désactivation et réactivation d'un joueur chez le même pooler, `pool_seasons.delai_reactivation_jours`) était pris en compte lors de la saisie. Vérification : **non, nulle part** — même l'onglet Mouvements a `checkReactivationDelay()` mais avec `if (isAdmin) return` en premier, donc jamais appliqué puisque David soumet toujours en admin.
+- Décision avec David (2 questions) : avertissement dans l'onglet **Historique seulement**, **informatif** (n'empêche pas de soumettre) — pas de blocage, car des cas légitimes existent (LTIR, etc.) et Historique doit rester libre pour reconstituer des scénarios réels.
+- `checkHistReactivationDelayAction` (nouveau) : cherche la désactivation la plus récente du même joueur chez le même pooler avant la date choisie, compare à `delai_reactivation_jours` (actuellement 3 en staging). Appelé en direct dans le formulaire (useEffect sur sélection joueur/pooler/date, côtés A et B) → message orange non bloquant si sous le délai.
+- `getHistLogAction` étendu : calcule le même avertissement pour chaque ligne déjà journalisée (comparaison en mémoire contre toutes les désactivations de la saison, une seule requête plutôt qu'une par ligne) → badge ⚠ avec tooltip dans le journal.
+- Validé par requêtes directes contre staging (mêmes requêtes que le code TS, rejouées en Python) avant de pousser — confirmé `delai_reactivation_jours = 3` en staging, aucune erreur de requête.
+
 ### 2026-07-11 (suite)
 
 **[Fix] — Journal Historique toujours vide malgré des lignes bien écrites** (`app/app/admin/historique/historique-actions.ts`) :

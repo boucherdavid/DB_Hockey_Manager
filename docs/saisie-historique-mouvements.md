@@ -86,6 +86,13 @@ du pool.
 5. Le message vert "✓ Transaction enregistrée" confirme la soumission et le
    formulaire se réinitialise (pooler et date conservés, champs joueur
    vidés) pour enchaîner rapidement sur la ligne suivante du fichier.
+6. Un avertissement orange (non bloquant) apparaît si le joueur sélectionné
+   a été retiré du même pooler il y a moins de `delai_reactivation_jours`
+   (3 jours actuellement) par rapport à la date choisie — utile pour
+   repérer une saisie qui viole involontairement cette règle. Le même
+   avertissement (badge ⚠, survol pour le détail) apparaît rétroactivement
+   dans le journal pour les lignes déjà saisies. Ça n'empêche jamais de
+   soumettre : des cas légitimes existent (LTIR, etc.).
 
 ---
 
