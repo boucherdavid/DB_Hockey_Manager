@@ -56,6 +56,13 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-12 (suite 2)
+
+**[Feat] — "Changement de type" : 2e joueur optionnel en une seule transaction** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`) :
+- David a fait remarquer que le pattern habituel est toujours pairé (un actif descend, un réserviste/recrue monte, au même moment) — la version précédente forçait 2 saisies séparées, contre-intuitif.
+- `submitHistChangeAction` : nouveau helper `applyTypeChange()` interne, appelé pour le joueur 1 puis, si fourni, pour un 2e joueur (`typeChangeSecondPlayerId`/`typeChangeSecondTo`) dans la même soumission. Reste optionnel pour les cas asymétriques (ex: promotion de recrue sans contrepartie).
+- UI : bloc "Joueur 2 (optionnel)" sous le premier, sélection depuis le roster actuel (exclut le joueur 1 déjà choisi).
+
 ### 2026-07-12 (suite)
 
 **[Fix+Feat] — "Échange même pooler" faisait un retrait complet au lieu d'un ajustement actif/réserve ; ajout de "Changement de type"** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`) :
