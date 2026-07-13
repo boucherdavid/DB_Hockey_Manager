@@ -79,6 +79,16 @@ du pool.
        (monter/descendre un joueur) et les mouvements de recrues
        (promotion, retour en banque) — la majorité des mouvements
        d'un historique de saison normale, en fait.
+   - Partout où un rôle est choisi pour un joueur qui arrive (Ajout,
+     Échange même pooler, Échange entre poolers), le choix inclut
+     **Recrue** en plus d'Actif/Réserviste — utile si le joueur reçu
+     est encore sous contrat ELC ou était déjà en banque de recrues
+     chez l'autre pooler.
+   - **Échange entre poolers** peut aussi inclure des **choix de
+     repêchage** (section qui apparaît sous "Côté B" dès qu'un des deux
+     poolers a des picks non utilisés) : cases à cocher pour les picks
+     de A qui partent vers B et vice-versa. Un échange peut être
+     pick(s)-contre-pick(s) sans aucun joueur.
    - Choisir la **date** exacte du mouvement (devient `added_at`/`removed_at`
      à midi UTC ce jour-là).
    - Sélectionner le/les pooler(s) et joueur(s) concernés (recherche par nom

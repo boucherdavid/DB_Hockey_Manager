@@ -56,6 +56,15 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-13 (suite)
+
+**[Feat] — Type "Recrue" partout + choix de repêchage dans les échanges entre poolers** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`, `docs/saisie-historique-mouvements.md`) :
+- David a signalé 2 manques en saisissant un échange entre poolers : (1) impossible de placer le joueur reçu directement en banque de recrues (utile s'il est encore sous ELC ou déjà en banque chez l'autre pooler) ; (2) impossible d'inclure des choix de repêchage échangés dans la même transaction.
+- `playerInAType`/`playerInBType` élargis à `'actif' | 'reserviste' | 'recrue'` (nouveau type `HistPlayerType`).
+- Nouvelle section "Choix de repêchage échangés" sous Côté B (visible seulement si l'un des deux poolers a des picks non utilisés) : cases à cocher par pick (saison + ronde), transfert de `pool_draft_picks.current_owner_id` à la soumission — même pattern que `admin/transactions/actions.ts` (déjà utilisé pour les vraies transactions). Vérification que le pick appartient encore au bon pooler et n'est pas déjà utilisé avant transfert.
+- `canSubmit` assoupli pour permettre un échange **pick(s)-contre-pick(s) sans aucun joueur**.
+- Validé (requête picks) directement contre staging avant de pousser.
+
 ### 2026-07-13
 
 **[Fix] — Un joueur mis en réserve perdait tous ses points de saison dans le classement** (`app/lib/standings.ts`, `app/app/poolers/[id]/PoolerPageTabs.tsx`, `docs/saisie-historique-mouvements.md`) :
