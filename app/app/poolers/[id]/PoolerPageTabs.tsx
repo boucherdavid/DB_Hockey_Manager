@@ -246,7 +246,9 @@ export default function PoolerPageTabs({
     }`
 
   const sorted = groupAndSort(alignementPlayers)
-  const totalPts = alignementPlayers.filter(p => p.playerType === 'actif').reduce((s, p) => s + p.poolPoints, 0)
+  // poolPoints ne compte déjà que les matchs joués pendant les segments réellement actifs
+  // (voir buildStandings) — pas besoin de refiltrer par statut actuel ici.
+  const totalPts = alignementPlayers.reduce((s, p) => s + p.poolPoints, 0)
 
   const signaturesLibres = changeLog.filter(e => e.change_type === 'signature_agent_libre' && e.old_type !== 'ltir').length
   const signaturesLtir   = changeLog.filter(e => e.change_type === 'signature_agent_libre' && e.old_type === 'ltir').length
@@ -328,7 +330,7 @@ export default function PoolerPageTabs({
                 <tfoot>
                   <tr className="bg-blue-50 border-t">
                     <td colSpan={8} className="px-4 py-2 text-sm text-gray-500 font-medium">
-                      Total (actifs seulement)
+                      Total
                     </td>
                     <td className="px-2 py-2 text-center font-bold text-blue-600">{fmtPts(totalPts)}</td>
                   </tr>

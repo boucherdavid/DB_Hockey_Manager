@@ -140,6 +140,39 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
     logsByPlayer.get(gl.player_id)!.push(gl)
   }
 
+  // Historique des changements de type (actif/réserviste/ltir/recrue) par (pooler, joueur),
+  // pour ne compter les points d'une période que pendant les segments où le joueur était
+  // réellement actif — un simple changement de player_type (deactivate/activate/type_change)
+  // ne crée pas de nouvelle ligne pooler_rosters, donc une période peut couvrir plusieurs
+  // statuts successifs.
+  const { data: changeLogRows } = await admin
+    .from('roster_change_log')
+    .select('pooler_id, player_id, changed_at, new_type')
+    .eq('pool_season_id', seasonId)
+    .not('new_type', 'is', null)
+
+  const eventsByKey = new Map<string, { changedAt: number; newType: string }[]>()
+  for (const r of (changeLogRows ?? []) as { pooler_id: string; player_id: number; changed_at: string; new_type: string }[]) {
+    const key = `${r.pooler_id}::${r.player_id}`
+    if (!eventsByKey.has(key)) eventsByKey.set(key, [])
+    eventsByKey.get(key)!.push({ changedAt: new Date(r.changed_at).getTime(), newType: r.new_type })
+  }
+  for (const events of eventsByKey.values()) events.sort((a, b) => a.changedAt - b.changedAt)
+
+  // Statut du joueur à un instant donné : dernier événement connu avant ce moment,
+  // ou `fallback` (player_type de la ligne) si aucun événement ne précède (ex: rosters
+  // initiaux en mode init, qui ne journalisent rien).
+  function statusAt(key: string, timeMs: number, fallback: string): string {
+    const events = eventsByKey.get(key)
+    if (!events || events.length === 0) return fallback
+    let result = fallback
+    for (const e of events) {
+      if (e.changedAt > timeMs) break
+      result = e.newType
+    }
+    return result
+  }
+
   const poolerMap = new Map<string, { name: string; players: PlayerContrib[] }>()
 
   // Grouper les roster rows par (pooler.id, player.id)
@@ -169,6 +202,7 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
 
     const logs = logsByPlayer.get(player.id) ?? []
     const periods: PeriodContrib[] = []
+    const key = `${pooler.id}::${player.id}`
 
     for (const row of rows) {
       const addedAt  = row.added_at  ? new Date(row.added_at)  : null
@@ -181,6 +215,9 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
         const gameTime = new Date(gl.game_start_time)
         if (!addedAt || gameTime <= addedAt) continue
         if (removedAt && gameTime > removedAt) continue
+        // Ne compter que si le joueur était réellement actif au moment du match —
+        // une période peut inclure des segments réserviste/LTIR/recrue intercalés.
+        if (statusAt(key, gameTime.getTime(), row.player_type) !== 'actif') continue
         earned.goals           += gl.goals
         earned.assists         += gl.assists
         earned.goalie_wins     += gl.goalie_wins
@@ -240,9 +277,10 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
     .map(([poolerId, { name, players }]) => ({
       poolerId,
       poolerName: name,
-      totalPoints: players
-        .filter(p => p.playerType === 'actif')
-        .reduce((s, p) => s + p.poolPoints, 0),
+      // poolPoints est désormais calculé match par match selon le statut réel du joueur
+      // à ce moment (statusAt) — plus besoin de filtrer par statut actuel ici, sinon un
+      // joueur benché aujourd'hui perdrait les points gagnés pendant qu'il était actif.
+      totalPoints: players.reduce((s, p) => s + p.poolPoints, 0),
       players,
     }))
     .sort((a, b) => b.totalPoints - a.totalPoints || a.poolerName.localeCompare(b.poolerName))
