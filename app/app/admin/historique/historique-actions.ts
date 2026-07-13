@@ -95,6 +95,8 @@ export async function checkHistReactivationDelayAction(
 
 export type HistTxType = 'swap' | 'trade' | 'ajout' | 'retrait' | 'type_change'
 
+export type HistPlayerType = 'actif' | 'reserviste' | 'recrue'
+
 export type HistChangeInput = {
   poolSeasonId: number
   date: string            // YYYY-MM-DD
@@ -103,16 +105,44 @@ export type HistChangeInput = {
   poolerAId: string
   playerOutAId: number | null   // joueur qui quitte le pooler A (ou dont le type change, si type_change)
   playerInAId: number | null    // joueur qui arrive chez le pooler A
-  playerInAType: 'actif' | 'reserviste'
+  playerInAType: HistPlayerType
   // Côté B — trade seulement
   poolerBId: string | null
-  playerInBType: 'actif' | 'reserviste'
+  playerInBType: HistPlayerType
   // type_change seulement — nouveau player_type du joueur playerOutAId, sans le retirer du pool
-  typeChangeTo: 'actif' | 'reserviste' | 'recrue' | null
+  typeChangeTo: HistPlayerType | null
   // type_change seulement — 2e joueur optionnel, pour un échange (ex: un descend, un monte)
   // dans la même transaction plutôt que 2 saisies séparées
   typeChangeSecondPlayerId: number | null
-  typeChangeSecondTo: 'actif' | 'reserviste' | 'recrue' | null
+  typeChangeSecondTo: HistPlayerType | null
+  // trade seulement — choix de repêchage échangés (id de pool_draft_picks)
+  pickAIds: number[]   // picks de A, transférés vers B
+  pickBIds: number[]   // picks de B, transférés vers A
+}
+
+export type HistDraftPick = {
+  id: number
+  round: number
+  season: string
+  originalOwnerName: string | null
+}
+
+export async function getHistDraftPicksAction(poolerId: string): Promise<HistDraftPick[]> {
+  if (!poolerId) return []
+  const db = createAdminClient()
+  const { data } = await db
+    .from('pool_draft_picks')
+    .select('id, round, pool_seasons(season), original_owner:poolers!original_owner_id(name)')
+    .eq('current_owner_id', poolerId)
+    .eq('is_used', false)
+    .order('pool_season_id')
+    .order('round')
+  return ((data ?? []) as any[]).map(p => ({
+    id: p.id,
+    round: p.round,
+    season: p.pool_seasons?.season ?? '?',
+    originalOwnerName: p.original_owner?.name ?? null,
+  }))
 }
 
 export async function submitHistChangeAction(
@@ -226,6 +256,24 @@ export async function submitHistChangeAction(
       })
       if (error) return { error: `Ajout B : ${error.message}` }
       await log(input.playerOutAId, input.poolerBId, input.playerInBType)
+    }
+
+    // Choix de repêchage échangés : A → B et B → A
+    for (const pickId of input.pickAIds ?? []) {
+      const { data: pick } = await db.from('pool_draft_picks').select('current_owner_id, is_used').eq('id', pickId).single()
+      if (!pick || pick.is_used || pick.current_owner_id !== input.poolerAId) {
+        return { error: `Choix de repêchage (id: ${pickId}) invalide ou n'appartient plus à ce pooler.` }
+      }
+      const { error } = await db.from('pool_draft_picks').update({ current_owner_id: input.poolerBId }).eq('id', pickId)
+      if (error) return { error: `Transfert de pick A→B : ${error.message}` }
+    }
+    for (const pickId of input.pickBIds ?? []) {
+      const { data: pick } = await db.from('pool_draft_picks').select('current_owner_id, is_used').eq('id', pickId).single()
+      if (!pick || pick.is_used || pick.current_owner_id !== input.poolerBId) {
+        return { error: `Choix de repêchage (id: ${pickId}) invalide ou n'appartient plus à ce pooler.` }
+      }
+      const { error } = await db.from('pool_draft_picks').update({ current_owner_id: input.poolerAId }).eq('id', pickId)
+      if (error) return { error: `Transfert de pick B→A : ${error.message}` }
     }
   }
 

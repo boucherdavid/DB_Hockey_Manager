@@ -6,10 +6,13 @@ import {
   submitHistChangeAction,
   getHistLogAction,
   checkHistReactivationDelayAction,
+  getHistDraftPicksAction,
   type HistRosterEntry,
   type HistPlayerResult,
   type HistLogEntry,
   type HistTxType,
+  type HistPlayerType,
+  type HistDraftPick,
 } from './historique-actions'
 
 type Pooler = { id: string; name: string }
@@ -142,15 +145,21 @@ export default function HistoriqueManager({
   const [rosterA, setRosterA] = useState<HistRosterEntry[]>([])
   const [playerOutAId, setPlayerOutAId] = useState<number | null>(null)
   const [playerInA, setPlayerInA] = useState<HistPlayerResult | null>(null)
-  const [playerInAType, setPlayerInAType] = useState<'actif' | 'reserviste'>('actif')
-  const [typeChangeTo, setTypeChangeTo] = useState<'actif' | 'reserviste' | 'recrue' | null>(null)
+  const [playerInAType, setPlayerInAType] = useState<HistPlayerType>('actif')
+  const [typeChangeTo, setTypeChangeTo] = useState<HistPlayerType | null>(null)
   const [typeChangeSecondPlayerId, setTypeChangeSecondPlayerId] = useState<number | null>(null)
-  const [typeChangeSecondTo, setTypeChangeSecondTo] = useState<'actif' | 'reserviste' | 'recrue' | null>(null)
+  const [typeChangeSecondTo, setTypeChangeSecondTo] = useState<HistPlayerType | null>(null)
 
   // Côté B (trade)
   const [poolerBId, setPoolerBId] = useState('')
   const [rosterB, setRosterB] = useState<HistRosterEntry[]>([])
-  const [playerInBType, setPlayerInBType] = useState<'actif' | 'reserviste'>('actif')
+  const [playerInBType, setPlayerInBType] = useState<HistPlayerType>('actif')
+
+  // Choix de repêchage échangés (trade seulement)
+  const [pickAOptions, setPickAOptions] = useState<HistDraftPick[]>([])
+  const [pickBOptions, setPickBOptions] = useState<HistDraftPick[]>([])
+  const [pickAIds, setPickAIds] = useState<number[]>([])
+  const [pickBIds, setPickBIds] = useState<number[]>([])
 
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -181,6 +190,17 @@ export default function HistoriqueManager({
     getHistRosterAction(poolerBId, poolSeasonId).then(setRosterB)
   }, [poolerBId, poolSeasonId])
 
+  // Choix de repêchage disponibles (trade seulement)
+  useEffect(() => {
+    if (txType !== 'trade' || !poolerAId) { setPickAOptions([]); return }
+    getHistDraftPicksAction(poolerAId).then(setPickAOptions)
+  }, [txType, poolerAId])
+
+  useEffect(() => {
+    if (txType !== 'trade' || !poolerBId) { setPickBOptions([]); return }
+    getHistDraftPicksAction(poolerBId).then(setPickBOptions)
+  }, [txType, poolerBId])
+
   // Avertissement délai de réactivation — côté A (joueur ajouté chez poolerA)
   useEffect(() => {
     if (txType === 'retrait' || !poolerAId || !playerInA || !date) { setReactivationWarningA(null); return }
@@ -204,6 +224,8 @@ export default function HistoriqueManager({
     setTypeChangeTo(null)
     setTypeChangeSecondPlayerId(null)
     setTypeChangeSecondTo(null)
+    setPickAIds([])
+    setPickBIds([])
     setError(null)
     setReactivationWarningA(null)
     setReactivationWarningB(null)
@@ -232,6 +254,8 @@ export default function HistoriqueManager({
         typeChangeTo: txType === 'type_change' ? typeChangeTo : null,
         typeChangeSecondPlayerId: txType === 'type_change' ? typeChangeSecondPlayerId : null,
         typeChangeSecondTo: txType === 'type_change' ? typeChangeSecondTo : null,
+        pickAIds: txType === 'trade' ? pickAIds : [],
+        pickBIds: txType === 'trade' ? pickBIds : [],
       })
       if (result.error) {
         setError(result.error)
@@ -248,7 +272,10 @@ export default function HistoriqueManager({
 
   const canSubmit = !!poolerAId && !!date && (
     txType === 'swap'        ? (!!playerOutAId && !!playerInA) :
-    txType === 'trade'       ? (!!playerOutAId && !!playerInA && !!poolerBId) :
+    txType === 'trade'       ? (!!poolerBId && (
+                                 (!!playerOutAId && !!playerInA) ||
+                                 pickAIds.length > 0 || pickBIds.length > 0
+                               )) :
     txType === 'ajout'       ? !!playerInA :
     txType === 'retrait'     ? !!playerOutAId :
     txType === 'type_change' ? !!playerOutAId && !!typeChangeTo && (!typeChangeSecondPlayerId || !!typeChangeSecondTo) : false
@@ -368,7 +395,7 @@ export default function HistoriqueManager({
               onClear={() => setPlayerInA(null)}
             />
             <div className="flex gap-3">
-              {(['actif', 'reserviste'] as const).map(t => (
+              {PLAYER_TYPES.map(t => (
                 <label key={t} className="flex items-center gap-1 text-sm cursor-pointer">
                   <input
                     type="radio"
@@ -379,6 +406,9 @@ export default function HistoriqueManager({
                 </label>
               ))}
             </div>
+            <p className="text-xs text-gray-400">
+              Recrue : le joueur va directement dans la banque de recrues (ex. encore sous contrat ELC).
+            </p>
             {reactivationWarningA && (
               <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-1">
                 ⚠ {reactivationWarningA}
@@ -422,7 +452,7 @@ export default function HistoriqueManager({
             )}
             <div className="flex gap-3">
               <span className="text-xs text-gray-500">Type chez B :</span>
-              {(['actif', 'reserviste'] as const).map(t => (
+              {PLAYER_TYPES.map(t => (
                 <label key={t} className="flex items-center gap-1 text-sm cursor-pointer">
                   <input type="radio" checked={playerInBType === t} onChange={() => setPlayerInBType(t)} />
                   {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -433,6 +463,61 @@ export default function HistoriqueManager({
               <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-1">
                 ⚠ {reactivationWarningB}
               </p>
+            )}
+
+            {/* Choix de repêchage échangés */}
+            {(pickAOptions.length > 0 || pickBOptions.length > 0) && (
+              <div className="border-t pt-3 space-y-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Choix de repêchage échangés (optionnel)
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-gray-500">Picks de A → B</label>
+                    {pickAOptions.length === 0 ? (
+                      <p className="text-xs text-gray-400">Aucun pick disponible</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {pickAOptions.map(p => (
+                          <li key={p.id}>
+                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={pickAIds.includes(p.id)}
+                                onChange={e => setPickAIds(ids => e.target.checked ? [...ids, p.id] : ids.filter(i => i !== p.id))}
+                              />
+                              {p.season} — Ronde {p.round}
+                              {p.originalOwnerName && <span className="text-gray-400 text-xs"> ({p.originalOwnerName})</span>}
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-gray-500">Picks de B → A</label>
+                    {pickBOptions.length === 0 ? (
+                      <p className="text-xs text-gray-400">Aucun pick disponible</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {pickBOptions.map(p => (
+                          <li key={p.id}>
+                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={pickBIds.includes(p.id)}
+                                onChange={e => setPickBIds(ids => e.target.checked ? [...ids, p.id] : ids.filter(i => i !== p.id))}
+                              />
+                              {p.season} — Ronde {p.round}
+                              {p.originalOwnerName && <span className="text-gray-400 text-xs"> ({p.originalOwnerName})</span>}
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )}
