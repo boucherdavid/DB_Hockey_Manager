@@ -56,6 +56,16 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-13
+
+**[Fix] — Un joueur mis en réserve perdait tous ses points de saison dans le classement** (`app/lib/standings.ts`, `app/app/poolers/[id]/PoolerPageTabs.tsx`, `docs/saisie-historique-mouvements.md`) :
+- Contexte : David a remarqué, en consultant son alignement après un "Changement de type" (Spencer Knight mis en réserve), que Knight affichait quand même 53-54 pts dans le tableau — pensant que ça aurait dû refléter seulement les points d'un match précis plutôt qu'un cumul.
+- Investigation (agent Explore) : `buildStandings()` filtre le total du pooler par le `player_type` **actuel** de la ligne `pooler_rosters` (`rows[rows.length-1].player_type`), pas par le statut réel pendant chaque match. Comme `deactivate()`/`activate()` (Mouvements) et notre nouveau `type_change` (Historique) ne font qu'un `UPDATE player_type` sur la ligne existante (jamais de nouvelle ligne), mettre un joueur en réserve efface rétroactivement **tous** ses points de la fenêtre `added_at→removed_at`, même ceux gagnés pendant qu'il était vraiment actif. Confirmé sur prod : 175 actifs / 25 réservistes / 9 LTIR dans la saison 2025-26 active — potentiellement 34 joueurs affectés.
+- Fix (confirmé avec David avant de toucher au moteur de classement) : chaque période est découpée en segments actif/non-actif via `roster_change_log` (nouvelle fonction `statusAt`, utilise le dernier événement `changed_at <= heure du match`, fallback sur le `player_type` de la ligne si aucun événement ne précède). Le filtre final `.filter(p => p.playerType === 'actif')` est retiré car le gating se fait maintenant match par match. Même correction dans le total du pied de page `PoolerPageTabs.tsx` (libellé "Total (actifs seulement)" renommé simplement "Total", plus exact).
+- Validation : simulation Python de l'ancienne vs nouvelle logique contre staging (cas Spencer Knight) avant de pousser — confirmé que la date du 8 octobre 2025 saisie pour Knight (son premier vrai changement de la saison) donne bien 0 pt compté, ce que David a confirmé être correct.
+- **Nuance importante découverte et clarifiée avec David** : le fix ne "répare" un joueur que si une vraie transaction datée dans la saison existe pour lui. ~22 joueurs actuellement réservistes n'ont qu'un marqueur générique daté du 2026-06-07 (import en bloc, `old_type=None`, postérieur à la fin de saison du 16 avril) — pour eux, le calcul retombe sur leur statut actuel (comportement inchangé, pas de régression) jusqu'à ce que leur vraie date de désactivation soit saisie via Changement de type. David a confirmé : c'est le concept attendu (actif par défaut du 7 oct au 16 avril, affiné au fur et à mesure de la saisie historique) — pas une procédure standard, mais le principe reste juste.
+- Aucune migration de schéma requise — fix de code seulement, s'applique automatiquement à prod (push) et staging (hot-reload local).
+
 ### 2026-07-12 (suite 2)
 
 **[Feat] — "Changement de type" : 2e joueur optionnel en une seule transaction** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`) :

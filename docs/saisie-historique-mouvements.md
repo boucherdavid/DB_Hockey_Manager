@@ -117,6 +117,27 @@ du pool.
   `pooler_rosters` — une date mal saisie ici fausse directement les points
   attribués pour la période concernée.
 
+### Principe pour les changements de statut (actif/réserviste/recrue)
+
+Un joueur initialisé (via Admin > Initialisation) est considéré **actif par
+défaut du 7 octobre 2025 (début de saison) au 16 avril 2026 (fin de saison)**,
+tant qu'aucune transaction historique ne dit le contraire. `buildStandings()`
+découpe chaque période `pooler_rosters` en segments actif/non-actif à partir
+de `roster_change_log` (fonction `statusAt`, corrigée le 2026-07-13 —
+voir entrée SUIVI du même jour) : seuls les matchs joués pendant un segment
+**réellement actif** comptent dans le total du pooler, peu importe le statut
+*actuel* du joueur.
+
+**Tant qu'un joueur n'a pas encore de vraie transaction historique saisie**
+(ex. seulement le marqueur générique du 7 juin 2026, sans date réelle dans la
+saison), le calcul retombe sur son statut **actuel** en base — c'est
+volontaire et sans danger, mais ça veut dire que ses points ne se
+corrigeront qu'au fur et à mesure que ses vraies dates de désactivation/
+réactivation sont saisies via **Changement de type**. Un joueur affichant 0
+point compté malgré un statut visible dans son historique n'est donc pas
+forcément un bug — vérifier d'abord si sa vraie date de changement de statut
+a été saisie.
+
 ---
 
 ## Points d'attention
