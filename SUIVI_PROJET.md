@@ -56,6 +56,16 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-15 (suite)
+
+**[Chore] — Fusion start_app.ps1/start_staging.ps1, plus de notion de "prod" en local** (`start_app.ps1`, `start_staging.ps1` supprimé, `CLAUDE.md`, `python_script/setup_staging.py`) :
+- Contexte : en préparant la session précédente, constat que `app/.env.local` **et** `app/.env.local.prod` pointaient tous les deux vers staging au lieu de prod (`unnghyqtbkopflqgfori`) — la vraie config prod locale avait été perdue, probablement lors du plantage évoqué en début de session (le bloc `finally` de `start_staging.ps1` qui restaure `.env.local` n'a pas pu s'exécuter). Un incident identique était déjà documenté le 2026-05-xx (voir plus bas, ligne ~131) — donc un 2e occurrence du même problème.
+- David a clarifié qu'aucun script "prod" en local n'est nécessaire : l'app de prod tourne en continu sur Vercel (ses variables d'environnement vivent dans le dashboard Vercel, pas dans ces fichiers), donc personne n'a besoin de démarrer/arrêter une "version prod" localement — seul le test contre staging a une utilité.
+- `start_app.ps1` (l'ancien, `npm run dev` simple sans bascule d'env) supprimé, `start_staging.ps1` renommé `start_app.ps1` (`git mv`, historique préservé). Le script simplifié n'a plus de logique de sauvegarde/restauration (`.env.local.prod`) — il écrase simplement `.env.local` avec `.env.staging.local` à chaque lancement (`Copy-Item -Force`), sans rien à restaurer à l'arrêt. Ça élimine la fenêtre de plantage qui causait la corruption (plus de swap = plus rien à interrompre au mauvais moment).
+- Fichier `app/.env.local.prod` (obsolète, gitignoré) supprimé localement.
+- Références mises à jour : `CLAUDE.md` (section 2 + arborescence, précise que `start_app.ps1` cible toujours staging), `python_script/setup_staging.py` (message de fin pointait encore vers `start_staging.ps1`).
+- Aucune valeur prod reconstruite dans `app/.env.local` — inutile désormais, rien ne la consomme.
+
 ### 2026-07-15
 
 **[Feat] — Échange entre poolers : plusieurs joueurs par côté (N contre M)** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`) :

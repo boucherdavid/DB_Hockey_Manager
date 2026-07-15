@@ -194,7 +194,7 @@ CREATE POLICY "Pooler gère son profil" ON poolers FOR ALL
 print("─" * 60)
 print()
 print("Ensuite :")
-print("  1. .\\start_staging.ps1")
+print("  1. .\\start_app.ps1")
 print("  2. Connecte-toi avec prenom@staging.test / Staging2026!")
 print("  (player_game_logs préservés — relancer backfill_regular/playoff_game_logs.py si rafraîchissement souhaité)")
 print()

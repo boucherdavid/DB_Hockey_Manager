@@ -1,10 +1,12 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 
 $projectRoot = 'C:\Projet_Codex\Hockey_Pool_App'
-$appDir = Join-Path $projectRoot 'app'
+$appDir      = Join-Path $projectRoot 'app'
+$envStaging  = Join-Path $appDir '.env.staging.local'
+$envLocal    = Join-Path $appDir '.env.local'
 
-if (-not (Test-Path $appDir)) {
-    Write-Error "Dossier introuvable: $appDir"
+if (-not (Test-Path $envStaging)) {
+    Write-Error "Fichier introuvable : $envStaging"
 }
 
 $existing = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -19,8 +21,16 @@ if ($existing) {
     exit 1
 }
 
-Write-Host "Demarrage de l'application depuis $appDir"
-Write-Host "Mode dev: Webpack"
-Write-Host "URL: http://localhost:3000"
+# L'app tourne toujours en local contre staging - la prod reelle est sur Vercel,
+# jamais demarree/arretee depuis ce poste. .env.local est ecrase a chaque lancement,
+# rien a restaurer a la fin.
+Copy-Item $envStaging $envLocal -Force
+
+Write-Host ""
+Write-Host "Demarrage de l'application (staging) depuis $appDir"
+Write-Host "Supabase : https://pwblgjdmuaoyfixeyltg.supabase.co"
+Write-Host "URL      : http://localhost:3000"
+Write-Host ""
+
 Set-Location $appDir
 npm.cmd run dev

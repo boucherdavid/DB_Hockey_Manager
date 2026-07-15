@@ -28,10 +28,11 @@ Application web pour gérer un pool de hockey long terme, en remplacement d'un f
 ## 2. Commandes essentielles
 
 ```powershell
-# Démarrer l'application (depuis la racine)
+# Démarrer l'application en local (depuis la racine)
+# Toujours contre staging — la prod réelle tourne sur Vercel, jamais démarrée/arrêtée localement.
 ./start_app.ps1
 
-# Ou manuellement
+# Ou manuellement (utilise le contenu courant de app/.env.local, pas de bascule staging)
 cd app && npm run dev
 
 # Arrêter l'application
@@ -71,7 +72,7 @@ Hockey_Pool_App/
 ├── CLAUDE.md                  ← Ce fichier (référence stable)
 ├── SUIVI_PROJET.md            ← Journal de bord actif (à mettre à jour chaque session)
 ├── schema.sql                 ← Schéma de référence de la base de données
-├── start_app.ps1              ← Démarrer l'app localement
+├── start_app.ps1              ← Démarrer l'app localement (toujours contre staging)
 ├── stop_app.ps1               ← Arrêter l'app localement
 ├── .mcp.json                  ← Configuration MCP pour Claude Code
 ├── .gitignore
