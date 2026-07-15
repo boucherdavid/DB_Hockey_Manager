@@ -13,6 +13,7 @@ import {
   type HistTxType,
   type HistPlayerType,
   type HistDraftPick,
+  type HistTradePlayer,
 } from './historique-actions'
 
 type Pooler = { id: string; name: string }
@@ -127,6 +128,69 @@ function RosterSelect({
   )
 }
 
+function TradeSidePicker({
+  label,
+  roster,
+  selected,
+  onToggle,
+  onTypeChange,
+  warnings,
+}: {
+  label: string
+  roster: HistRosterEntry[]
+  selected: HistTradePlayer[]
+  onToggle: (playerId: number, checked: boolean) => void
+  onTypeChange: (playerId: number, type: HistPlayerType) => void
+  warnings: Record<number, string | null>
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs text-gray-500">{label}</label>
+      {roster.length === 0 ? (
+        <p className="text-xs text-gray-400">Aucun joueur</p>
+      ) : (
+        <ul className="space-y-1.5 max-h-56 overflow-y-auto border rounded p-2">
+          {roster.map(r => {
+            const sel = selected.find(s => s.playerId === r.playerId)
+            return (
+              <li key={r.id}>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!sel}
+                    onChange={e => onToggle(r.playerId, e.target.checked)}
+                  />
+                  {r.name}
+                  <span className="text-gray-400 text-xs">({r.teamCode} · {r.playerType})</span>
+                </label>
+                {sel && (
+                  <div className="flex gap-3 pl-6 pt-0.5">
+                    {PLAYER_TYPES.map(t => (
+                      <label key={t} className="flex items-center gap-1 text-xs cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={sel.type === t}
+                          onChange={() => onTypeChange(r.playerId, t)}
+                        />
+                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {sel && warnings[r.playerId] && (
+                  <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-0.5 ml-6 mt-0.5">
+                    ⚠ {warnings[r.playerId]}
+                  </p>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export default function HistoriqueManager({
   poolers,
   poolSeasonId,
@@ -153,7 +217,10 @@ export default function HistoriqueManager({
   // Côté B (trade)
   const [poolerBId, setPoolerBId] = useState('')
   const [rosterB, setRosterB] = useState<HistRosterEntry[]>([])
-  const [playerInBType, setPlayerInBType] = useState<HistPlayerType>('actif')
+
+  // Joueurs échangés (trade seulement) — N contre M
+  const [playersAOut, setPlayersAOut] = useState<HistTradePlayer[]>([])
+  const [playersBOut, setPlayersBOut] = useState<HistTradePlayer[]>([])
 
   // Choix de repêchage échangés (trade seulement)
   const [pickAOptions, setPickAOptions] = useState<HistDraftPick[]>([])
@@ -168,7 +235,8 @@ export default function HistoriqueManager({
 
   // Avertissement (non bloquant) : délai de réactivation
   const [reactivationWarningA, setReactivationWarningA] = useState<string | null>(null)
-  const [reactivationWarningB, setReactivationWarningB] = useState<string | null>(null)
+  const [warningsAOut, setWarningsAOut] = useState<Record<number, string | null>>({})
+  const [warningsBOut, setWarningsBOut] = useState<Record<number, string | null>>({})
 
   const poolerName = poolers.find(p => p.id === poolerAId)?.name ?? ''
 
@@ -208,27 +276,59 @@ export default function HistoriqueManager({
       .then(r => setReactivationWarningA(r.warning))
   }, [poolerAId, playerInA, poolSeasonId, date, txType])
 
-  // Avertissement délai de réactivation — côté B (joueur ajouté chez poolerB, trade seulement)
+  // Avertissement délai de réactivation — joueurs de A qui vont chez B (trade)
   useEffect(() => {
-    if (txType !== 'trade' || !poolerBId || !playerOutAId || !date) { setReactivationWarningB(null); return }
-    checkHistReactivationDelayAction(poolerBId, playerOutAId, poolSeasonId, date)
-      .then(r => setReactivationWarningB(r.warning))
-  }, [poolerBId, playerOutAId, poolSeasonId, date, txType])
+    if (txType !== 'trade' || !poolerBId || !date || playersAOut.length === 0) { setWarningsAOut({}); return }
+    let cancelled = false
+    Promise.all(
+      playersAOut.map(({ playerId }) =>
+        checkHistReactivationDelayAction(poolerBId, playerId, poolSeasonId, date).then(r => [playerId, r.warning] as const)
+      )
+    ).then(entries => { if (!cancelled) setWarningsAOut(Object.fromEntries(entries)) })
+    return () => { cancelled = true }
+  }, [txType, poolerBId, playersAOut, poolSeasonId, date])
+
+  // Avertissement délai de réactivation — joueurs de B qui vont chez A (trade)
+  useEffect(() => {
+    if (txType !== 'trade' || !poolerAId || !date || playersBOut.length === 0) { setWarningsBOut({}); return }
+    let cancelled = false
+    Promise.all(
+      playersBOut.map(({ playerId }) =>
+        checkHistReactivationDelayAction(poolerAId, playerId, poolSeasonId, date).then(r => [playerId, r.warning] as const)
+      )
+    ).then(entries => { if (!cancelled) setWarningsBOut(Object.fromEntries(entries)) })
+    return () => { cancelled = true }
+  }, [txType, poolerAId, playersBOut, poolSeasonId, date])
 
   // Vide les champs de sélection joueur (garde pooler + date pour enchaîner rapidement)
   function resetSelections() {
     setPlayerOutAId(null)
     setPlayerInA(null)
     setPlayerInAType('actif')
-    setPlayerInBType('actif')
     setTypeChangeTo(null)
     setTypeChangeSecondPlayerId(null)
     setTypeChangeSecondTo(null)
+    setPlayersAOut([])
+    setPlayersBOut([])
     setPickAIds([])
     setPickBIds([])
     setError(null)
     setReactivationWarningA(null)
-    setReactivationWarningB(null)
+    setWarningsAOut({})
+    setWarningsBOut({})
+  }
+
+  function toggleAOut(playerId: number, checked: boolean) {
+    setPlayersAOut(prev => checked ? [...prev, { playerId, type: 'actif' }] : prev.filter(p => p.playerId !== playerId))
+  }
+  function setAOutType(playerId: number, type: HistPlayerType) {
+    setPlayersAOut(prev => prev.map(p => p.playerId === playerId ? { ...p, type } : p))
+  }
+  function toggleBOut(playerId: number, checked: boolean) {
+    setPlayersBOut(prev => checked ? [...prev, { playerId, type: 'actif' }] : prev.filter(p => p.playerId !== playerId))
+  }
+  function setBOutType(playerId: number, type: HistPlayerType) {
+    setPlayersBOut(prev => prev.map(p => p.playerId === playerId ? { ...p, type } : p))
   }
 
   // Reset complet déclenché par un changement de contexte (type ou pooler A)
@@ -246,14 +346,15 @@ export default function HistoriqueManager({
         date,
         txType,
         poolerAId,
-        playerOutAId: txType === 'ajout' ? null : playerOutAId,
-        playerInAId: txType === 'retrait' ? null : (playerInA?.id ?? null),
+        playerOutAId: (txType === 'ajout' || txType === 'trade') ? null : playerOutAId,
+        playerInAId: (txType === 'retrait' || txType === 'trade') ? null : (playerInA?.id ?? null),
         playerInAType,
         poolerBId: txType === 'trade' ? poolerBId : null,
-        playerInBType,
         typeChangeTo: txType === 'type_change' ? typeChangeTo : null,
         typeChangeSecondPlayerId: txType === 'type_change' ? typeChangeSecondPlayerId : null,
         typeChangeSecondTo: txType === 'type_change' ? typeChangeSecondTo : null,
+        playersAOut: txType === 'trade' ? playersAOut : [],
+        playersBOut: txType === 'trade' ? playersBOut : [],
         pickAIds: txType === 'trade' ? pickAIds : [],
         pickBIds: txType === 'trade' ? pickBIds : [],
       })
@@ -273,7 +374,7 @@ export default function HistoriqueManager({
   const canSubmit = !!poolerAId && !!date && (
     txType === 'swap'        ? (!!playerOutAId && !!playerInA) :
     txType === 'trade'       ? (!!poolerBId && (
-                                 (!!playerOutAId && !!playerInA) ||
+                                 playersAOut.length > 0 || playersBOut.length > 0 ||
                                  pickAIds.length > 0 || pickBIds.length > 0
                                )) :
     txType === 'ajout'       ? !!playerInA :
@@ -326,14 +427,11 @@ export default function HistoriqueManager({
           </select>
         </div>
 
-        {/* Player OUT (swap / trade / retrait / type_change) */}
-        {txType !== 'ajout' && (
+        {/* Player OUT (swap / retrait / type_change) */}
+        {txType !== 'ajout' && txType !== 'trade' && (
           <div className="space-y-1">
             <RosterSelect
-              label={
-                txType === 'trade' ? 'Joueur A envoie (quitte A → va chez B)' :
-                txType === 'type_change' ? 'Joueur 1' : 'Joueur retiré / cédé'
-              }
+              label={txType === 'type_change' ? 'Joueur 1' : 'Joueur retiré / cédé'}
               roster={rosterA}
               value={playerOutAId}
               onChange={setPlayerOutAId}
@@ -385,11 +483,11 @@ export default function HistoriqueManager({
           </div>
         )}
 
-        {/* Player IN (swap / trade / ajout) */}
-        {txType !== 'retrait' && txType !== 'type_change' && (
+        {/* Player IN (swap / ajout) */}
+        {txType !== 'retrait' && txType !== 'type_change' && txType !== 'trade' && (
           <div className="space-y-3">
             <PlayerSearch
-              label={txType === 'trade' ? 'Joueur A reçoit (vient de B)' : 'Joueur acquis / activé'}
+              label="Joueur acquis / activé"
               selected={playerInA}
               onSelect={setPlayerInA}
               onClear={() => setPlayerInA(null)}
@@ -434,36 +532,24 @@ export default function HistoriqueManager({
                 ))}
               </select>
             </div>
-            {/* Le joueur qui quitte B vers A est le playerInA — affiché en lecture seule */}
-            {playerInA && (
-              <p className="text-sm text-gray-600">
-                Joueur B envoie : <span className="font-medium">{playerInA.name}</span>
-                <span className="text-gray-400 text-xs ml-1">(même que Joueur A reçoit)</span>
-              </p>
-            )}
-            {/* Le joueur que B reçoit est playerOutA — affiché en lecture seule */}
-            {playerOutAId && (
-              <p className="text-sm text-gray-600">
-                Joueur B reçoit : <span className="font-medium">
-                  {rosterA.find(r => r.playerId === playerOutAId)?.name ?? '—'}
-                </span>
-                <span className="text-gray-400 text-xs ml-1">(même que Joueur A envoie)</span>
-              </p>
-            )}
-            <div className="flex gap-3">
-              <span className="text-xs text-gray-500">Type chez B :</span>
-              {PLAYER_TYPES.map(t => (
-                <label key={t} className="flex items-center gap-1 text-sm cursor-pointer">
-                  <input type="radio" checked={playerInBType === t} onChange={() => setPlayerInBType(t)} />
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </label>
-              ))}
-            </div>
-            {reactivationWarningB && (
-              <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-1">
-                ⚠ {reactivationWarningB}
-              </p>
-            )}
+
+            <TradeSidePicker
+              label="Joueurs que A envoie (quittent A → vont chez B)"
+              roster={rosterA}
+              selected={playersAOut}
+              onToggle={toggleAOut}
+              onTypeChange={setAOutType}
+              warnings={warningsAOut}
+            />
+
+            <TradeSidePicker
+              label="Joueurs que B envoie (quittent B → vont chez A)"
+              roster={rosterB}
+              selected={playersBOut}
+              onToggle={toggleBOut}
+              onTypeChange={setBOutType}
+              warnings={warningsBOut}
+            />
 
             {/* Choix de repêchage échangés */}
             {(pickAOptions.length > 0 || pickBOptions.length > 0) && (

@@ -68,8 +68,10 @@ du pool.
        (`is_active=false`, `removed_at` posé) — ce n'est **pas** un
        ajustement actif↔réserviste (le joueur reste dans l'équipe). Pour
        ça, utiliser **Changement de type** ci-dessous.
-     - **Échange entre poolers** — trade A ↔ B (un joueur part de A vers B,
-       un autre part de B vers A).
+     - **Échange entre poolers** — trade A ↔ B, un ou plusieurs joueurs de
+       chaque côté (N contre M) : cocher les joueurs du roster A qui partent
+       vers B et ceux du roster B qui partent vers A, avec leur type
+       (actif/réserviste/recrue) chez leur nouvelle équipe.
      - **Ajout seulement** — signature sans coupure correspondante.
      - **Retrait seulement** — coupure sans remplacement.
      - **Changement de type** — un joueur déjà dans l'équipe change de

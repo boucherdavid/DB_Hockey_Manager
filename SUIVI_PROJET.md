@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-06-22
+Derniere mise a jour: 2026-07-15
 
 ## Role du fichier
 
@@ -55,6 +55,16 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-07-15
+
+**[Feat] — Échange entre poolers : plusieurs joueurs par côté (N contre M)** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`) :
+- Contexte : l'onglet Historique ne permettait qu'un joueur par côté dans un "Échange entre poolers" (`playerOutAId`/`playerInA`/`playerInBType`) — insuffisant pour reconstituer un vrai échange à plusieurs joueurs (ex: 2 contre 1 + picks).
+- `HistChangeInput` : `playerInBType` retiré, remplacé par `playersAOut`/`playersBOut: HistTradePlayer[]` (`{ playerId, type }`), un par joueur échangé de chaque côté. `submitHistChangeAction` boucle sur chaque tableau (retrait chez l'origine + ajout chez la destination avec le type choisi) — chemin `trade` complètement séparé du chemin "un seul joueur" (swap/ajout/retrait), qui garde `playerOutAId`/`playerInAId` inchangés.
+- UI : nouveau composant `TradeSidePicker` (liste à cocher du roster de chaque pooler + choix actif/réserviste/recrue par joueur sélectionné + avertissement délai de réactivation par joueur) — remplace les selects uniques + l'affichage en lecture seule "même que Joueur A/B" côté B.
+- Avertissement de délai de réactivation recalculé par joueur (`warningsAOut`/`warningsBOut`, un appel `checkHistReactivationDelayAction` par joueur sélectionné) plutôt qu'un seul avertissement global.
+- Reprise après un plantage de l'ordinateur en cours de développement (le backend et le nouveau `TradeSidePicker` étaient déjà écrits mais pas encore branchés au reste du formulaire — état incohérent au redémarrage) — validé par `tsc --noEmit` (aucune erreur) après reconnexion des deux côtés du formulaire au nouveau modèle.
+- Non testé manuellement dans le navigateur (page admin derrière authentification, pas d'accès aux identifiants dans cette session) — à valider par David avant de considérer le chantier clos.
 
 ### 2026-07-13 (suite)
 
