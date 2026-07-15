@@ -56,6 +56,13 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-15 (suite 2)
+
+**[Doc] — Rôle de `stop_app.ps1` clarifié** (aucun code) :
+- David a demandé si `stop_app.ps1` restait utile après la fusion `start_app.ps1`/`start_staging.ps1`.
+- Rôle distinct de `start_app.ps1` (qui tourne en foreground, s'arrête normalement au `Ctrl+C`) : `stop_app.ps1` sert à libérer le port 3000 quand le process est resté orphelin (fenêtre de terminal fermée sans `Ctrl+C`) ou depuis un autre terminal que celui d'origine. `start_app.ps1` s'appuie dessus explicitement (message "port déjà utilisé → `.\stop_app.ps1`").
+- Bénéfice de la simplification de la session précédente : `stop_app.ps1` fait un `Stop-Process -Force`, qui coupait auparavant le bloc `finally` de bascule d'env (`start_staging.ps1`) — source potentielle de corruption de `.env.local`. Depuis que `start_app.ps1` n'a plus de swap/restore, ce risque n'existe plus : `stop_app.ps1` est maintenant strictement sûr à utiliser à tout moment. Pas de changement de code, garde son rôle actuel.
+
 ### 2026-07-15 (suite)
 
 **[Chore] — Fusion start_app.ps1/start_staging.ps1, plus de notion de "prod" en local** (`start_app.ps1`, `start_staging.ps1` supprimé, `CLAUDE.md`, `python_script/setup_staging.py`) :
