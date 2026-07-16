@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-07-15
+Derniere mise a jour: 2026-07-16
 
 ## Role du fichier
 
@@ -55,6 +55,17 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-07-16
+
+**[Feat] — Historique : picks dans le journal, transfert du statut recrue, correction de date effective** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`, `supabase_migrations/roster_change_log_pick_transfer.sql`) :
+- Contexte : après avoir soumis un échange entre poolers incluant un choix de repêchage, David a signalé 3 manques : (1) le pick échangé n'apparaissait pas dans le journal, (2) le statut de recrue (protégé 5 ans si repêché, ou protégé le temps de l'ELC si agent libre) ne survivait pas au changement de pooler, (3) impossible de corriger la date effective d'une transaction déjà saisie (cas concret : échange Carter Yakemchuk / Sam Rinzel saisi avec la date du jour au lieu du 9 octobre 2025).
+- **Migration** (`roster_change_log_pick_transfer.sql`, déjà appliquée en staging et prod par David) : `player_id` devient nullable sur `roster_change_log`, nouvelle colonne `pick_id` (FK `pool_draft_picks`). Une ligne de journal représente désormais soit un joueur, soit un pick.
+- **Picks dans le journal** : `submitHistChangeAction` (chemin `trade`) journalise maintenant chaque pick transféré (départ + arrivée, même pattern que les joueurs). `getHistLogAction` embarque `pool_draft_picks(round, pool_seasons(season))` ; le journal affiche "Choix — {saison} Ronde {round}" à la place du nom de joueur pour ces lignes.
+- **Transfert automatique du statut recrue** : `getHistRosterAction` renvoie maintenant `rookieType`/`poolDraftYear`/`draftPickId` par joueur du roster. Dans `TradeSidePicker`, choisir le type "Recrue" pour un joueur qui était déjà recrue chez le pooler d'origine pré-remplit automatiquement `rookie_type`/`pool_draft_year` (protection transférée), avec un contrôle pour corriger manuellement si besoin. `draft_pick_id` suit uniquement si les valeurs pré-remplies n'ont pas été modifiées (transfert non ambigu) — sinon abandonné, le lien vers le pick d'origine n'étant plus fiable après une correction manuelle. Décidé avec David : transfert automatique par défaut, override possible (pas de ressaisie obligatoire à chaque échange).
+- **Correction de date effective** (nouvelle action `updateHistLogDateAction`) : sélection multiple de lignes du journal (checkbox) + un seul champ date pour corriger en masse — utile car un échange produit plusieurs lignes (N joueurs × 2 sens + picks). Corrige `roster_change_log.changed_at` **et** `pooler_rosters.added_at`/`removed_at` correspondant (jamais l'un sans l'autre, cf. règle CLAUDE.md section 6) ; ignore la propagation pour les lignes `type_change` (aucune fenêtre associée) et les lignes de pick (pas de `added_at`/`removed_at`). Si la ligne `pooler_rosters` correspondante est introuvable (déjà modifiée depuis), retourne une erreur explicite plutôt que de laisser le journal et le roster désynchronisés.
+- Validé par `tsc --noEmit` (aucune erreur) ; lint : mêmes avertissements `any`/`set-state-in-effect` déjà présents avant ces changements, rien de nouveau introduit.
+- Reste à faire par David : utiliser la nouvelle correction de date dans le navigateur pour fixer l'échange Yakemchuk/Rinzel au 2025-10-09 (non fait depuis cette session, l'accès admin nécessite une connexion).
 
 ### 2026-07-15 (suite 2)
 

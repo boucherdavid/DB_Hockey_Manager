@@ -10,6 +10,9 @@ export type HistRosterEntry = {
   teamCode: string | null
   playerType: string
   addedAt: string
+  rookieType: 'repeche' | 'agent_libre' | null
+  poolDraftYear: number | null
+  draftPickId: number | null
 }
 
 export async function getHistRosterAction(
@@ -19,7 +22,7 @@ export async function getHistRosterAction(
   const db = createAdminClient()
   const { data } = await db
     .from('pooler_rosters')
-    .select('id, player_id, player_type, added_at, players(first_name, last_name, position, teams(code))')
+    .select('id, player_id, player_type, added_at, rookie_type, pool_draft_year, draft_pick_id, players(first_name, last_name, position, teams(code))')
     .eq('pooler_id', poolerId)
     .eq('pool_season_id', poolSeasonId)
     .is('removed_at', null)
@@ -32,6 +35,9 @@ export async function getHistRosterAction(
     teamCode: r.players?.teams?.code ?? null,
     playerType: r.player_type,
     addedAt: r.added_at,
+    rookieType: r.rookie_type,
+    poolDraftYear: r.pool_draft_year,
+    draftPickId: r.draft_pick_id,
   }))
 }
 
@@ -97,7 +103,14 @@ export type HistTxType = 'swap' | 'trade' | 'ajout' | 'retrait' | 'type_change'
 
 export type HistPlayerType = 'actif' | 'reserviste' | 'recrue'
 
-export type HistTradePlayer = { playerId: number; type: HistPlayerType }
+export type HistTradePlayer = {
+  playerId: number
+  type: HistPlayerType
+  // pertinent seulement si type === 'recrue' — pré-rempli depuis la fiche d'origine
+  // (transfert automatique de la protection), éditable manuellement dans le formulaire
+  rookieType: 'repeche' | 'agent_libre' | null
+  poolDraftYear: number | null
+}
 
 export type HistChangeInput = {
   poolSeasonId: number
@@ -219,15 +232,37 @@ export async function submitHistChangeAction(
       return { error: 'Aucun joueur ni choix de repêchage sélectionné' }
     }
 
+    // Calcule rookie_type/pool_draft_year/draft_pick_id pour la nouvelle ligne chez le pooler
+    // receveur. Si l'admin n'a pas modifié les valeurs pré-remplies (transfert automatique
+    // depuis la ligne d'origine), le draft_pick_id d'origine suit aussi — sinon (reconstruction
+    // manuelle/incertaine) il est abandonné, le lien vers le pick d'origine n'étant plus fiable.
+    function resolveRookieFields(
+      type: HistPlayerType,
+      rookieType: 'repeche' | 'agent_libre' | null,
+      poolDraftYear: number | null,
+      srcRow: { rookie_type: string | null; pool_draft_year: number | null; draft_pick_id: number | null } | null,
+    ) {
+      if (type !== 'recrue') return { rookie_type: null, pool_draft_year: null, draft_pick_id: null }
+      const effectiveYear = rookieType === 'repeche' ? poolDraftYear : null
+      const unchanged = rookieType === (srcRow?.rookie_type ?? null) && effectiveYear === (srcRow?.pool_draft_year ?? null)
+      return {
+        rookie_type: rookieType,
+        pool_draft_year: effectiveYear,
+        draft_pick_id: unchanged ? (srcRow?.draft_pick_id ?? null) : null,
+      }
+    }
+
     // Joueurs de A → B
-    for (const { playerId, type } of playersAOut) {
-      const { error: errOut } = await db
+    for (const { playerId, type, rookieType, poolDraftYear } of playersAOut) {
+      const { data: srcRow, error: errOut } = await db
         .from('pooler_rosters')
         .update({ is_active: false, removed_at: ts })
         .eq('pooler_id', input.poolerAId)
         .eq('player_id', playerId)
         .eq('pool_season_id', input.poolSeasonId)
         .is('removed_at', null)
+        .select('rookie_type, pool_draft_year, draft_pick_id')
+        .maybeSingle()
       if (errOut) return { error: `Retrait A (joueur ${playerId}) : ${errOut.message}` }
       await log(playerId, input.poolerAId, null)
 
@@ -238,20 +273,23 @@ export async function submitHistChangeAction(
         player_type: type,
         is_active: true,
         added_at: ts,
+        ...resolveRookieFields(type, rookieType, poolDraftYear, srcRow),
       })
       if (errIn) return { error: `Ajout B (joueur ${playerId}) : ${errIn.message}` }
       await log(playerId, input.poolerBId, type)
     }
 
     // Joueurs de B → A
-    for (const { playerId, type } of playersBOut) {
-      const { error: errOut } = await db
+    for (const { playerId, type, rookieType, poolDraftYear } of playersBOut) {
+      const { data: srcRow, error: errOut } = await db
         .from('pooler_rosters')
         .update({ is_active: false, removed_at: ts })
         .eq('pooler_id', input.poolerBId)
         .eq('player_id', playerId)
         .eq('pool_season_id', input.poolSeasonId)
         .is('removed_at', null)
+        .select('rookie_type, pool_draft_year, draft_pick_id')
+        .maybeSingle()
       if (errOut) return { error: `Retrait B (joueur ${playerId}) : ${errOut.message}` }
       await log(playerId, input.poolerBId, null)
 
@@ -262,9 +300,19 @@ export async function submitHistChangeAction(
         player_type: type,
         is_active: true,
         added_at: ts,
+        ...resolveRookieFields(type, rookieType, poolDraftYear, srcRow),
       })
       if (errIn) return { error: `Ajout A (joueur ${playerId}) : ${errIn.message}` }
       await log(playerId, input.poolerAId, type)
+    }
+
+    async function logPick(pickId: number, poolerId: string, arrived: boolean) {
+      const { error } = await db.from('roster_change_log').insert({
+        player_id: null, pick_id: pickId, pooler_id: poolerId, pool_season_id: input.poolSeasonId,
+        change_type: changeType, old_type: null, new_type: arrived ? 'transfere' : null,
+        changed_by: null, changed_at: ts, is_admin_override: true,
+      })
+      if (error) console.error('submitHistChangeAction logPick:', error.message)
     }
 
     // Choix de repêchage échangés : A → B et B → A
@@ -275,6 +323,8 @@ export async function submitHistChangeAction(
       }
       const { error } = await db.from('pool_draft_picks').update({ current_owner_id: input.poolerBId }).eq('id', pickId)
       if (error) return { error: `Transfert de pick A→B : ${error.message}` }
+      await logPick(pickId, input.poolerAId, false)
+      await logPick(pickId, input.poolerBId, true)
     }
     for (const pickId of pickBIds) {
       const { data: pick } = await db.from('pool_draft_picks').select('current_owner_id, is_used').eq('id', pickId).single()
@@ -283,6 +333,8 @@ export async function submitHistChangeAction(
       }
       const { error } = await db.from('pool_draft_picks').update({ current_owner_id: input.poolerAId }).eq('id', pickId)
       if (error) return { error: `Transfert de pick B→A : ${error.message}` }
+      await logPick(pickId, input.poolerBId, false)
+      await logPick(pickId, input.poolerAId, true)
     }
 
     revalidatePath('/admin/historique')
@@ -323,10 +375,12 @@ export async function submitHistChangeAction(
 }
 
 export type HistLogEntry = {
+  id: number
   txType: HistTxType
   poolerName: string
-  playerName: string
+  playerName: string | null
   teamCode: string | null
+  pickLabel: string | null
   newType: string | null
   effectiveDate: string   // changed_at — date du mouvement dans le pool
   loggedAt: string        // created_at — moment réel de la saisie
@@ -339,7 +393,7 @@ export async function getHistLogAction(poolSeasonId: number): Promise<HistLogEnt
   // (pooler_id et changed_by) — PostgREST refuse un embed "poolers(...)" ambigu.
   const [{ data, error }, { data: saison }, { data: removals }] = await Promise.all([
     db.from('roster_change_log')
-      .select('pooler_id, player_id, change_type, new_type, changed_at, created_at, players(first_name, last_name, teams(code)), poolers!roster_change_log_pooler_id_fkey(name)')
+      .select('id, pooler_id, player_id, pick_id, change_type, new_type, changed_at, created_at, players(first_name, last_name, teams(code)), poolers!roster_change_log_pooler_id_fkey(name), pool_draft_picks(round, pool_seasons(season))')
       .eq('pool_season_id', poolSeasonId)
       .like('change_type', 'hist_%')
       .order('created_at', { ascending: false })
@@ -362,7 +416,7 @@ export async function getHistLogAction(poolSeasonId: number): Promise<HistLogEnt
 
   return ((data ?? []) as any[]).map(r => {
     let reactivationWarning: string | null = null
-    if (r.new_type) {
+    if (r.new_type && r.player_id) {
       const priorRemoval = (removals ?? [])
         .filter((x: any) => x.pooler_id === r.pooler_id && x.player_id === r.player_id && x.removed_at <= r.changed_at)
         .sort((a: any, b: any) => (b.removed_at as string).localeCompare(a.removed_at))[0]
@@ -374,14 +428,69 @@ export async function getHistLogAction(poolSeasonId: number): Promise<HistLogEnt
       }
     }
     return {
+      id: r.id,
       txType: (r.change_type as string).replace('hist_', '') as HistTxType,
       poolerName: r.poolers?.name ?? '',
-      playerName: `${r.players?.first_name ?? ''} ${r.players?.last_name ?? ''}`.trim(),
+      playerName: r.player_id ? `${r.players?.first_name ?? ''} ${r.players?.last_name ?? ''}`.trim() : null,
       teamCode: r.players?.teams?.code ?? null,
+      pickLabel: r.pick_id ? `Choix — ${r.pool_draft_picks?.pool_seasons?.season ?? '?'} Ronde ${r.pool_draft_picks?.round ?? '?'}` : null,
       newType: r.new_type,
       effectiveDate: r.changed_at,
       loggedAt: r.created_at,
       reactivationWarning,
     }
   })
+}
+
+// Corrige la date effective d'une ou plusieurs lignes déjà journalisées (ex: erreur de saisie).
+// Propage la correction à pooler_rosters.added_at/removed_at (jamais seulement au journal) —
+// buildStandings() calcule les points sur cette fenêtre, pas sur roster_change_log.changed_at.
+export async function updateHistLogDateAction(
+  ids: number[],
+  newDate: string,
+): Promise<{ error?: string }> {
+  if (ids.length === 0) return { error: 'Aucune ligne sélectionnée' }
+  if (!newDate) return { error: 'Date manquante' }
+  const db = createAdminClient()
+  const newTs = `${newDate}T12:00:00Z`
+
+  const { data: rows, error: fetchError } = await db
+    .from('roster_change_log')
+    .select('id, pooler_id, player_id, pool_season_id, change_type, new_type, changed_at')
+    .in('id', ids)
+  if (fetchError) return { error: fetchError.message }
+
+  for (const row of rows ?? []) {
+    const { error: logErr } = await db
+      .from('roster_change_log')
+      .update({ changed_at: newTs })
+      .eq('id', row.id)
+    if (logErr) return { error: `Journal (id ${row.id}) : ${logErr.message}` }
+
+    // type_change ne touche jamais added_at/removed_at (le joueur reste sur la même ligne continue)
+    // choix de repêchage (player_id null) : aucune fenêtre added_at/removed_at associée
+    if (row.change_type === 'hist_type_change' || !row.player_id) continue
+
+    const dateField = row.new_type ? 'added_at' : 'removed_at'
+    const { data: updatedRoster, error: rosterErr } = await db
+      .from('pooler_rosters')
+      .update({ [dateField]: newTs })
+      .eq('pooler_id', row.pooler_id)
+      .eq('player_id', row.player_id)
+      .eq('pool_season_id', row.pool_season_id)
+      .eq(dateField, row.changed_at)
+      .select('id')
+    if (rosterErr) return { error: `Roster (id ${row.id}) : ${rosterErr.message}` }
+    if (!updatedRoster || updatedRoster.length === 0) {
+      return {
+        error: `Ligne ${row.id} : date du journal corrigée, mais la ligne pooler_rosters correspondante (${dateField}) est introuvable — vérifier manuellement, le calcul des points pourrait rester basé sur l'ancienne date.`,
+      }
+    }
+  }
+
+  revalidatePath('/admin/historique')
+  revalidatePath('/admin/effectifs')
+  revalidatePath('/classement')
+  revalidatePath('/poolers')
+  return {}
 }

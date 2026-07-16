@@ -7,6 +7,7 @@ import {
   getHistLogAction,
   checkHistReactivationDelayAction,
   getHistDraftPicksAction,
+  updateHistLogDateAction,
   type HistRosterEntry,
   type HistPlayerResult,
   type HistLogEntry,
@@ -134,6 +135,7 @@ function TradeSidePicker({
   selected,
   onToggle,
   onTypeChange,
+  onRookieChange,
   warnings,
 }: {
   label: string
@@ -141,6 +143,7 @@ function TradeSidePicker({
   selected: HistTradePlayer[]
   onToggle: (playerId: number, checked: boolean) => void
   onTypeChange: (playerId: number, type: HistPlayerType) => void
+  onRookieChange: (playerId: number, rookieType: 'repeche' | 'agent_libre' | null, poolDraftYear: number | null) => void
   warnings: Record<number, string | null>
 }) {
   return (
@@ -152,6 +155,7 @@ function TradeSidePicker({
         <ul className="space-y-1.5 max-h-56 overflow-y-auto border rounded p-2">
           {roster.map(r => {
             const sel = selected.find(s => s.playerId === r.playerId)
+            const autoTransfer = !!r.rookieType && sel?.rookieType === r.rookieType && sel?.poolDraftYear === r.poolDraftYear
             return (
               <li key={r.id}>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -175,6 +179,36 @@ function TradeSidePicker({
                         {t.charAt(0).toUpperCase() + t.slice(1)}
                       </label>
                     ))}
+                  </div>
+                )}
+                {sel && sel.type === 'recrue' && (
+                  <div className="flex flex-wrap items-center gap-2 pl-6 pt-1 text-xs">
+                    <select
+                      value={sel.rookieType ?? ''}
+                      onChange={e => {
+                        const v = (e.target.value || null) as 'repeche' | 'agent_libre' | null
+                        onRookieChange(r.playerId, v, v === 'repeche' ? (sel.poolDraftYear ?? r.poolDraftYear ?? new Date().getFullYear()) : null)
+                      }}
+                      className="border rounded px-1 py-0.5"
+                    >
+                      <option value="">— Type recrue —</option>
+                      <option value="repeche">Repêché (protection 5 ans)</option>
+                      <option value="agent_libre">Agent libre (protection ELC)</option>
+                    </select>
+                    {sel.rookieType === 'repeche' && (
+                      <input
+                        type="number"
+                        value={sel.poolDraftYear ?? ''}
+                        onChange={e => onRookieChange(r.playerId, 'repeche', e.target.value ? Number(e.target.value) : null)}
+                        placeholder="Année"
+                        className="border rounded px-1 py-0.5 w-20"
+                      />
+                    )}
+                    {autoTransfer ? (
+                      <span className="text-gray-400">(transfert automatique du statut d'origine)</span>
+                    ) : r.rookieType ? (
+                      <span className="text-orange-600">(modifié — le lien vers le pick d'origine ne sera pas conservé)</span>
+                    ) : null}
                   </div>
                 )}
                 {sel && warnings[r.playerId] && (
@@ -233,6 +267,12 @@ export default function HistoriqueManager({
   const [log, setLog] = useState<HistLogEntry[]>(initialLog)
   const [logFilter, setLogFilter] = useState<HistTxType | 'all'>('all')
 
+  // Correction de la date effective d'une ou plusieurs lignes déjà journalisées
+  const [selectedLogIds, setSelectedLogIds] = useState<number[]>([])
+  const [editDate, setEditDate] = useState('')
+  const [isEditPending, startEditTransition] = useTransition()
+  const [editError, setEditError] = useState<string | null>(null)
+
   // Avertissement (non bloquant) : délai de réactivation
   const [reactivationWarningA, setReactivationWarningA] = useState<string | null>(null)
   const [warningsAOut, setWarningsAOut] = useState<Record<number, string | null>>({})
@@ -244,6 +284,27 @@ export default function HistoriqueManager({
     const l = await getHistLogAction(poolSeasonId)
     setLog(l)
   }, [poolSeasonId])
+
+  function toggleLogSelection(id: number, checked: boolean) {
+    setSelectedLogIds(prev => checked ? [...prev, id] : prev.filter(x => x !== id))
+    setEditError(null)
+  }
+
+  function applyDateCorrection() {
+    setEditError(null)
+    startEditTransition(async () => {
+      const result = await updateHistLogDateAction(selectedLogIds, editDate)
+      if (result.error) {
+        setEditError(result.error)
+      } else {
+        setSelectedLogIds([])
+        setEditDate('')
+        refreshLog()
+        if (poolerAId) getHistRosterAction(poolerAId, poolSeasonId).then(setRosterA)
+        if (poolerBId) getHistRosterAction(poolerBId, poolSeasonId).then(setRosterB)
+      }
+    })
+  }
 
   // Charger roster A quand le pooler A change
   useEffect(() => {
@@ -318,17 +379,31 @@ export default function HistoriqueManager({
     setWarningsBOut({})
   }
 
+  // Quand le type choisi passe à "recrue", pré-remplit rookieType/poolDraftYear depuis la
+  // fiche d'origine (transfert automatique de la protection) — sinon vide, à préciser manuellement.
+  function rookieDefaults(roster: HistRosterEntry[], playerId: number, type: HistPlayerType) {
+    if (type !== 'recrue') return { rookieType: null, poolDraftYear: null }
+    const src = roster.find(r => r.playerId === playerId)
+    return { rookieType: src?.rookieType ?? null, poolDraftYear: src?.poolDraftYear ?? null }
+  }
+
   function toggleAOut(playerId: number, checked: boolean) {
-    setPlayersAOut(prev => checked ? [...prev, { playerId, type: 'actif' }] : prev.filter(p => p.playerId !== playerId))
+    setPlayersAOut(prev => checked ? [...prev, { playerId, type: 'actif', rookieType: null, poolDraftYear: null }] : prev.filter(p => p.playerId !== playerId))
   }
   function setAOutType(playerId: number, type: HistPlayerType) {
-    setPlayersAOut(prev => prev.map(p => p.playerId === playerId ? { ...p, type } : p))
+    setPlayersAOut(prev => prev.map(p => p.playerId === playerId ? { ...p, type, ...rookieDefaults(rosterA, playerId, type) } : p))
+  }
+  function setAOutRookie(playerId: number, rookieType: 'repeche' | 'agent_libre' | null, poolDraftYear: number | null) {
+    setPlayersAOut(prev => prev.map(p => p.playerId === playerId ? { ...p, rookieType, poolDraftYear } : p))
   }
   function toggleBOut(playerId: number, checked: boolean) {
-    setPlayersBOut(prev => checked ? [...prev, { playerId, type: 'actif' }] : prev.filter(p => p.playerId !== playerId))
+    setPlayersBOut(prev => checked ? [...prev, { playerId, type: 'actif', rookieType: null, poolDraftYear: null }] : prev.filter(p => p.playerId !== playerId))
   }
   function setBOutType(playerId: number, type: HistPlayerType) {
-    setPlayersBOut(prev => prev.map(p => p.playerId === playerId ? { ...p, type } : p))
+    setPlayersBOut(prev => prev.map(p => p.playerId === playerId ? { ...p, type, ...rookieDefaults(rosterB, playerId, type) } : p))
+  }
+  function setBOutRookie(playerId: number, rookieType: 'repeche' | 'agent_libre' | null, poolDraftYear: number | null) {
+    setPlayersBOut(prev => prev.map(p => p.playerId === playerId ? { ...p, rookieType, poolDraftYear } : p))
   }
 
   // Reset complet déclenché par un changement de contexte (type ou pooler A)
@@ -539,6 +614,7 @@ export default function HistoriqueManager({
               selected={playersAOut}
               onToggle={toggleAOut}
               onTypeChange={setAOutType}
+              onRookieChange={setAOutRookie}
               warnings={warningsAOut}
             />
 
@@ -548,6 +624,7 @@ export default function HistoriqueManager({
               selected={playersBOut}
               onToggle={toggleBOut}
               onTypeChange={setBOutType}
+              onRookieChange={setBOutRookie}
               warnings={warningsBOut}
             />
 
@@ -646,6 +723,33 @@ export default function HistoriqueManager({
             ))}
           </div>
         </div>
+        {selectedLogIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+            <span className="text-xs text-blue-800">
+              {selectedLogIds.length} ligne{selectedLogIds.length > 1 ? 's' : ''} sélectionnée{selectedLogIds.length > 1 ? 's' : ''}
+            </span>
+            <input
+              type="date"
+              value={editDate}
+              onChange={e => setEditDate(e.target.value)}
+              className="border rounded px-2 py-1 text-sm"
+            />
+            <button
+              onClick={applyDateCorrection}
+              disabled={!editDate || isEditPending}
+              className="px-2 py-1 rounded text-xs bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-40"
+            >
+              {isEditPending ? 'Correction...' : 'Corriger la date effective'}
+            </button>
+            <button
+              onClick={() => { setSelectedLogIds([]); setEditError(null) }}
+              className="text-xs text-gray-500 hover:text-gray-700"
+            >
+              Annuler la sélection
+            </button>
+          </div>
+        )}
+        {editError && <p className="text-red-600 text-sm">{editError}</p>}
         {(() => {
           const filtered = logFilter === 'all' ? log : log.filter(e => e.txType === logFilter)
           if (filtered.length === 0) {
@@ -656,6 +760,7 @@ export default function HistoriqueManager({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-gray-500 border-b">
+                    <th className="pb-1 pr-2"></th>
                     <th className="pb-1 pr-2">Date effective</th>
                     <th className="pb-1 pr-2">Saisi le</th>
                     <th className="pb-1 pr-2">Type</th>
@@ -664,8 +769,15 @@ export default function HistoriqueManager({
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((e, i) => (
-                    <tr key={i} className="border-b border-gray-50">
+                  {filtered.map(e => (
+                    <tr key={e.id} className="border-b border-gray-50">
+                      <td className="py-1 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedLogIds.includes(e.id)}
+                          onChange={ev => toggleLogSelection(e.id, ev.target.checked)}
+                        />
+                      </td>
                       <td className="py-1 pr-2 text-gray-500 whitespace-nowrap">
                         {e.effectiveDate.slice(0, 10)}
                       </td>
@@ -679,8 +791,8 @@ export default function HistoriqueManager({
                       </td>
                       <td className="py-1 pr-2 text-gray-700">{e.poolerName}</td>
                       <td className="py-1 text-gray-800">
-                        {e.playerName}
-                        <span className="text-gray-400 text-xs ml-1">{e.teamCode}</span>
+                        {e.playerName ?? e.pickLabel ?? '—'}
+                        {e.teamCode && <span className="text-gray-400 text-xs ml-1">{e.teamCode}</span>}
                         {e.reactivationWarning && (
                           <span
                             className="ml-1 text-orange-600 cursor-help"
