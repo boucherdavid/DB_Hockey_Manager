@@ -8,6 +8,7 @@ import {
   checkHistReactivationDelayAction,
   getHistDraftPicksAction,
   updateHistLogDateAction,
+  deleteHistLogAction,
   type HistRosterEntry,
   type HistPlayerResult,
   type HistLogEntry,
@@ -294,6 +295,23 @@ export default function HistoriqueManager({
     setEditError(null)
     startEditTransition(async () => {
       const result = await updateHistLogDateAction(selectedLogIds, editDate)
+      if (result.error) {
+        setEditError(result.error)
+      } else {
+        setSelectedLogIds([])
+        setEditDate('')
+        refreshLog()
+        if (poolerAId) getHistRosterAction(poolerAId, poolSeasonId).then(setRosterA)
+        if (poolerBId) getHistRosterAction(poolerBId, poolSeasonId).then(setRosterB)
+      }
+    })
+  }
+
+  function applyDeleteSelection() {
+    setEditError(null)
+    if (!window.confirm(`Supprimer ${selectedLogIds.length} ligne(s) et annuler leur effet sur les alignements ?`)) return
+    startEditTransition(async () => {
+      const result = await deleteHistLogAction(selectedLogIds)
       if (result.error) {
         setEditError(result.error)
       } else {
@@ -740,6 +758,13 @@ export default function HistoriqueManager({
               className="px-2 py-1 rounded text-xs bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-40"
             >
               {isEditPending ? 'Correction...' : 'Corriger la date effective'}
+            </button>
+            <button
+              onClick={applyDeleteSelection}
+              disabled={isEditPending}
+              className="px-2 py-1 rounded text-xs bg-red-700 text-white hover:bg-red-800 disabled:opacity-40"
+            >
+              {isEditPending ? 'Suppression...' : 'Supprimer la sélection'}
             </button>
             <button
               onClick={() => { setSelectedLogIds([]); setEditError(null) }}

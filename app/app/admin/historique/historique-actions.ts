@@ -494,3 +494,116 @@ export async function updateHistLogDateAction(
   revalidatePath('/poolers')
   return {}
 }
+
+// Supprime une ou plusieurs lignes déjà journalisées (ex: transaction saisie par erreur).
+// Annule aussi la vraie mutation associée (jamais seulement la ligne du journal) :
+//   - arrivée joueur  → supprime la ligne pooler_rosters créée, si elle n'a pas été modifiée depuis
+//   - départ joueur   → restaure removed_at = null sur la ligne d'origine, si elle n'a pas bougé depuis
+//   - type_change     → restaure l'ancien player_type, si le type courant correspond encore à ce que
+//                        cette ligne avait fait (old_type est connu, contrairement à updateHistLogDateAction)
+//   - pick (arrivée)  → restaure current_owner_id vers le propriétaire précédent (retrouvé via la
+//                        ligne de départ jumelle, même pick_id + même changed_at), si le pick n'a pas
+//                        été retransféré depuis
+// Sélectionner l'ensemble des lignes d'une même transaction (tous les joueurs/picks des deux sens)
+// avant de supprimer — une suppression partielle peut laisser le roster dans un état incohérent.
+export async function deleteHistLogAction(ids: number[]): Promise<{ error?: string }> {
+  if (ids.length === 0) return { error: 'Aucune ligne sélectionnée' }
+  const db = createAdminClient()
+
+  const { data: rows, error: fetchError } = await db
+    .from('roster_change_log')
+    .select('id, pooler_id, player_id, pick_id, pool_season_id, change_type, old_type, new_type, changed_at')
+    .in('id', ids)
+  if (fetchError) return { error: fetchError.message }
+
+  for (const row of rows ?? []) {
+    if (row.change_type === 'hist_type_change') {
+      if (!row.old_type) {
+        return { error: `Ligne ${row.id} : type précédent inconnu — suppression annulée (risque d'incohérence).` }
+      }
+      const { data: current } = await db
+        .from('pooler_rosters')
+        .select('id, player_type')
+        .eq('pooler_id', row.pooler_id)
+        .eq('player_id', row.player_id)
+        .eq('pool_season_id', row.pool_season_id)
+        .is('removed_at', null)
+        .maybeSingle()
+      if (!current || current.player_type !== row.new_type) {
+        return { error: `Ligne ${row.id} : le type actuel du joueur ne correspond plus à ce qu'a fait cette ligne (probablement modifié depuis) — suppression annulée.` }
+      }
+      const { error: revertErr } = await db
+        .from('pooler_rosters')
+        .update({ player_type: row.old_type })
+        .eq('id', current.id)
+      if (revertErr) return { error: `Ligne ${row.id} : ${revertErr.message}` }
+      continue
+    }
+
+    if (row.pick_id) {
+      if (row.new_type) {
+        const { data: sibling } = await db
+          .from('roster_change_log')
+          .select('pooler_id')
+          .eq('pick_id', row.pick_id)
+          .eq('changed_at', row.changed_at)
+          .is('new_type', null)
+          .maybeSingle()
+        if (!sibling) {
+          return { error: `Ligne ${row.id} : propriétaire précédent du pick introuvable (ligne de départ jumelle absente) — suppression annulée.` }
+        }
+        const { data: reverted, error: pickErr } = await db
+          .from('pool_draft_picks')
+          .update({ current_owner_id: sibling.pooler_id })
+          .eq('id', row.pick_id)
+          .eq('current_owner_id', row.pooler_id)
+          .select('id')
+        if (pickErr) return { error: `Ligne ${row.id} : ${pickErr.message}` }
+        if (!reverted || reverted.length === 0) {
+          return { error: `Ligne ${row.id} : le pick a été retransféré depuis — suppression annulée.` }
+        }
+      }
+      continue
+    }
+
+    if (row.player_id) {
+      if (row.new_type) {
+        const { data: deleted, error: delErr } = await db
+          .from('pooler_rosters')
+          .delete()
+          .eq('pooler_id', row.pooler_id)
+          .eq('player_id', row.player_id)
+          .eq('pool_season_id', row.pool_season_id)
+          .eq('added_at', row.changed_at)
+          .is('removed_at', null)
+          .select('id')
+        if (delErr) return { error: `Ligne ${row.id} : ${delErr.message}` }
+        if (!deleted || deleted.length === 0) {
+          return { error: `Ligne ${row.id} : la fiche roster correspondante est introuvable ou a été modifiée depuis — suppression annulée.` }
+        }
+      } else {
+        const { data: restored, error: restErr } = await db
+          .from('pooler_rosters')
+          .update({ removed_at: null, is_active: true })
+          .eq('pooler_id', row.pooler_id)
+          .eq('player_id', row.player_id)
+          .eq('pool_season_id', row.pool_season_id)
+          .eq('removed_at', row.changed_at)
+          .select('id')
+        if (restErr) return { error: `Ligne ${row.id} : ${restErr.message}` }
+        if (!restored || restored.length === 0) {
+          return { error: `Ligne ${row.id} : la fiche roster correspondante est introuvable (removed_at ne correspond plus) — suppression annulée.` }
+        }
+      }
+    }
+  }
+
+  const { error: delLogErr } = await db.from('roster_change_log').delete().in('id', ids)
+  if (delLogErr) return { error: delLogErr.message }
+
+  revalidatePath('/admin/historique')
+  revalidatePath('/admin/effectifs')
+  revalidatePath('/classement')
+  revalidatePath('/poolers')
+  return {}
+}
