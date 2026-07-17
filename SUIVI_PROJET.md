@@ -56,6 +56,13 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-17 (suite)
+
+**[Fix] — Choix de repêchage : le tableau ne se rafraîchissait pas au changement de saison** (`app/app/admin/presaison/PicksManager.tsx`) :
+- David a signalé, en testant `/admin/init?tab=choix` juste après le nettoyage de routes de cette session, que changer la saison dans le sélecteur ne mettait rien à jour dans le résumé.
+- Cause : `PicksEditor.tsx` initialise son état local `localPicks` avec `useState<Pick[]>(picks)` — ça ne fixe la valeur qu'au montage initial, donc un nouveau prop `picks` (saison différente) ne resynchronise jamais l'état une fois le composant monté.
+- Fix : `key={selectedId}` sur `<PicksEditor>` dans `PicksManager.tsx` pour forcer un remount complet à chaque changement de saison.
+
 ### 2026-07-17
 
 **[Fix+Chore] — Nettoyage des routes admin mortes + carte des routes documentée dans CLAUDE.md** (`app/app/admin/init/page.tsx`, `app/app/admin/series/page.tsx`, `app/app/signaler/actions.ts`, `app/app/admin/config/actions.ts`, suppression de 9 fichiers `page.tsx` orphelins + 2 dossiers, `CLAUDE.md`) :

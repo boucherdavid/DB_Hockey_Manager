@@ -83,7 +83,7 @@ export default function PicksManager({ saisons, poolers, picksBySaison }: Props)
       )}
 
       {haspicks ? (
-        <PicksEditor picks={picks} poolers={poolers} seasonLabel={saison?.season ?? ''} />
+        <PicksEditor key={selectedId} picks={picks} poolers={poolers} seasonLabel={saison?.season ?? ''} />
       ) : (
         <div className="bg-gray-50 border border-gray-200 rounded-lg px-6 py-8 text-center">
           <p className="text-gray-500 text-sm mb-4">
