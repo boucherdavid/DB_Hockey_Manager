@@ -128,15 +128,31 @@ Hockey_Pool_App/
 
 ## 5. Routes applicatives
 
-**Utilisateur :**
-`/` `/login` `/joueurs` `/statistiques` `/repechage` `/calendrier`
-`/poolers` `/poolers/[id]` `/transactions` `/classement`
-`/series` `/series/picks` `/gestion-effectifs` `/gestion-series` `/compte` `/aide`
+Vérifié par lecture du code le 2026-07-17 (build `next build` + grep des liens réels) —
+mettre à jour cette section dès qu'une route ou un onglet admin change (voir section 11).
 
-**Admin :**
-`/admin` `/admin/joueurs` `/admin/poolers` `/admin/rosters`
-`/admin/recrues` `/admin/transactions` `/admin/presaison`
-`/admin/config` `/admin/series` `/admin/historique`
+**Utilisateur :**
+`/` `/login` `/joueurs` `/statistiques` `/repechage` `/repechage-recrues` `/calendrier`
+`/poolers` `/poolers/[id]` `/transactions` `/classement` `/resultats` (récap veille)
+`/gestion-series` (soumettre ses choix séries) `/classement-series` (classement séries)
+`/gestion-effectifs` `/draft-center` (classement des prospects, vue publique)
+`/dashboard` (redirige vers son propre alignement) `/compte` `/signaler` `/aide` `/offline`
+
+**Admin — 4 pages hub avec onglets (`?tab=`), pas de routes à plat :**
+
+| Hub | Onglets (`?tab=id` → label) |
+|---|---|
+| `/admin/pool` | `poolers` Poolers · `config` Configuration · `communication` Communication (feedback + notifs) · `suivi` Suivi (activité) · `joueurs` Données joueurs (doc pipeline) · `prospects` Classement des prospects |
+| `/admin/init` | `rosters` Rosters initiaux · `recrues` Banque de recrues · `presaison` Pré-saison · `choix` Choix de repêchage (← réassigner le propriétaire d'un pick échangé hors-app) |
+| `/admin/effectifs` | `mouvements` Mouvements · `transactions` Transactions · `historique` Historique (saisie historique manuelle) · `donnees` Mise à jour données (doc pipeline) |
+| `/admin/series` | pas d'onglets — vue unique (avancement des séries), message si aucune saison séries active |
+
+Repêchage annuel en direct (tableau de sélection) : route à part `/admin/repechage`
+(pas un onglet — lien direct dans la Navbar), distinct de l'onglet `/admin/init?tab=choix`
+qui ne sert qu'à réassigner un pick déjà existant.
+
+`/admin/joueurs` et `/admin/draft-center` sont des redirections volontaires vers les onglets
+équivalents de `/admin/pool` (compat liens existants) — pas des pages à part entière.
 
 ---
 
@@ -195,7 +211,7 @@ Règle : quand on touche une page de consultation, on la rend responsive en mêm
 - Pas de layout en colonnes côte à côte sur mobile (`flex-wrap` ou `grid-cols-1`)
 
 Pages de consultation : `/`, `/joueurs`, `/statistiques`, `/repechage`,
-`/poolers`, `/poolers/[id]`, `/transactions`, `/series`, `/series/picks`, `/aide`
+`/poolers`, `/poolers/[id]`, `/transactions`, `/gestion-series`, `/classement-series`, `/aide`
 
 ---
 

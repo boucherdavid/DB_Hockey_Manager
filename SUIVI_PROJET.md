@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-07-16
+Derniere mise a jour: 2026-07-17
 
 ## Role du fichier
 
@@ -55,6 +55,19 @@ Je l'utiliserai pour:
   - `/admin/rosters`
 
 ## Journal des sessions
+
+### 2026-07-17
+
+**[Fix+Chore] — Nettoyage des routes admin mortes + carte des routes documentée dans CLAUDE.md** (`app/app/admin/init/page.tsx`, `app/app/admin/series/page.tsx`, `app/app/signaler/actions.ts`, `app/app/admin/config/actions.ts`, suppression de 9 fichiers `page.tsx` orphelins + 2 dossiers, `CLAUDE.md`) :
+- Contexte : en essayant de corriger le pick échangé dans la transaction Yakemchuk/Rinzel (voir 2026-07-16), j'ai orienté David vers `/admin/config` — une route qui n'existe plus dans la navigation réelle depuis la réorganisation de l'admin en 4 pages hub à onglets (`/admin/pool`, `/admin/init`, `/admin/effectifs`, `/admin/series`). CLAUDE.md listait encore l'ancienne structure à plat (`/admin/config`, `/admin/joueurs`, etc.), jamais mise à jour lors de cette réorg. David a demandé un document de mapping tenu à jour pour éviter que ça se reproduise.
+- **Investigation complète** (agent Explore, lecture directe du code) : la vraie fonctionnalité de réassignation de pick (`PicksEditor.tsx`) vit maintenant sous l'onglet "Choix de repêchage" de `/admin/init` (`?tab=choix`, via `PicksManager`), pas `/admin/config`.
+- **Bug trouvé** : `/admin/init` contient un 5e bloc de code ("Repêchage des recrues" — `DraftBoard`/`DraftOrderEditor`) absent de son tableau `TABS` — donc inatteignable par navigation (`activeTab` retombe toujours sur `rosters`). Code mort depuis la réorg ; le vrai tableau de repêchage annuel reste accessible via la route séparée `/admin/repechage`, toujours liée dans la Navbar. Bloc supprimé de `admin/init/page.tsx` (fetch + JSX + imports `DraftBoard`/`DraftOrderEditor`/`SaisonSelectNav` + param `saisonId`) — ces composants restent utilisés par `/admin/repechage/page.tsx`, donc non supprimés eux-mêmes.
+- **2 liens cassés corrigés** : `admin/series/page.tsx` pointait vers `/admin/config` (orphelin) → `/admin/pool?tab=config` ; la notification push envoyée sur un nouveau feedback (`app/signaler/actions.ts`) pointait vers `/admin/feedback` (orphelin) → `/admin/pool?tab=communication`. `config/actions.ts` : `REVALIDATE_PATHS` mis à jour (`/admin/config` → `/admin/pool`).
+- **Pages orphelines supprimées** (confirmé via `grep` qu'aucun `href`/lien n'y menait encore, seulement d'anciens `revalidatePath` inoffensifs) : `admin/poolers/page.tsx`, `admin/rosters/page.tsx`, `admin/recrues/page.tsx`, `admin/transactions/page.tsx`, `admin/presaison/page.tsx`, `admin/historique/page.tsx`, `admin/suivi/page.tsx`, `admin/config/page.tsx`, `admin/feedback/page.tsx` — chaque fois seulement le `page.tsx` (les composants/actions du même dossier restent utilisés par les onglets des hubs). Dossiers `admin/mouvements/` et `admin/notifications/` supprimés en entier (aucun composant réutilisé ailleurs — `MouvementsManager.tsx` confirmé non importé nulle part, superseded par `GestionEffectifsManager`). `admin/joueurs/page.tsx` et `admin/draft-center/page.tsx` conservés : ce sont des redirections volontaires vers les onglets équivalents, pas du code mort.
+- Vérifié avec David que rien de lié aux séries n'était "mort" seulement parce qu'aucune saison séries n'est active actuellement — confirmé : `/admin/series` est une vraie page hub live, le message "aucune saison active" est un état normal, pas du code mort.
+- **CLAUDE.md section 5** réécrite avec la vraie structure (table hub → onglets, vérifiée par `next build` + grep des liens réels) ; section 8 (pages responsive) corrigée (`/series`/`/series/picks` n'existent plus, remplacées par `/gestion-series`/`/classement-series`).
+- Validé par `next build` complet (aucune erreur, liste des routes générées confirmée) + `tsc --noEmit` propre après chaque étape.
+- Reste à faire par David : utiliser `/admin/init?tab=choix` (pas `/admin/config`) pour remettre le pick de la transaction Yakemchuk/Rinzel chez son propriétaire d'origine.
 
 ### 2026-07-16
 

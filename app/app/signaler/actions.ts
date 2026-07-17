@@ -28,7 +28,7 @@ export async function submitFeedbackAction(
   sendPushToAdmins({
     title: `DB Hockey Manager — ${TYPE_LABEL[type] ?? 'Retour'}`,
     body:  `${pooler?.name ?? 'Un pooler'} a soumis un retour : ${description.trim().slice(0, 80)}${description.length > 80 ? '…' : ''}`,
-    url:   '/admin/feedback',
+    url:   '/admin/pool?tab=communication',
   }).catch(() => {})
 
   return {}

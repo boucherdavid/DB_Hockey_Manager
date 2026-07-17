@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-const REVALIDATE_PATHS = ['/admin/config', '/admin', '/', '/poolers', '/dashboard']
+const REVALIDATE_PATHS = ['/admin/pool', '/admin', '/', '/poolers', '/dashboard']
 const revalidateAll = () => REVALIDATE_PATHS.forEach(p => revalidatePath(p))
 
 function nextSeasonLabel(season: string, offset: number): string {
