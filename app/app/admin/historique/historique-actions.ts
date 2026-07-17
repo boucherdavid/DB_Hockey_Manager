@@ -164,7 +164,7 @@ export async function getHistDraftPicksAction(poolerId: string): Promise<HistDra
 
 export async function submitHistChangeAction(
   input: HistChangeInput,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; warning?: string }> {
   const db = createAdminClient()
   const ts = `${input.date}T12:00:00Z`
   const changeType = `hist_${input.txType}`
@@ -184,39 +184,53 @@ export async function submitHistChangeAction(
   if (input.txType === 'type_change') {
     if (!input.playerOutAId || !input.typeChangeTo) return { error: 'Joueur ou type manquant' }
 
-    async function applyTypeChange(playerId: number, newType: string) {
+    async function applyTypeChange(playerId: number, newType: string): Promise<{ error?: string; warning?: string }> {
       const { data: existing } = await db
         .from('pooler_rosters')
-        .select('player_type')
+        .select('player_type, added_at')
         .eq('pooler_id', input.poolerAId)
         .eq('player_id', playerId)
         .eq('pool_season_id', input.poolSeasonId)
         .is('removed_at', null)
         .maybeSingle()
-      if (!existing) return `Entrée introuvable dans le roster actuel (joueur ${playerId})`
+      if (!existing) return { error: `Entrée introuvable dans le roster actuel (joueur ${playerId})` }
+
+      // La date effective saisie fait foi : si elle précède la date d'ajout actuelle du joueur
+      // (souvent un ajout en direct via addPlayerAction, non daté historiquement), on recule
+      // added_at pour que la fenêtre added_at→removed_at couvre bien la transaction —
+      // sinon buildStandings() ignorerait tout ce qui précède added_at, peu importe ce log.
+      const updateFields: Record<string, unknown> = { player_type: newType }
+      let warning: string | undefined
+      if (existing.added_at && ts < existing.added_at) {
+        updateFields.added_at = ts
+        warning = `Date d'ajout au roster reculée du ${existing.added_at.slice(0, 10)} au ${input.date} (joueur ${playerId}) pour couvrir la transaction.`
+      }
+
       const { error } = await db
         .from('pooler_rosters')
-        .update({ player_type: newType })
+        .update(updateFields)
         .eq('pooler_id', input.poolerAId)
         .eq('player_id', playerId)
         .eq('pool_season_id', input.poolSeasonId)
         .is('removed_at', null)
-      if (error) return `Changement de type : ${error.message}`
+      if (error) return { error: `Changement de type : ${error.message}` }
       await log(playerId, input.poolerAId, newType, existing.player_type)
-      return null
+      return { warning }
     }
 
-    const err1 = await applyTypeChange(input.playerOutAId, input.typeChangeTo)
-    if (err1) return { error: err1 }
+    const res1 = await applyTypeChange(input.playerOutAId, input.typeChangeTo)
+    if (res1.error) return { error: res1.error }
+    const warnings = [res1.warning].filter((w): w is string => !!w)
 
     if (input.typeChangeSecondPlayerId && input.typeChangeSecondTo) {
-      const err2 = await applyTypeChange(input.typeChangeSecondPlayerId, input.typeChangeSecondTo)
-      if (err2) return { error: err2 }
+      const res2 = await applyTypeChange(input.typeChangeSecondPlayerId, input.typeChangeSecondTo)
+      if (res2.error) return { error: res2.error }
+      if (res2.warning) warnings.push(res2.warning)
     }
 
     revalidatePath('/admin/historique')
     revalidatePath('/admin/effectifs')
-    return {}
+    return { warning: warnings.length > 0 ? warnings.join(' ') : undefined }
   }
 
   // Échange entre poolers : un ou plusieurs joueurs de chaque côté (N contre M),

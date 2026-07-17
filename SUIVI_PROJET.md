@@ -56,6 +56,16 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-17 (suite 2)
+
+**[Fix] — Changement de type sans effet réel sur les points car `added_at` restait figé après un ajout en direct** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`, données staging) :
+- Contexte : David a constaté que Jackson Blake (marqué "Changement de type" → actif le 14 octobre 2025 via Historique) affichait 0 point partout dans son alignement, malgré des dizaines de matchs joués par CAR depuis le 7 octobre.
+- Cause : sa ligne `pooler_rosters` avait `added_at = 2026-06-07T15:07:28` (ajout en direct via `addPlayerAction`, sans date historique — pas via le mode init qui date correctement au `saison_start_date`). Le "Changement de type" du 14 octobre a bien modifié `player_type`, mais cette action ne touche jamais `added_at`/`removed_at` par conception — la fenêtre de calcul des points (`added_at → removed_at`) commençait donc en juin, après toute la saison, peu importe les événements dans `roster_change_log`.
+- Discussion avec David sur la règle attendue : la date effective saisie dans Historique doit toujours faire foi comme date de début pour le joueur concerné ; en temps normal (hors Historique), c'est l'horodatage réel de l'action qui compte — comportement déjà correct pour les ajouts/échanges/retraits (ils fixent `added_at`/`removed_at` explicitement). Le trou ne concernait que `type_change`, seule action qui modifie une ligne existante sans jamais reposer `added_at`.
+- **Fix** : `applyTypeChange` compare maintenant la date effective saisie à `added_at` de la ligne visée — si la date saisie est antérieure, `added_at` est reculé à cette date (décision validée avec David : correction automatique plutôt qu'un simple avertissement, cohérent avec "la date effective saisie fait foi"). Un avertissement non bloquant (orange) informe l'admin quand ça se produit, avec l'ancienne et la nouvelle date. `submitHistChangeAction` retourne maintenant `{ warning? }` en plus de `{ error? }`.
+- Correction ponctuelle en staging : `added_at` de Jackson Blake (pooler_rosters id=37) remis au 2025-10-07 (début de saison réel), plutôt qu'à la date du 14 octobre — cohérent avec la règle générale "un joueur présent depuis le début de saison a `added_at = saison_start_date`, les changements de type ultérieurs se chargent de la bonne classification à l'intérieur de cette fenêtre".
+- Validé par `next build` complet + `tsc --noEmit` propre.
+
 ### 2026-07-17 (suite)
 
 **[Fix] — Choix de repêchage : le tableau ne se rafraîchissait pas au changement de saison** (`app/app/admin/presaison/PicksManager.tsx`) :

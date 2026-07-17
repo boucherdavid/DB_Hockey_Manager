@@ -265,6 +265,7 @@ export default function HistoriqueManager({
 
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [submitWarning, setSubmitWarning] = useState<string | null>(null)
   const [log, setLog] = useState<HistLogEntry[]>(initialLog)
   const [logFilter, setLogFilter] = useState<HistTxType | 'all'>('all')
 
@@ -433,6 +434,7 @@ export default function HistoriqueManager({
   function handleSubmit() {
     setError(null)
     setSuccess(false)
+    setSubmitWarning(null)
     startTransition(async () => {
       const result = await submitHistChangeAction({
         poolSeasonId,
@@ -455,6 +457,7 @@ export default function HistoriqueManager({
         setError(result.error)
       } else {
         setSuccess(true)
+        setSubmitWarning(result.warning ?? null)
         resetSelections()
         // Recharger les rosters et le log
         if (poolerAId) getHistRosterAction(poolerAId, poolSeasonId).then(setRosterA)
@@ -707,6 +710,11 @@ export default function HistoriqueManager({
         {success && (
           <p className="text-green-700 text-sm bg-green-50 border border-green-200 rounded px-3 py-2">
             ✓ Transaction enregistrée — prêt pour la suivante ({poolerName || '—'}, {date}).
+          </p>
+        )}
+        {submitWarning && (
+          <p className="text-orange-700 text-sm bg-orange-50 border border-orange-200 rounded px-3 py-2">
+            ⚠ {submitWarning}
           </p>
         )}
 
