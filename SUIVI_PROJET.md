@@ -21,6 +21,16 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-07-18 (suite)
+
+**[Feat] — Script de synchronisation staging → prod pour l'historique de roster** (`python_script/sync_staging_to_prod.py` nouveau, `CLAUDE.md`) :
+- Contexte : David reconstruit son historique de saison (échanges, changements de type, picks) dans l'outil Historique, mais toujours contre staging. Il a fait remarquer qu'il ne voulait pas resaisir deux fois la même chose en prod — le but de staging est justement de valider avant, pas de dupliquer le travail.
+- Investigation avant de coder (lecture directe des deux bases) : les `poolers.id` et `pool_draft_picks.id` sont identiques entre staging et prod (même origine de clone) — aucun remapping nécessaire pour eux. Par contre `players.id` **diverge** : les deux bases sont importées indépendamment par le même pipeline PuckPedia, l'ordre d'insertion des nouveaux joueurs n'est pas garanti identique (prod : 2553 joueurs, id max 3051 ; staging : 2569 joueurs, id max 2824). Une copie brute des `player_id` aurait donc pu pointer vers le mauvais joueur en prod. ~20% des joueurs actuellement rostérés (67/326) n'ont pas de `nhl_id` (recrues/prospects encore en junior/AHL) — un mapping uniquement par `nhl_id` aurait donc raté une bonne partie des cas réels.
+- Décidé avec David (2 questions) : script de synchronisation avec **remplacement complet** de la saison régulière active (efface `pooler_rosters`/`roster_change_log` de prod pour cette saison et les remplace par la version staging), plutôt qu'une fusion incrémentale — plus simple, correspond au modèle mental "staging = source de vérité une fois validé".
+- **`sync_staging_to_prod.py`** : mapping des joueurs par `nhl_id` en premier, repli sur `(prénom, nom)` exact si absent des deux côtés ; si un joueur référencé par le roster actif de staging n'a aucune correspondance fiable en prod (introuvable ou ambigu), le script **abandonne sans rien écrire** plutôt que de risquer une corruption — recommande de rouler le pipeline prod d'abord. `pool_draft_picks` synchronisé par `id` direct (ownership + `is_used`). Dry-run par défaut (aucune écriture) ; `--apply` requiert une confirmation tapée "oui", avant toute suppression. Log dans `python_script/logs/` comme les autres scripts du pipeline.
+- Portée volontairement limitée : pas les joueurs/contrats (déjà gérés par le pipeline PuckPedia indépendant par base), pas les comptes poolers, pas la config de saison, pas `transactions`/`transaction_items` (non utilisé par le flux Historique).
+- Testé en dry-run contre les vraies données (staging et prod) : 2517/2569 joueurs mappés automatiquement, aucun problème sur les 326 lignes du roster actif — script fonctionnel, prêt à être utilisé avec `--apply` quand David voudra pousser son historique validé vers prod. Pas encore exécuté en mode réel.
+
 ### 2026-07-18
 
 **[Fix] — Le recul automatique de `added_at` (session 2026-07-17) ne couvrait que l'onglet Historique, pas les mouvements de saison régulière** (`app/lib/rosterTypeChange.ts` nouveau, `app/app/admin/historique/historique-actions.ts`, `app/app/gestion-effectifs/actions.ts`, `app/app/gestion-effectifs/GestionEffectifsManager.tsx`, `app/app/admin/transactions/actions.ts`, `app/app/admin/transactions/TransactionBuilder.tsx`) :

@@ -68,6 +68,19 @@ python import_supabase.py      # 2. Import joueurs/contrats → Supabase
 python import_drafts.py        # 3. Import repêchages NHL (5 dernières saisons)
 ```
 
+```bash
+# Synchroniser l'historique de roster (pooler_rosters, roster_change_log, ownership des
+# picks) de la saison régulière active, de staging vers prod — évite de ressaisir
+# manuellement en prod une reconstruction d'historique déjà validée en staging.
+# Portée limitée : PAS les joueurs/contrats (pipeline PuckPedia), PAS les comptes
+# poolers, PAS la config de saison. Remplacement complet (delete + reinsert), jamais
+# incrémental. Voir python_script/sync_staging_to_prod.py pour le détail du mapping
+# joueurs (players.id peut diverger entre les deux bases — mappé par nhl_id puis nom).
+cd python_script
+python sync_staging_to_prod.py           # dry-run — aucune écriture, affiche le rapport
+python sync_staging_to_prod.py --apply   # exécution réelle — demande confirmation "oui"
+```
+
 ---
 
 ## 3. Structure du projet
@@ -329,6 +342,7 @@ Exemples :
 | `app/lib/streaks.ts` | Indicateurs de séquence (badges 🔥✅🧊) |
 | `app/proxy.ts` | Auth + redirections (remplace middleware.ts) |
 | `python_script/run_pipeline.py` | Point d'entrée pipeline de données |
+| `python_script/sync_staging_to_prod.py` | Synchronise l'historique de roster staging → prod |
 | `schema.sql` | Schéma de référence BD |
 | `supabase_migrations/` | Migrations SQL historiques |
 
