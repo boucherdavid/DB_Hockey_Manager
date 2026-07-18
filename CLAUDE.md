@@ -195,10 +195,16 @@ qui ne sert qu'à réassigner un pick déjà existant.
   — mais le tout premier événement "réel" (l'ajout) reste dans la liste avec une date plus
   tardive. Bug corrigé le 2026-07-17 (`statusAt` retombait sur le type courant au lieu de
   `old_type` pour cette fenêtre) — voir `SUIVI_PROJET.md`.
-- **Changement de type et `added_at`** : quand une date effective Historique précède
-  `added_at` de la ligne visée, `added_at` est automatiquement reculé à cette date (avec
-  avertissement non bloquant) — la date effective saisie fait toujours foi comme date de
-  début pour le joueur concerné.
+- **Changement de type et `added_at`** : quand une date effective précède `added_at` de la
+  ligne visée, `added_at` est automatiquement reculé à cette date (avec avertissement non
+  bloquant) — la date effective saisie fait toujours foi comme date de début pour le joueur
+  concerné. Logique partagée dans `computeTypeChangeAddedAt()` (`app/lib/rosterTypeChange.ts`),
+  utilisée par les 3 interfaces qui modifient `player_type` sur une ligne existante sans
+  jamais toucher `added_at` : `/admin/historique` (Changement de type), `/gestion-effectifs`
+  (`activate`/`deactivate`, checkbox admin "Forcer une date effective"), `/admin/transactions`
+  (`type_change`/`promote`/`reactivate`, `transactionDate`). Toute nouvelle action qui modifie
+  `player_type` sur une ligne existante avec une date potentiellement passée doit passer par
+  cette même fonction plutôt que de dupliquer la logique.
 - **Périodes affichées** (`PlayerContrib.periods`, popup ↩ dans `/classement` et
   `/poolers/[id]`) : une entrée par fenêtre **active** contiguë (via `activeSegments()`), pas
   une entrée par ligne `pooler_rosters`. Un joueur réactivé plusieurs fois sans jamais quitter
