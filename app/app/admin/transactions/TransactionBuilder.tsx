@@ -287,7 +287,7 @@ export default function TransactionBuilder({ poolers, saison }: { poolers: Poole
   const [notes, setNotes] = useState('')
   const [transactionDate, setTransactionDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [submitting, setSubmitting] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null)
 
   const addItem = (item: TxItem) => setItems(prev => [...prev, item])
   const removeItem = (tempId: string) => setItems(prev => prev.filter(i => i.tempId !== tempId))
@@ -303,7 +303,9 @@ export default function TransactionBuilder({ poolers, saison }: { poolers: Poole
       setItems([])
       setNotes('')
       setTransactionDate(new Date().toISOString().slice(0, 10))
-      setMessage({ type: 'success', text: 'Transaction enregistrée.' })
+      setMessage(result.warning
+        ? { type: 'warning', text: `Transaction enregistrée. ⚠ ${result.warning}` }
+        : { type: 'success', text: 'Transaction enregistrée.' })
     }
     setTimeout(() => setMessage(null), 5000)
   }
@@ -401,7 +403,7 @@ export default function TransactionBuilder({ poolers, saison }: { poolers: Poole
                 Tout effacer
               </button>
               {message && (
-                <span className={`text-sm font-medium ${message.type === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+                <span className={`text-sm font-medium ${message.type === 'error' ? 'text-red-600' : message.type === 'warning' ? 'text-orange-600' : 'text-green-600'}`}>
                   {message.text}
                 </span>
               )}

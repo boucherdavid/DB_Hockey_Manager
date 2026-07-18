@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-07-17
+Derniere mise a jour: 2026-07-18
 
 ## Role du fichier
 
@@ -20,6 +20,17 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-18
+
+**[Fix] — Le recul automatique de `added_at` (session 2026-07-17) ne couvrait que l'onglet Historique, pas les mouvements de saison régulière** (`app/lib/rosterTypeChange.ts` nouveau, `app/app/admin/historique/historique-actions.ts`, `app/app/gestion-effectifs/actions.ts`, `app/app/gestion-effectifs/GestionEffectifsManager.tsx`, `app/app/admin/transactions/actions.ts`, `app/app/admin/transactions/TransactionBuilder.tsx`) :
+- Contexte : David a demandé confirmation que la mécanique de comptage de points serait correcte en saison régulière, pas seulement pour la saisie d'historique. En vérifiant plutôt que de simplement confirmer, j'ai trouvé que le fix du 2026-07-17 (recul de `added_at` si la date effective le précède) n'avait été appliqué qu'à `submitHistChangeAction` (onglet Historique) — pas aux deux autres interfaces qui font exactement le même type de mutation (`UPDATE player_type` sur une ligne existante, sans jamais toucher `added_at`) avec une date effective potentiellement passée :
+  - `/gestion-effectifs` (`GestionEffectifsManager`, utilisé en direct pendant la saison par les poolers et par l'admin) : `activate()`/`deactivate()`, avec la checkbox admin "Forcer une date effective" (`forcedDate`).
+  - `/admin/transactions` (`TransactionBuilder`) : action `type_change`/`promote`/`reactivate`, avec `transactionDate`.
+- **Extraction** : nouvelle fonction pure partagée `computeTypeChangeAddedAt()` (`app/lib/rosterTypeChange.ts`) — même logique que le fix Historique, réutilisée dans les 3 endroits plutôt que dupliquée. `historique-actions.ts` refactorisé pour l'utiliser aussi (comportement inchangé).
+- Les 3 actions serveur retournent maintenant `{ error?, warning? }` (au lieu de `{ error? }` seulement) ; les 3 composants clients (`HistoriqueManager`, `GestionEffectifsManager`, `TransactionBuilder`) affichent l'avertissement non bloquant en orange après soumission.
+- Sans ce fix, une désactivation/réactivation "en temps réel" du **jour même** ne posait aucun problème (dates toujours croissantes) — le risque était spécifiquement le cas où un admin utilise une date passée (`forcedDate`/`transactionDate`) sur un joueur ajouté en direct plus tôt dans la saison mais dont la date d'ajout réelle n'a jamais été corrigée.
+- Validé par `next build` complet + `tsc --noEmit` propre.
 
 ### 2026-07-17 (suite 3)
 

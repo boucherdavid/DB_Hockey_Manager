@@ -320,6 +320,7 @@ export default function GestionEffectifsManager({
   const [isPending, startTransition] = useTransition()
   const [error, setError]   = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [submitWarning, setSubmitWarning] = useState<string | null>(null)
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -495,6 +496,7 @@ export default function GestionEffectifsManager({
 
   function handleSubmit() {
     setError(null)
+    setSubmitWarning(null)
     startTransition(async () => {
       const result = await submitBatchAction({
         poolerId, saisonId,
@@ -505,6 +507,7 @@ export default function GestionEffectifsManager({
         setError(result.error)
       } else {
         setSuccess(true)
+        setSubmitWarning(result.warning ?? null)
         setCart([])
         resetAddForm()
         const [r, counts] = await Promise.all([
@@ -764,6 +767,7 @@ export default function GestionEffectifsManager({
 
       {error   && <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>}
       {success && <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-700">✓ Mouvements appliqués avec succès.</div>}
+      {submitWarning && <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-sm text-orange-700">⚠ {submitWarning}</div>}
     </div>
   )
 }

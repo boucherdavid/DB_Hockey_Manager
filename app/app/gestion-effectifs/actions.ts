@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 import { sendPushToUser } from '@/lib/push'
+import { computeTypeChangeAddedAt } from '@/lib/rosterTypeChange'
 
 export type PlayerType = 'actif' | 'reserviste' | 'ltir' | 'recrue'
 
@@ -206,7 +207,7 @@ export async function submitBatchAction(input: {
   saisonId: number
   actions: BatchActionInput[]
   forcedDate?: string
-}): Promise<{ error?: string }> {
+}): Promise<{ error?: string; warning?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non authentifié' }
@@ -256,13 +257,15 @@ export async function submitBatchAction(input: {
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
+  const warnings: string[] = []
+
   async function getEntry(entryId: number) {
     const { data } = await db
       .from('pooler_rosters')
-      .select('player_id, player_type, players (nhl_id)')
+      .select('player_id, player_type, added_at, players (nhl_id)')
       .eq('id', entryId)
       .single()
-    return data as { player_id: number; player_type: string; players: { nhl_id: number | null } | null } | null
+    return data as { player_id: number; player_type: string; added_at: string | null; players: { nhl_id: number | null } | null } | null
   }
 
   async function log(playerId: number, changeType: string, oldType: string | null, newType: string | null) {
@@ -301,7 +304,11 @@ export async function submitBatchAction(input: {
   async function deactivate(entryId: number, toType: 'reserviste' | 'ltir') {
     const e = await getEntry(entryId)
     if (!e) throw new Error('Entrée introuvable')
-    await db.from('pooler_rosters').update({ player_type: toType }).eq('id', entryId)
+    const { addedAtOverride, warning } = computeTypeChangeAddedAt(e.added_at, changedAt)
+    if (warning) warnings.push(warning)
+    await db.from('pooler_rosters')
+      .update({ player_type: toType, ...(addedAtOverride ? { added_at: addedAtOverride } : {}) })
+      .eq('id', entryId)
     await log(e.player_id, toType === 'ltir' ? 'ltir' : 'deactivation', e.player_type, toType)
   }
 
@@ -309,7 +316,11 @@ export async function submitBatchAction(input: {
     const e = await getEntry(entryId)
     if (!e) throw new Error('Entrée introuvable')
     if (withDelayCheck) await checkReactivationDelay(e.player_id)
-    await db.from('pooler_rosters').update({ player_type: 'actif' }).eq('id', entryId)
+    const { addedAtOverride, warning } = computeTypeChangeAddedAt(e.added_at, changedAt)
+    if (warning) warnings.push(warning)
+    await db.from('pooler_rosters')
+      .update({ player_type: 'actif', ...(addedAtOverride ? { added_at: addedAtOverride } : {}) })
+      .eq('id', entryId)
     await log(e.player_id, fromType === 'ltir' ? 'retour_ltir' : 'activation', fromType, 'actif')
   }
 
@@ -428,7 +439,7 @@ export async function submitBatchAction(input: {
       }).catch(() => {})
     }
 
-    return {}
+    return { warning: warnings.length > 0 ? warnings.join(' ') : undefined }
   } catch (e: any) {
     return { error: e?.message ?? 'Erreur inconnue' }
   }

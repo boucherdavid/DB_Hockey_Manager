@@ -1,6 +1,7 @@
 'use server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { computeTypeChangeAddedAt } from '@/lib/rosterTypeChange'
 
 export type HistRosterEntry = {
   id: number
@@ -195,16 +196,9 @@ export async function submitHistChangeAction(
         .maybeSingle()
       if (!existing) return { error: `Entrée introuvable dans le roster actuel (joueur ${playerId})` }
 
-      // La date effective saisie fait foi : si elle précède la date d'ajout actuelle du joueur
-      // (souvent un ajout en direct via addPlayerAction, non daté historiquement), on recule
-      // added_at pour que la fenêtre added_at→removed_at couvre bien la transaction —
-      // sinon buildStandings() ignorerait tout ce qui précède added_at, peu importe ce log.
+      const { addedAtOverride, warning } = computeTypeChangeAddedAt(existing.added_at, ts)
       const updateFields: Record<string, unknown> = { player_type: newType }
-      let warning: string | undefined
-      if (existing.added_at && ts < existing.added_at) {
-        updateFields.added_at = ts
-        warning = `Date d'ajout au roster reculée du ${existing.added_at.slice(0, 10)} au ${input.date} (joueur ${playerId}) pour couvrir la transaction.`
-      }
+      if (addedAtOverride) updateFields.added_at = addedAtOverride
 
       const { error } = await db
         .from('pooler_rosters')

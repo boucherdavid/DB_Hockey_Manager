@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { computeTypeChangeAddedAt } from '@/lib/rosterTypeChange'
 
 export type ActionType = 'transfer' | 'promote' | 'sign' | 'reactivate' | 'release' | 'type_change' | 'ballotage'
 
@@ -106,7 +107,7 @@ export async function submitTransactionAction(
   notes: string,
   items: TxItemPayload[],
   transactionDate?: string,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; warning?: string }> {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -285,6 +286,7 @@ export async function submitTransactionAction(
   if (itemsErr) return { error: itemsErr.message }
 
   // Appliquer
+  const warnings: string[] = []
   for (const item of items) {
     const { action_type, from_pooler_id, to_pooler_id, player_id, pick_id, old_player_type, new_player_type } = item
 
@@ -319,14 +321,22 @@ export async function submitTransactionAction(
     if (action_type === 'promote' || action_type === 'reactivate' || action_type === 'type_change') {
       const matchType = action_type === 'type_change' ? old_player_type : action_type === 'promote' ? 'recrue' : 'ltir'
       const poolerId = to_pooler_id ?? from_pooler_id!
-      const { error } = await supabase
+      const { data: existingRow } = await supabase
         .from('pooler_rosters')
-        .update({ player_type: new_player_type })
+        .select('id, added_at')
         .eq('pooler_id', poolerId)
         .eq('player_id', player_id!)
         .eq('pool_season_id', saisonId)
         .eq('player_type', matchType!)
         .eq('is_active', true)
+        .maybeSingle()
+      if (!existingRow) return { error: `Joueur (id: ${player_id}) avec type "${matchType}" introuvable.` }
+      const { addedAtOverride, warning } = computeTypeChangeAddedAt(existingRow.added_at, txTs)
+      if (warning) warnings.push(warning)
+      const { error } = await supabase
+        .from('pooler_rosters')
+        .update({ player_type: new_player_type, ...(addedAtOverride ? { added_at: addedAtOverride } : {}) })
+        .eq('id', existingRow.id)
       if (error) return { error: error.message }
       continue
     }
@@ -356,5 +366,5 @@ export async function submitTransactionAction(
     }
   }
 
-  return {}
+  return { warning: warnings.length > 0 ? warnings.join(' ') : undefined }
 }
