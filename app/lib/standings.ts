@@ -147,30 +147,73 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
   // statuts successifs.
   const { data: changeLogRows } = await admin
     .from('roster_change_log')
-    .select('pooler_id, player_id, changed_at, new_type')
+    .select('pooler_id, player_id, changed_at, new_type, old_type')
     .eq('pool_season_id', seasonId)
     .not('new_type', 'is', null)
 
-  const eventsByKey = new Map<string, { changedAt: number; newType: string }[]>()
-  for (const r of (changeLogRows ?? []) as { pooler_id: string; player_id: number; changed_at: string; new_type: string }[]) {
+  const eventsByKey = new Map<string, { changedAt: number; newType: string; oldType: string | null }[]>()
+  for (const r of (changeLogRows ?? []) as { pooler_id: string; player_id: number; changed_at: string; new_type: string; old_type: string | null }[]) {
     const key = `${r.pooler_id}::${r.player_id}`
     if (!eventsByKey.has(key)) eventsByKey.set(key, [])
-    eventsByKey.get(key)!.push({ changedAt: new Date(r.changed_at).getTime(), newType: r.new_type })
+    eventsByKey.get(key)!.push({ changedAt: new Date(r.changed_at).getTime(), newType: r.new_type, oldType: r.old_type })
   }
   for (const events of eventsByKey.values()) events.sort((a, b) => a.changedAt - b.changedAt)
 
   // Statut du joueur à un instant donné : dernier événement connu avant ce moment,
   // ou `fallback` (player_type de la ligne) si aucun événement ne précède (ex: rosters
   // initiaux en mode init, qui ne journalisent rien).
+  // Cas particulier : si le tout premier événement connu (trié par date effective, pas par
+  // date de saisie) survient APRÈS l'instant demandé, `fallback` (le player_type courant,
+  // donc le plus récent) serait faux — on utilise plutôt le old_type de cet événement, qui
+  // représente le statut juste avant que la date effective saisie ne l'écrase. Arrive quand
+  // une correction Historique (ex: Changement de type) porte une date antérieure au premier
+  // événement réellement journalisé pour ce joueur (ex: son ajout initial en temps réel).
   function statusAt(key: string, timeMs: number, fallback: string): string {
     const events = eventsByKey.get(key)
     if (!events || events.length === 0) return fallback
+    if (timeMs < events[0].changedAt) return events[0].oldType ?? fallback
     let result = fallback
     for (const e of events) {
       if (e.changedAt > timeMs) break
       result = e.newType
     }
     return result
+  }
+
+  // Découpe une ligne pooler_rosters (added_at→removed_at) en fenêtres "actif" contiguës,
+  // pour qu'un joueur réactivé plusieurs fois dans la saison (recrue/réserviste↔actif, sans
+  // jamais quitter le pool) affiche une période distincte par fenêtre plutôt qu'une seule
+  // période couvrant toute la ligne.
+  function activeSegments(
+    key: string,
+    addedAtMs: number,
+    removedAtMs: number | null,
+    fallback: string,
+  ): { start: number; end: number | null }[] {
+    const events = eventsByKey.get(key) ?? []
+    const boundarySet = new Set<number>([addedAtMs])
+    for (const e of events) {
+      if (e.changedAt > addedAtMs && (removedAtMs === null || e.changedAt < removedAtMs)) {
+        boundarySet.add(e.changedAt)
+      }
+    }
+    if (removedAtMs !== null) boundarySet.add(removedAtMs)
+    const boundaries = Array.from(boundarySet).sort((a, b) => a - b)
+
+    const segments: { start: number; end: number | null }[] = []
+    for (let i = 0; i < boundaries.length; i++) {
+      const segStart = boundaries[i]
+      const segEnd = i + 1 < boundaries.length ? boundaries[i + 1] : removedAtMs
+      if (segEnd !== null && segEnd <= segStart) continue
+      if (statusAt(key, segStart, fallback) !== 'actif') continue
+      const prev = segments[segments.length - 1]
+      if (prev && prev.end === segStart) {
+        prev.end = segEnd
+      } else {
+        segments.push({ start: segStart, end: segEnd })
+      }
+    }
+    return segments
   }
 
   const poolerMap = new Map<string, { name: string; players: PlayerContrib[] }>()
@@ -207,36 +250,38 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
     for (const row of rows) {
       const addedAt  = row.added_at  ? new Date(row.added_at)  : null
       const removedAt = row.removed_at ? new Date(row.removed_at) : null
+      if (!addedAt) continue
 
-      const earned: StatBlock = { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0 }
-      let gamesPlayed = 0
+      const segments = activeSegments(key, addedAt.getTime(), removedAt ? removedAt.getTime() : null, row.player_type)
 
-      for (const gl of logs) {
-        const gameTime = new Date(gl.game_start_time)
-        if (!addedAt || gameTime <= addedAt) continue
-        if (removedAt && gameTime > removedAt) continue
-        // Ne compter que si le joueur était réellement actif au moment du match —
-        // une période peut inclure des segments réserviste/LTIR/recrue intercalés.
-        if (statusAt(key, gameTime.getTime(), row.player_type) !== 'actif') continue
-        earned.goals           += gl.goals
-        earned.assists         += gl.assists
-        earned.goalie_wins     += gl.goalie_wins
-        earned.goalie_otl      += gl.goalie_otl
-        earned.goalie_shutouts += gl.goalie_shutouts
-        gamesPlayed++
+      for (const seg of segments) {
+        const earned: StatBlock = { goals: 0, assists: 0, goalie_wins: 0, goalie_otl: 0, goalie_shutouts: 0 }
+        let gamesPlayed = 0
+
+        for (const gl of logs) {
+          const gameTime = new Date(gl.game_start_time).getTime()
+          if (gameTime <= seg.start) continue
+          if (seg.end !== null && gameTime > seg.end) continue
+          earned.goals           += gl.goals
+          earned.assists         += gl.assists
+          earned.goalie_wins     += gl.goalie_wins
+          earned.goalie_otl      += gl.goalie_otl
+          earned.goalie_shutouts += gl.goalie_shutouts
+          gamesPlayed++
+        }
+
+        periods.push({
+          goals:           earned.goals,
+          assists:         earned.assists,
+          goalie_wins:     earned.goalie_wins,
+          goalie_otl:      earned.goalie_otl,
+          goalie_shutouts: earned.goalie_shutouts,
+          gamesPlayed,
+          points:          calcPoints(earned, pts),
+          addedAt:         new Date(seg.start).toISOString(),
+          removedAt:       seg.end !== null ? new Date(seg.end).toISOString() : null,
+        })
       }
-
-      periods.push({
-        goals:           earned.goals,
-        assists:         earned.assists,
-        goalie_wins:     earned.goalie_wins,
-        goalie_otl:      earned.goalie_otl,
-        goalie_shutouts: earned.goalie_shutouts,
-        gamesPlayed,
-        points:          calcPoints(earned, pts),
-        addedAt:         row.added_at ?? '',
-        removedAt:       row.removed_at ?? null,
-      })
     }
 
     // Totaux : somme de toutes les périodes

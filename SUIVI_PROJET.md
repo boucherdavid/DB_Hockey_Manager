@@ -56,6 +56,17 @@ Je l'utiliserai pour:
 
 ## Journal des sessions
 
+### 2026-07-17 (suite 3)
+
+**[Fix] — buildStandings() : statut avant le premier événement journalisé + périodes découpées par fenêtre active** (`app/lib/standings.ts`) :
+- Contexte : David a confirmé le modèle attendu du calcul de points (recrue/réserviste = 0 point, actif = comptabilisé, un joueur peut avoir plusieurs fenêtres actives dans la saison qui s'additionnent) avec l'exemple concret de Jackson Blake (recrue jusqu'au 14 octobre 2025, puis actif). En vérifiant `statusAt()` par rapport à ce modèle, j'ai trouvé un vrai bug plutôt que de simplement confirmer.
+- **Bug 1 (calcul)** : `statusAt()` retombait sur le `player_type` *courant* de la ligne quand aucun événement `roster_change_log` ne précédait le moment du match. Pour Blake, son événement "ajout recrue" original a une date effective réelle (juin 2026, ajout en direct hors Historique) *postérieure* à son "Changement de type" du 14 octobre (date historique). Triés par date effective, le premier événement chronologique est donc le Changement de type — donc pour ses matchs du 9 et 11 octobre (avant tout événement connu), le fallback utilisait son type courant ('actif') au lieu de son vrai type à ce moment ('recrue'), lui attribuant 2 points (assists) qu'il ne devrait pas avoir.
+  - Fix : le fallback utilise maintenant `old_type` du premier événement chronologique (`'recrue'` ici, capturé par le Changement de type) plutôt que le type courant de la ligne.
+  - Vérifié directement contre les données réelles de staging (script Python reproduisant la logique) : total de Blake passe de 53 à **51 points**, les 2 matchs pré-activation étant désormais exclus.
+- **Amélioration 2 (affichage)** : les "périodes" (bouton ↩ + popup détail dans `/classement` et `/poolers/[id]`) ne se découpaient auparavant que sur les vraies lignes `pooler_rosters` (ajout/retrait/échange), pas sur les changements de type. Un joueur réactivé plusieurs fois sans jamais quitter le pool (ex: réserve→actif→réserve→actif, tout sur la même ligne) affichait donc une seule période couvrant tout, avec un total déjà correct mais sans le détail par fenêtre. Nouvelle fonction `activeSegments()` : découpe chaque ligne en fenêtres actives contiguës (bornées par les événements `roster_change_log`), une entrée `PeriodContrib` par fenêtre plutôt qu'une par ligne. Décidé avec David : oui, découper aussi sur les changements de type.
+- Pas de migration de schéma ni de changement de données — recalcul dynamique, s'applique automatiquement à toute la saison dès le déploiement.
+- Validé par `next build` complet + `tsc --noEmit` propre + vérification manuelle contre les données réelles de staging.
+
 ### 2026-07-17 (suite 2)
 
 **[Fix] — Changement de type sans effet réel sur les points car `added_at` restait figé après un ajout en direct** (`app/app/admin/historique/historique-actions.ts`, `app/app/admin/historique/HistoriqueManager.tsx`, données staging) :
