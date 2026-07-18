@@ -21,6 +21,14 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-07-18 (suite 2)
+
+**[Chore+Docs] — CSV PuckPedia poussé vers prod après validation staging, nouvelle convention** (CSV pipeline, `CLAUDE.md`) :
+- David a demandé (suite à la discussion sur le fonctionnement staging/prod) que je pousse systématiquement le CSV PuckPedia sur `main` dès qu'un log de pipeline staging est validé propre, pour que l'import automatique GitHub Actions (`import.yml`) mette prod à jour — plutôt que de devoir rouler `run_pipeline_prod.ps1` séparément pour les salaires/contrats.
+- Poussé le CSV du run staging du 2026-07-18 (déjà validé plus tôt dans la session) : commit `26d6431`. Déclenché et vérifié le run GitHub Actions (`gh run watch`) — succès en 58s, 1521 joueurs mis à jour, 4338 contrats upserted en prod.
+- Convention documentée dans `CLAUDE.md` section 2 (commandes essentielles) et en mémoire long terme (`feedback_push_csv_after_staging_validation.md`) : appliquer par défaut à chaque validation de log staging propre, sans attendre la demande.
+- Nouvelle mémoire `project_staging_prod_sync.md` : distingue les 2 mécanismes de synchro staging→prod qui existent maintenant — CSV salaires (semi-automatique via push git) vs historique de roster (manuel via `sync_staging_to_prod.py --apply`, jamais automatique).
+
 ### 2026-07-18 (suite)
 
 **[Feat] — Script de synchronisation staging → prod pour l'historique de roster** (`python_script/sync_staging_to_prod.py` nouveau, `CLAUDE.md`) :

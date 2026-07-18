@@ -53,6 +53,14 @@ cd app && npm run dev
 ./run_pipeline_staging.ps1 --no-scrape
 ```
 
+**Convention** : après avoir validé un log `run_pipeline_staging_*.log` sans erreur, committer
+et pousser les CSV modifiés (`python_script/PuckPedia_*.csv`, `python_script/teams_offline/*.csv`)
+sur `main` — sans attendre la demande. Ça déclenche automatiquement
+`.github/workflows/import.yml` (trigger sur push de `teams_offline/**.csv`), qui réimporte
+vers **prod**. Le scraping est indépendant de la cible DB (même CSV peu importe staging/prod),
+donc valider en staging avant de pousser suffit — pas besoin de rouler `run_pipeline_prod.ps1`
+séparément pour les salaires/contrats/repêchage.
+
 ```bash
 # Pipeline Python complet (manuel — cible toujours prod via python_script/.env,
 # sauf si SUPABASE_URL/SUPABASE_SERVICE_KEY sont déjà définis dans la session)
