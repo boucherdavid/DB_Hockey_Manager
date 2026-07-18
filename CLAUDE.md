@@ -17,6 +17,11 @@ Application web pour gérer un pool de hockey long terme, en remplacement d'un f
 - Transactions gérées côté admin
 - Historique conservé dans `transactions` et `transaction_items`
 - Protection recrue : 5 saisons pour les repêchages, durée ELC pour les agents libres
+- Calcul des points (`buildStandings()`) : seules les fenêtres où le joueur est réellement
+  `actif` comptent — `recrue`/`reserviste`/`ltir` ne rapportent aucun point. Un joueur peut
+  être actif plusieurs fois non consécutives dans une même saison (ex: réserve puis rappelé) ;
+  chaque fenêtre active compte ses propres points, additionnés au total. Détails techniques
+  (dates, `added_at`/`removed_at`, `roster_change_log`) en section 6.
 
 **Stack :**
 - Frontend : Next.js 16, React 19, TypeScript, Tailwind CSS 4
@@ -174,6 +179,31 @@ qui ne sert qu'à réassigner un pick déjà existant.
 - Bug corrigé le 2026-06-20 dans `/admin/transactions` (`submitTransactionAction`) : la date
   historique n'était appliquée qu'à `transactions.created_at`, pas aux mutations réelles sur
   `pooler_rosters`. Voir `SUIVI_PROJET.md` (session 2026-06-20).
+
+**Mécanique de `buildStandings()` (`app/lib/standings.ts`) :**
+- Fenêtre de base par ligne `pooler_rosters` : `added_at → removed_at` (`null` = toujours actif).
+  Aucun match hors de cette fenêtre n'est considéré, peu importe `roster_change_log`.
+- À l'intérieur de la fenêtre, `statusAt()` détermine le statut réel du joueur à l'heure de
+  chaque match à partir de `roster_change_log` (événements avec `new_type` non nul, triés par
+  `changed_at` — la date **effective**, pas la date de saisie). Seuls les matchs où le statut
+  résolu est `'actif'` comptent des points.
+- **Avant le tout premier événement connu** pour ce `(pooler, joueur)` : le statut retenu est
+  `old_type` de cet événement (pas le `player_type` courant de la ligne). Piège : un ajout en
+  direct (`addPlayerAction`, hors Historique) journalise un événement à l'horodatage réel de
+  l'action ; si une correction Historique ultérieure (ex: Changement de type) porte une date
+  effective **antérieure**, elle devient le nouvel événement le plus ancien chronologiquement
+  — mais le tout premier événement "réel" (l'ajout) reste dans la liste avec une date plus
+  tardive. Bug corrigé le 2026-07-17 (`statusAt` retombait sur le type courant au lieu de
+  `old_type` pour cette fenêtre) — voir `SUIVI_PROJET.md`.
+- **Changement de type et `added_at`** : quand une date effective Historique précède
+  `added_at` de la ligne visée, `added_at` est automatiquement reculé à cette date (avec
+  avertissement non bloquant) — la date effective saisie fait toujours foi comme date de
+  début pour le joueur concerné.
+- **Périodes affichées** (`PlayerContrib.periods`, popup ↩ dans `/classement` et
+  `/poolers/[id]`) : une entrée par fenêtre **active** contiguë (via `activeSegments()`), pas
+  une entrée par ligne `pooler_rosters`. Un joueur réactivé plusieurs fois sans jamais quitter
+  le pool (recrue/réserve↔actif sur la même ligne continue) affiche donc une période par
+  fenêtre active, pas une seule période couvrant toute la ligne.
 
 **Next.js 16 :**
 - Utiliser `proxy.ts`, PAS `middleware.ts`

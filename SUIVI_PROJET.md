@@ -13,46 +13,11 @@ Je l'utiliserai pour:
 
 ## Instantane actuel
 
-- Le projet est organise en deux blocs:
-  - `app/`: application Next.js 16 + React 19 + TypeScript + Tailwind 4
-  - `python_script/`: scripts Python pour preparation/import des donnees
-- La base de donnees ciblee est Supabase/PostgreSQL.
-- Le dossier racine ne contient pas de depot git detecte a ce stade.
-- Un fichier de contexte existe deja: `CLAUDE.md`.
-- Des dependances installees sont presentes localement dans `app/node_modules/` et `python_script/venv/`.
-
-## Structure utile
-
-- `app/app/page.tsx`: page d'accueil, lecture de la saison active et de la liste des poolers
-- `app/app/layout.tsx`: layout global avec `Navbar`
-- `app/app/admin/page.tsx`: acces admin avec verification `is_admin`
-- `app/lib/supabase/server.ts` et `app/lib/supabase/client.ts`: clients Supabase
-- `python_script/scrape_puckpedia.py`: scraping PuckPedia
-- `python_script/import_supabase.py`: import CSV vers Supabase
-- `schema.sql`: schema de base de donnees
-
-## Contraintes deja identifiees
-
-- Next.js 16: utiliser `proxy.ts`, pas `middleware.ts`
-- Supabase: le contexte existant mentionne l'usage de la legacy anon key
-- RLS: une fonction `is_admin()` en `SECURITY DEFINER` est signalee comme sensible
-
-## Resume fonctionnel actuel
-
-- Pages publiques/utilisateur:
-  - `/`
-  - `/login`
-  - `/joueurs`
-  - `/poolers`
-  - `/poolers/[id]`
-  - `/dashboard`
-- Pages admin:
-  - `/admin`
-  - `/admin/joueurs`
-  - `/admin/joueurs/nouveau`
-  - `/admin/joueurs/[id]`
-  - `/admin/poolers`
-  - `/admin/rosters`
+Structure du projet, stack, routes applicatives (utilisateur + admin) et contraintes
+techniques : voir `CLAUDE.md` (sections 1 à 6) — c'est la référence maintenue, pour éviter
+qu'un second inventaire dérive silencieusement de la réalité comme celui qui était ici
+jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters` comme pages
+admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
 
