@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-07-18
+Derniere mise a jour: 2026-07-19
 
 ## Role du fichier
 
@@ -20,6 +20,12 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-19
+
+**[Chore] — Validation log pipeline staging et push CSV vers prod** (CSV pipeline) :
+- Log `run_pipeline_staging_2026-07-19_10-48-33.log` validé : aucune erreur, 1522 joueurs mis à jour, 4298 contrats upserted, pipeline terminé en 224s. Backfill nhl_id : 0/566 correspondance trouvée, comportement identique au run du 2026-07-18 (566 sans match) — pas d'anomalie.
+- CSV poussés sur `main` selon la convention établie hier : commit `e9990a2`. Déclenche l'import automatique GitHub Actions vers prod.
 
 ### 2026-07-18 (suite 2)
 
