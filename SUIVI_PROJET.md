@@ -45,6 +45,17 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 - Validé : `npx tsc --noEmit` propre ; smoke-test des 3 routes touchées (`/admin/transactions`, `/admin/historique`, `/gestion-effectifs`) sur le serveur de dev contre staging — 307 (redirection login normale), aucune erreur serveur.
 - **Correction d'une fausse piste signalée par erreur** : j'avais d'abord cru `app/app/admin/rosters/actions.ts` en bonne partie mort (pas de `page.tsx` dans `admin/rosters/`), en oubliant que ce dossier avait déjà été noté comme "composants/actions réutilisés par les onglets des hubs" lors de la suppression de `admin/rosters/page.tsx` (voir plus bas dans ce journal). Vérifié à nouveau, précisément : `RosterManager.tsx` est bien rendu par l'onglet "Rosters initiaux" de `/admin/init` (`app/app/admin/init/page.tsx:6,164`), qui utilise `submitRosterAction`/`adminInitRosterAction`/`updateRookieTypeAction`/`viderRostersAction`. Seule `changeTypeAction` (grep : zéro appelant nulle part) était réellement morte — supprimée (48 lignes), `detectChangeType` reste utilisé par les 6 autres appels dans le fichier. `tsc --noEmit` propre après coup.
 
+### 2026-07-20 (suite)
+
+**[Vérification] — Reprise après plantage de session, état réel confirmé** (aucun changement de code) :
+- Session précédente plantée avant sa fin. David pensait que 3 choses étaient faites : le garde-fou, la synchro staging→prod, et la revérification des 309 lignes restantes. Vérifié chacune contre l'état réel (code + logs), pas contre la mémoire :
+  - **Garde-fou** : confirmé fait et committé (`3c00626`, `9044f47`), scope inchangé (type_change seulement, voir entrée du 2026-07-20 plus haut).
+  - **309 lignes fantômes restantes** : confirmé indirectement stable — le dry-run de `sync_staging_to_prod.py` montre `roster_change_log` à 381 lignes aujourd'hui contre 402 dans le log du 2026-07-18, soit exactement -21, cohérent avec les 2+19 lignes supprimées en staging plus tôt le 2026-07-20.
+  - **Synchro staging→prod** : **pas faite**. Seuls deux dry-runs existent dans `python_script/logs/sync_staging_to_prod_*.log` (2026-07-18 et 2026-07-20), aucun `--apply`. David a clarifié : quand il disait "le sync est fait", il parlait du script (écrit et fonctionnel), pas de la synchro exécutée — à ne pas confondre à l'avenir.
+- **Décision** : ne pas lancer `--apply` tant que la reconstruction/correction de l'historique de roster en staging n'est pas terminée. Synchroniser une seule fois vers prod une fois l'historique validé au complet, pas en cours de route.
+- Mémoire mise à jour : `project_staging_prod_sync.md` (statut réel + piège de vocabulaire).
+- David poursuit la reconstruction de l'historique staging dans une session future.
+
 ### 2026-07-19
 
 **[Chore] — Validation log pipeline staging et push CSV vers prod** (CSV pipeline) :
