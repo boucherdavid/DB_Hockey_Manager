@@ -218,54 +218,6 @@ export async function removePlayerAction(rosterId: number): Promise<{ error?: st
   return error ? { error: error.message } : {}
 }
 
-export async function changeTypeAction(
-  entryId: number,
-  playerId: number,
-  poolerId: string,
-  saisonId: number,
-  newType: PlayerType,
-): Promise<{ error?: string }> {
-  const supabase = await createClient()
-
-  const { data: currentEntry } = await supabase
-    .from('pooler_rosters')
-    .select('player_type')
-    .eq('id', entryId)
-    .single()
-  const oldType = (currentEntry?.player_type ?? null) as PlayerType | null
-
-  if (newType === 'recrue') {
-    const [{ data: player }, draftYearCutoff] = await Promise.all([
-      supabase.from('players').select('is_rookie, draft_year').eq('id', playerId).single(),
-      getDraftYearCutoff(supabase, saisonId),
-    ])
-    const isEligible = player?.is_rookie || (player?.draft_year != null && player.draft_year >= draftYearCutoff)
-    if (!isEligible) {
-      return { error: 'Seuls les joueurs recrues peuvent aller dans la banque de recrues.' }
-    }
-  }
-
-  if (newType === 'actif') {
-    const { data: player } = await supabase.from('players').select('position').eq('id', playerId).single()
-    const bucket = getPlayerBucket(player?.position ?? null)
-    const count = await countActiveByBucket(supabase, poolerId, saisonId, bucket, entryId)
-    if (count >= ACTIVE_LIMITS[bucket]) {
-      return { error: `Limite atteinte pour les ${BUCKET_LABELS[bucket]} (${ACTIVE_LIMITS[bucket]}).` }
-    }
-  }
-
-  const { error } = await supabase.from('pooler_rosters').update({ player_type: newType }).eq('id', entryId)
-  if (error) return { error: error.message }
-
-  if (oldType !== newType) {
-    const changeType = detectChangeType(oldType, newType)
-    await logChange(supabase, playerId, poolerId, saisonId, changeType, oldType, newType)
-
-  }
-
-  return {}
-}
-
 type AddEntry = {
   player_id:      number
   player_type:    PlayerType
