@@ -231,6 +231,18 @@ qui ne sert qu'à réassigner un pick déjà existant.
   une entrée par ligne `pooler_rosters`. Un joueur réactivé plusieurs fois sans jamais quitter
   le pool (recrue/réserve↔actif sur la même ligne continue) affiche donc une période par
   fenêtre active, pas une seule période couvrant toute la ligne.
+- **Piège — ligne `roster_change_log` non-historique plus récente qu'une correction
+  Historique** : il existe en base des lignes `roster_change_log` sans préfixe `hist_`
+  (`activation`/`ajout_recrue`/`retrait`/`ajout_reserviste`/`deactivation`,
+  `is_admin_override=false`) qui ne viennent pas de `/admin/historique` — un instantané de
+  l'état courant à un moment donné. Si on saisit ensuite une correction `/admin/historique`
+  avec une date effective **antérieure** à une telle ligne existante pour le même joueur,
+  `statusAt()` (trie uniquement par date effective, pas par date de saisie) applique cette
+  vieille ligne *après* la correction et fait réapparaître le statut d'avant-correction à
+  partir de sa date — un faux "Période 2" dans le popup. `submitHistChangeAction` ne
+  détecte ni ne nettoie ces lignes en conflit. Repéré et corrigé manuellement en staging le
+  2026-07-20 (21 lignes supprimées sur 365 candidates, voir `SUIVI_PROJET.md`) — pas de
+  garde-fou côté code, à revérifier après chaque nouvelle vague de corrections Historique.
 
 **Next.js 16 :**
 - Utiliser `proxy.ts`, PAS `middleware.ts`

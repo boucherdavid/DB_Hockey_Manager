@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-07-19
+Derniere mise a jour: 2026-07-20
 
 ## Role du fichier
 
@@ -20,6 +20,16 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-20
+
+**[Fix données] — Périodes fantômes dans le popup classement après correction Historique** (données `roster_change_log`, staging) :
+- David a repéré, en validant McMichael (David) et Blake (David), une "Période 2 actif" fantôme apparaissant après une correction `type_change` saisie dans `/admin/historique` avec une date effective passée (2025-10-14).
+- Cause : une vieille ligne `roster_change_log` (`change_type` sans préfixe `hist_`, `is_admin_override=false`) existait déjà pour ces joueurs avec une date effective (`changed_at`) plus tardive (2026-06-07) que la nouvelle correction historique, et un `new_type` reflétant leur statut **avant** la correction. `statusAt()` (`app/lib/standings.ts`) trie uniquement par date effective, donc cette vieille ligne s'appliquait après la correction et annulait son effet à partir du 7 juin.
+- Portée : un lot de 365 lignes du même genre (`activation`/`ajout_recrue`/`retrait`/`ajout_reserviste`/`deactivation`, toutes `changed_at` entre le 2026-06-07 et le 2026-07-09, `created_at` le 2026-07-10 — probablement un instantané de l'état courant importé/généré ce jour-là, origine exacte non confirmée). Comparé chaque ligne au `player_type` actuel réel : 309 correspondaient encore (inoffensives), 19 ne correspondaient plus plus (même bug que McMichael/Blake, touchant 6 poolers différents), 2 concernaient des joueurs retirés depuis (sans effet, fenêtre déjà fermée).
+- Vérifié avant toute suppression : la saison 2025-26 se termine le 2026-04-16 et toutes ces lignes ont `changed_at` ≥ 7 juin 2026 — donc **aucun point déjà calculé n'était faussé**, seul l'affichage (popup périodes) l'était.
+- Supprimé en staging, avec l'accord de David : les 2 lignes McMichael/Blake (id 9, 24) puis les 19 lignes mismatch confirmées (id 17,19,21,36,42,56,63,91,136,178,184,191,193,194,195,268,303,307,364).
+- **Risque résiduel** : les 309 lignes restantes redeviendront "mismatch" (même bug) dès qu'une future correction Historique changera le type d'un de ces joueurs — le nettoyage n'est pas définitif, à revérifier après chaque nouvelle vague de corrections. Pas de garde-fou côté code pour l'instant (`submitHistChangeAction` n'inspecte pas les événements futurs existants avant d'insérer une correction).
 
 ### 2026-07-19
 
