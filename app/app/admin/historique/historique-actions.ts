@@ -1,7 +1,7 @@
 'use server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { computeTypeChangeAddedAt } from '@/lib/rosterTypeChange'
+import { computeTypeChangeAddedAt, checkFutureRosterConflict } from '@/lib/rosterTypeChange'
 
 export type HistRosterEntry = {
   id: number
@@ -195,6 +195,9 @@ export async function submitHistChangeAction(
         .is('removed_at', null)
         .maybeSingle()
       if (!existing) return { error: `Entrée introuvable dans le roster actuel (joueur ${playerId})` }
+
+      const conflict = await checkFutureRosterConflict(db, input.poolerAId, playerId, input.poolSeasonId, ts, newType)
+      if (conflict.error) return conflict
 
       const { addedAtOverride, warning } = computeTypeChangeAddedAt(existing.added_at, ts)
       const updateFields: Record<string, unknown> = { player_type: newType }

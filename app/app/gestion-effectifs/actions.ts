@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 import { sendPushToUser } from '@/lib/push'
-import { computeTypeChangeAddedAt } from '@/lib/rosterTypeChange'
+import { computeTypeChangeAddedAt, checkFutureRosterConflict } from '@/lib/rosterTypeChange'
 
 export type PlayerType = 'actif' | 'reserviste' | 'ltir' | 'recrue'
 
@@ -304,6 +304,8 @@ export async function submitBatchAction(input: {
   async function deactivate(entryId: number, toType: 'reserviste' | 'ltir') {
     const e = await getEntry(entryId)
     if (!e) throw new Error('Entrée introuvable')
+    const conflict = await checkFutureRosterConflict(db, input.poolerId, e.player_id, input.saisonId, changedAt, toType)
+    if (conflict.error) throw new Error(conflict.error)
     const { addedAtOverride, warning } = computeTypeChangeAddedAt(e.added_at, changedAt)
     if (warning) warnings.push(warning)
     await db.from('pooler_rosters')
@@ -316,6 +318,8 @@ export async function submitBatchAction(input: {
     const e = await getEntry(entryId)
     if (!e) throw new Error('Entrée introuvable')
     if (withDelayCheck) await checkReactivationDelay(e.player_id)
+    const conflict = await checkFutureRosterConflict(db, input.poolerId, e.player_id, input.saisonId, changedAt, 'actif')
+    if (conflict.error) throw new Error(conflict.error)
     const { addedAtOverride, warning } = computeTypeChangeAddedAt(e.added_at, changedAt)
     if (warning) warnings.push(warning)
     await db.from('pooler_rosters')
@@ -338,6 +342,9 @@ export async function submitBatchAction(input: {
           throw new Error(`Budget d'agents libres standard épuisé (${alUsed}/${maxAl})`)
       }
     }
+
+    const conflict = await checkFutureRosterConflict(db, input.poolerId, playerId, input.saisonId, changedAt, playerType)
+    if (conflict.error) throw new Error(conflict.error)
 
     const { data: existing } = await db
       .from('pooler_rosters').select('id')

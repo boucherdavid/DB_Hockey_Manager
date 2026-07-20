@@ -241,8 +241,16 @@ qui ne sert qu'à réassigner un pick déjà existant.
   vieille ligne *après* la correction et fait réapparaître le statut d'avant-correction à
   partir de sa date — un faux "Période 2" dans le popup. `submitHistChangeAction` ne
   détecte ni ne nettoie ces lignes en conflit. Repéré et corrigé manuellement en staging le
-  2026-07-20 (21 lignes supprimées sur 365 candidates, voir `SUIVI_PROJET.md`) — pas de
-  garde-fou côté code, à revérifier après chaque nouvelle vague de corrections Historique.
+  2026-07-20 (21 lignes supprimées sur 365 candidates, voir `SUIVI_PROJET.md`).
+  **Garde-fou ajouté** le même jour : `checkFutureRosterConflict()`
+  (`app/lib/rosterTypeChange.ts`) bloque (au lieu de nettoyer automatiquement — impossible
+  de distinguer un artefact obsolète d'un vrai événement futur réel sans risquer d'effacer
+  une donnée réelle) toute saisie qui créerait ce conflit. Câblé dans `submitHistChangeAction`
+  (`/admin/historique`, type_change) et `deactivate`/`activate`/`addNewPlayer`
+  (`/gestion-effectifs`). Pas encore câblé dans les chemins `trade`/`ajout`/`retrait`/`swap`
+  de `/admin/historique`, ni dans `/admin/transactions` (qui n'écrit de toute façon aucune
+  ligne `roster_change_log` pour `type_change`/`promote`/`reactivate` — gap distinct, non
+  corrigé).
 
 **Next.js 16 :**
 - Utiliser `proxy.ts`, PAS `middleware.ts`
