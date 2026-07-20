@@ -246,11 +246,21 @@ qui ne sert qu'à réassigner un pick déjà existant.
   (`app/lib/rosterTypeChange.ts`) bloque (au lieu de nettoyer automatiquement — impossible
   de distinguer un artefact obsolète d'un vrai événement futur réel sans risquer d'effacer
   une donnée réelle) toute saisie qui créerait ce conflit. Câblé dans `submitHistChangeAction`
-  (`/admin/historique`, type_change) et `deactivate`/`activate`/`addNewPlayer`
-  (`/gestion-effectifs`). Pas encore câblé dans les chemins `trade`/`ajout`/`retrait`/`swap`
-  de `/admin/historique`, ni dans `/admin/transactions` (qui n'écrit de toute façon aucune
-  ligne `roster_change_log` pour `type_change`/`promote`/`reactivate` — gap distinct, non
-  corrigé).
+  (`/admin/historique`, type_change), `deactivate`/`activate`/`addNewPlayer`
+  (`/gestion-effectifs`), et `submitTransactionAction` (`/admin/transactions` — `transfer`
+  arrivée, `promote`/`reactivate`/`type_change`, `sign`). Pas encore câblé dans les chemins
+  `trade`/`ajout`/`retrait`/`swap` de `/admin/historique` (scope volontairement limité, risque
+  de collatéral jugé plus élevé pour un gain plus faible).
+- **Gap distinct comblé le 2026-07-20** : `/admin/transactions` (`submitTransactionAction`)
+  mettait à jour `pooler_rosters.player_type` mais n'écrivait **aucune** ligne
+  `roster_change_log` — `statusAt()` ne voyait donc jamais ces transitions et retombait sur
+  le type courant pour toute la fenêtre, avec un vrai risque de fausser des points de la
+  saison en cours (contrairement au bug des périodes fantômes, sans impact réel car daté
+  après la fin de saison). Toutes les branches (`transfer`/`ballotage`/`promote`/
+  `reactivate`/`sign`/`release`/`type_change`) journalisent désormais dans
+  `roster_change_log`, avec le même vocabulaire `change_type` que `/gestion-effectifs` et
+  `/admin/rosters` (`activation`/`deactivation`/`ajout_reserviste`/`ajout_recrue`/`retrait`/
+  `ltir`/`retour_ltir`/`changement_type`).
 
 **Next.js 16 :**
 - Utiliser `proxy.ts`, PAS `middleware.ts`

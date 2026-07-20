@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { computeTypeChangeAddedAt } from '@/lib/rosterTypeChange'
+import { computeTypeChangeAddedAt, checkFutureRosterConflict } from '@/lib/rosterTypeChange'
 
 export type ActionType = 'transfer' | 'promote' | 'sign' | 'reactivate' | 'release' | 'type_change' | 'ballotage'
 
@@ -30,6 +30,23 @@ function getPlayerBucket(position: string | null): 'forward' | 'defense' | 'goal
   if (pos.includes('G')) return 'goalie'
   if (pos.includes('D')) return 'defense'
   return 'forward'
+}
+
+// Choix du change_type roster_change_log — mêmes libellés que /gestion-effectifs et
+// /admin/rosters (CHANGE_LABEL dans admin/pool/page.tsx et poolers/[id]/PoolerPageTabs.tsx)
+// pour que le journal (Suivi) reste cohérent peu importe l'interface d'origine.
+function pickChangeType(oldType: string | null, newType: string | null): string {
+  if (!newType) return oldType === 'actif' ? 'deactivation' : 'retrait'
+  if (oldType === 'ltir' && newType === 'actif') return 'retour_ltir'
+  if (newType === 'actif') return 'activation'
+  if (!oldType) {
+    if (newType === 'reserviste') return 'ajout_reserviste'
+    if (newType === 'recrue') return 'ajout_recrue'
+    if (newType === 'ltir') return 'ltir'
+  }
+  if (oldType === 'actif') return 'deactivation'
+  if (newType === 'ltir') return 'ltir'
+  return 'changement_type'
 }
 
 const ACTIVE_LIMITS = { forward: 12, defense: 6, goalie: 2 }
@@ -285,6 +302,17 @@ export async function submitTransactionAction(
   const { error: itemsErr } = await supabase.from('transaction_items').insert(txItems)
   if (itemsErr) return { error: itemsErr.message }
 
+  // Journalise chaque mutation dans roster_change_log — sans quoi statusAt()
+  // (app/lib/standings.ts) ne voit jamais ces transitions et retombe sur le player_type
+  // courant pour toute la fenêtre added_at→removed_at, faussant les points en rétroactif.
+  async function log(playerId: number, poolerId: string, oldType: string | null, newType: string | null) {
+    await supabase.from('roster_change_log').insert({
+      player_id: playerId, pooler_id: poolerId, pool_season_id: saisonId,
+      change_type: pickChangeType(oldType, newType), old_type: oldType, new_type: newType,
+      changed_by: null, changed_at: txTs, is_admin_override: true,
+    })
+  }
+
   // Appliquer
   const warnings: string[] = []
   for (const item of items) {
@@ -297,30 +325,43 @@ export async function submitTransactionAction(
     }
 
     if ((action_type === 'transfer' || action_type === 'ballotage') && player_id) {
+      const destType = new_player_type ?? 'actif'
+      const conflict = await checkFutureRosterConflict(supabase, to_pooler_id!, player_id, saisonId, txTs, destType)
+      if (conflict.error) return conflict
+
       // Retirer du roster source
-      const { error: e1 } = await supabase
+      const { data: srcRow, error: e1 } = await supabase
         .from('pooler_rosters')
         .update({ is_active: false, removed_at: txTs })
         .eq('pooler_id', from_pooler_id!)
         .eq('player_id', player_id)
         .eq('pool_season_id', saisonId)
         .eq('is_active', true)
+        .select('player_type')
+        .maybeSingle()
       if (e1) return { error: e1.message }
+      await log(player_id, from_pooler_id!, srcRow?.player_type ?? null, null)
+
       // Ajouter au roster dest
       const { data: existingDest } = await supabase.from('pooler_rosters').select('id').eq('pooler_id', to_pooler_id!).eq('player_id', player_id).eq('pool_season_id', saisonId).maybeSingle()
       if (existingDest) {
-        const { error: e2 } = await supabase.from('pooler_rosters').update({ is_active: true, player_type: new_player_type ?? 'actif', removed_at: null, added_at: txTs }).eq('id', existingDest.id)
+        const { error: e2 } = await supabase.from('pooler_rosters').update({ is_active: true, player_type: destType, removed_at: null, added_at: txTs }).eq('id', existingDest.id)
         if (e2) return { error: e2.message }
       } else {
-        const { error: e2 } = await supabase.from('pooler_rosters').insert({ pooler_id: to_pooler_id, player_id, pool_season_id: saisonId, player_type: new_player_type ?? 'actif', is_active: true, added_at: txTs })
+        const { error: e2 } = await supabase.from('pooler_rosters').insert({ pooler_id: to_pooler_id, player_id, pool_season_id: saisonId, player_type: destType, is_active: true, added_at: txTs })
         if (e2) return { error: e2.message }
       }
+      await log(player_id, to_pooler_id!, null, destType)
       continue
     }
 
     if (action_type === 'promote' || action_type === 'reactivate' || action_type === 'type_change') {
       const matchType = action_type === 'type_change' ? old_player_type : action_type === 'promote' ? 'recrue' : 'ltir'
       const poolerId = to_pooler_id ?? from_pooler_id!
+
+      const conflict = await checkFutureRosterConflict(supabase, poolerId, player_id!, saisonId, txTs, new_player_type!)
+      if (conflict.error) return conflict
+
       const { data: existingRow } = await supabase
         .from('pooler_rosters')
         .select('id, added_at')
@@ -338,10 +379,14 @@ export async function submitTransactionAction(
         .update({ player_type: new_player_type, ...(addedAtOverride ? { added_at: addedAtOverride } : {}) })
         .eq('id', existingRow.id)
       if (error) return { error: error.message }
+      await log(player_id!, poolerId, matchType!, new_player_type!)
       continue
     }
 
     if (action_type === 'sign') {
+      const conflict = await checkFutureRosterConflict(supabase, to_pooler_id!, player_id!, saisonId, txTs, new_player_type!)
+      if (conflict.error) return conflict
+
       const { data: existing } = await supabase.from('pooler_rosters').select('id').eq('pooler_id', to_pooler_id!).eq('player_id', player_id!).eq('pool_season_id', saisonId).maybeSingle()
       if (existing) {
         const { error } = await supabase.from('pooler_rosters').update({ is_active: true, player_type: new_player_type!, removed_at: null, added_at: txTs }).eq('id', existing.id)
@@ -350,18 +395,22 @@ export async function submitTransactionAction(
         const { error } = await supabase.from('pooler_rosters').insert({ pooler_id: to_pooler_id, player_id, pool_season_id: saisonId, player_type: new_player_type, is_active: true, added_at: txTs })
         if (error) return { error: error.message }
       }
+      await log(player_id!, to_pooler_id!, null, new_player_type!)
       continue
     }
 
     if (action_type === 'release') {
-      const { error } = await supabase
+      const { data: relRow, error } = await supabase
         .from('pooler_rosters')
         .update({ is_active: false, removed_at: txTs })
         .eq('pooler_id', from_pooler_id!)
         .eq('player_id', player_id!)
         .eq('pool_season_id', saisonId)
         .eq('is_active', true)
+        .select('player_type')
+        .maybeSingle()
       if (error) return { error: error.message }
+      await log(player_id!, from_pooler_id!, relRow?.player_type ?? old_player_type ?? null, null)
       continue
     }
   }
