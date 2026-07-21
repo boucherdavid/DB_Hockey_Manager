@@ -9,8 +9,8 @@ Perfetti, Cole;WPG;;RW,LW;24;;;6000000;6000000;6000000;6000000;6000000.0
 Samberg, Dylan;WPG;;LD;27;;;5750000;5750000;UFA;0;0.0
 Lowry, Adam;WPG;;C;33;;;5000000;5000000;5000000;5000000;5000000.0
 Demelo, Dylan;WPG;;RD;33;;;4900000;4900000;UFA;0;0.0
-Niederreiter, Nino;WPG;;LW;33;;;4000000;UFA;0;0;0.0
 Ferraro, Mario;WPG;;LD,RD;27;;;4000000;4000000;4000000;UFA;0.0
+Niederreiter, Nino;WPG;;LW;33;;;4000000;UFA;0;0;0.0
 Skinner, Stuart;WPG;;G;27;;;3750000;3750000;UFA;0;0.0
 Iafallo, Alex;WPG;;LW,RW;32;;;3666666;3666666;UFA;0;0.0
 Namestnikov, Vladislav;WPG;;C,LW;33;;;3000000;UFA;0;0;0.0
@@ -35,12 +35,17 @@ Zhilkin, Danny;WPG;ELC;C;22;2026-27;;878333;RFA;0;0;0.0
 Chibrikov, Nikita;WPG;;LW,RW;23;;;875000;875000;RFA;0;0.0
 Duehr, Walker;WPG;;RW;28;;;875000;875000;UFA;0;0.0
 Salomonsson, Elias;WPG;ELC;RD;21;2026-27;;865000;RFA;0;0;0.0
-St. Ivany, Jack;WPG;;RD;26;;;850000;UFA;0;0;0.0
 Poulter, Isaac;WPG;;G;24;;;850000;0;0;0;0.0
-Thrun, Henry;WPG;;LD;25;;;850000;RFA;0;0;0.0
+St. Ivany, Jack;WPG;;RD;26;;;850000;UFA;0;0;0.0
 Gregor, Noah;WPG;;LW,RW;27;;;850000;UFA;0;0;0.0
-Ford, Parker;WPG;;C,RW;25;;;812500;0;0;0;0.0
+Thrun, Henry;WPG;;LD;25;;;850000;RFA;0;0;0.0
 Phillips, Isaak;WPG;;D;24;;;812500;0;0;0;0.0
+Ford, Parker;WPG;;C,RW;26;;;812500;0;0;0;0.0
+Morgan BarronCage27cap$1.85M;WPG;;;27;;;;;;;
+Brad LambertCage22cap$887k;WPG;;;22;;;;;;;
+Haydn FleuryDage30cap$950k;WPG;;;30;;;;;;;
+Vladislav NamestnikovCage33cap$3.00M;WPG;;;33;;;;;;;
+Nino NiederreiterRWage33cap$4.00M;WPG;;;33;;;;;;;
 Kupari, Rasmus;WPG;;C,RW;26;;;RFA;0;0;0;0.0
 Bauer, Tyrel;WPG;;D;24;;;RFA;0;0;0;0.0
 undefined, undefined;WPG;;;;;;;;;;
