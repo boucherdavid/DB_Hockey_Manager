@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-07-20
+Derniere mise a jour: 2026-07-21
 
 ## Role du fichier
 
@@ -20,6 +20,19 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-21
+
+**[UI] — Affichage uniforme du détail par période dans le classement** (`app/app/classement/ClassementTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :
+- David a repéré une incohérence visuelle : les joueurs avec une seule période active affichaient une date sous leur nom, ceux avec plusieurs périodes affichaient un bouton `↩N` ouvrant le détail par période — deux affichages différents pour la même information (dates de début/fin), source d'ambiguïté.
+- Le popup (`PeriodPopup`) affiche déjà `addedAt → removedAt` par période, donc rien ne se perdait à retirer la date affichée directement sous le nom.
+- Retiré la branche conditionnelle `isMultiPeriod ? bouton : date` dans les deux fichiers — le bouton `↩{p.periods.length}` s'affiche maintenant toujours, même pour une seule période (`↩1`). `fmtDate` reste utilisé à l'intérieur du popup.
+- Validé : `npx tsc --noEmit` propre.
+- Non touché : `app/app/classement-series/ClassementSeriesTable.tsx` a le même pattern `periods` mais n'a pas été demandé — à uniformiser dans une session future si souhaité.
+
+**[Chore] — Validation log pipeline staging et push CSV vers prod** (CSV pipeline) :
+- Log `run_pipeline_staging_2026-07-21_11-04-12.log` validé : aucune erreur/traceback, 1523 joueurs mis à jour, 4310 contrats upserted, 9 désactivés (absents du run), pipeline terminé en 244.5s. Backfill nhl_id : 0/566 correspondance trouvée, identique aux runs précédents (comportement stable, pas une régression).
+- CSV poussés sur `main` : commit `915229d`. Déclenche l'import automatique GitHub Actions vers prod.
 
 ### 2026-07-20
 
