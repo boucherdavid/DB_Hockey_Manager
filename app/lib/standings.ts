@@ -89,8 +89,7 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
     supabase
       .from('pooler_rosters')
       .select('player_type, added_at, removed_at, poolers(id, name), players(id, first_name, last_name, position, nhl_id, teams(code))')
-      .eq('pool_season_id', seasonId)
-      .not('player_type', 'eq', 'recrue'),
+      .eq('pool_season_id', seasonId),
     supabase.from('scoring_config').select('stat_key, points').in('scope', ['regular', 'both']),
     supabase.from('pool_seasons').select('season').eq('id', seasonId).single(),
   ])
@@ -298,6 +297,12 @@ export async function buildStandings(supabase: any, seasonId: string | number): 
 
     // player_type = la période la plus récente (dernière row)
     const currentRow = rows[rows.length - 1]
+
+    // Un joueur actuellement `recrue` sans aucune période active n'a jamais quitté la
+    // banque de recrues (rien à afficher) — mais s'il a été actif à un moment (périods
+    // non vide), sa contribution passée doit rester visible même si son statut final est
+    // redevenu recrue (ex: rétrogradé après un échange).
+    if (currentRow.player_type === 'recrue' && periods.length === 0) continue
 
     poolerMap.get(pooler.id)!.players.push({
       nhlId:          player.nhl_id,

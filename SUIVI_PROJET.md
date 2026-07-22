@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-07-21
+Derniere mise a jour: 2026-07-22
 
 ## Role du fichier
 
@@ -20,6 +20,22 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-22
+
+**[Fix code+données] — Joueurs invisibles/points perdus après un changement de type ou un échange rétroactif** (`app/lib/standings.ts`, `app/app/admin/historique/historique-actions.ts`, données `pooler_rosters`/`roster_change_log` en staging) :
+- David a repéré que Sam Rinzel (échangé, actif en début de saison chez lui) n'apparaissait plus du tout dans son effectif `/poolers/[id]`, et que Zeev Buium (qui l'a remplacé) affichait une date de période incorrecte (7 juin au lieu du 9 octobre) avec 0 pt alors qu'il a joué toute la saison.
+- **Cause 1 (bug de code actif)** : la requête `buildStandings()` excluait `.not('player_type', 'eq', 'recrue')` — TOUTE la ligne `pooler_rosters` disparaissait dès que le statut *courant* était `recrue`, même si le joueur avait été `actif` plus tôt dans la saison (cas Rinzel : rétrogradé à `recrue` le 2025-10-09 avant d'être échangé). Corrigé : le filtre SQL est retiré, et l'exclusion se fait maintenant après calcul des périodes (`periods.length === 0 && player_type === 'recrue'`) — ne masque que les joueurs réellement toujours restés en banque de recrues.
+- **Cause 2 (bug de code actif)** : la branche `trade` de `submitHistChangeAction` fixait `removed_at` sans vérifier qu'elle est postérieure à `added_at` de la ligne existante — a produit une fenêtre inversée (`added_at` 2026-06-07 > `removed_at` 2025-10-09) pour la ligne David/Rinzel. Corrigé : nouvelle fonction `removeFromRoster()` qui valide `ts >= added_at` avant de fermer la ligne, retourne une erreur explicite sinon (même philosophie que `checkFutureRosterConflict`).
+- **Cause 3 (données périmées, pas un bug actif)** : le recul automatique de `added_at` lors d'un changement de type (`computeTypeChangeAddedAt`) n'a été livré que le 2026-07-17 (commit `16846b3`). Les corrections Historique de Rinzel/Buium et de 4 lignes chez Vincent (Isaac Howard, Jiri Kulich, Marco Kasper) ont été saisies le 2026-07-13, avant ce correctif — `added_at` est resté figé à la date réelle de la session de reconstruction (7-10 juin 2026, **après la fin de la saison**), tronquant ou annulant les vraies périodes actives.
+- **Correction des données en staging** (SQL direct, confirmé avec David) : `added_at` reculé au 2025-10-07T12:00 (date de début de saison, `saison_start_date`) sur 6 lignes (`pooler_rosters` id 44, 47, 253, 309, 313, 314). Supprimé aussi 2 lignes `roster_change_log` fantômes (id 381, 408 — des clics "Activer" en temps réel faits juste avant la vraie correction historique, devenus redondants et qui auraient créé une fausse période active récente une fois `added_at` corrigé, même schéma que le bug documenté le 2026-07-20).
+- **Vérifié par simulation** (rejeu de la logique `buildStandings()` en Python contre les vraies données `player_game_logs`, `/poolers/[id]` étant protégé par auth donc impossible à tester directement) : Buium +26 pts (0 → 26), Kulich +1 pt, Marco Kasper +18 pts récupérés. Rinzel et Isaac Howard réapparaissent avec une période réelle mais 0 pt (n'ont pas joué durant leur courte fenêtre de 2 jours).
+- Validé : `npx tsc --noEmit` propre.
+- **Risque résiduel** : d'autres lignes du même lot de reconstruction (added_at figé 7-10 juin 2026) pourraient exister sans avoir encore été détectées — seules celles ayant un événement `roster_change_log` réel antérieur à cette date ont été repérées (requête ciblée), pas un audit exhaustif de tout `pooler_rosters`.
+
+**[Chore] — Validation log pipeline staging et push CSV vers prod** (CSV pipeline) :
+- Log `run_pipeline_staging_2026-07-22_07-50-56.log` validé : aucune erreur, 1523 joueurs mis à jour, 4315 contrats upserted, pipeline terminé en 232.9s. Backfill nhl_id : 0/566 (identique aux runs précédents).
+- CSV poussés sur `main` : commit `d9d12cd`.
 
 ### 2026-07-21
 

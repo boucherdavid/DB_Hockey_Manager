@@ -263,18 +263,39 @@ export async function submitHistChangeAction(
       }
     }
 
-    // Joueurs de A → B
-    for (const { playerId, type, rookieType, poolDraftYear } of playersAOut) {
-      const { data: srcRow, error: errOut } = await db
+    // Ferme la ligne ouverte (removed_at = date effective de l'échange) après avoir
+    // vérifié que cette date n'est pas antérieure à added_at — sinon la fenêtre
+    // added_at→removed_at serait inversée (incohérente, aucun segment actif calculable).
+    async function removeFromRoster(poolerId: string, playerId: number) {
+      const { data: existing } = await db
+        .from('pooler_rosters')
+        .select('added_at, rookie_type, pool_draft_year, draft_pick_id')
+        .eq('pooler_id', poolerId)
+        .eq('player_id', playerId)
+        .eq('pool_season_id', input.poolSeasonId)
+        .is('removed_at', null)
+        .maybeSingle()
+      if (!existing) return { error: `Entrée introuvable dans le roster actuel (joueur ${playerId})` }
+      if (existing.added_at && ts < existing.added_at) {
+        return { error: `Date d'échange (${input.date}) antérieure à la date d'ajout au roster (${existing.added_at.slice(0, 10)}) pour le joueur ${playerId} — corrige d'abord added_at (ex: via Changement de type) avant de saisir cet échange.` }
+      }
+      const { data: srcRow, error } = await db
         .from('pooler_rosters')
         .update({ is_active: false, removed_at: ts })
-        .eq('pooler_id', input.poolerAId)
+        .eq('pooler_id', poolerId)
         .eq('player_id', playerId)
         .eq('pool_season_id', input.poolSeasonId)
         .is('removed_at', null)
         .select('rookie_type, pool_draft_year, draft_pick_id')
         .maybeSingle()
-      if (errOut) return { error: `Retrait A (joueur ${playerId}) : ${errOut.message}` }
+      if (error) return { error: error.message }
+      return { srcRow }
+    }
+
+    // Joueurs de A → B
+    for (const { playerId, type, rookieType, poolDraftYear } of playersAOut) {
+      const { srcRow, error: removeError } = await removeFromRoster(input.poolerAId, playerId)
+      if (removeError) return { error: `Retrait A (joueur ${playerId}) : ${removeError}` }
       await log(playerId, input.poolerAId, null)
 
       const { error: errIn } = await db.from('pooler_rosters').insert({
@@ -284,7 +305,7 @@ export async function submitHistChangeAction(
         player_type: type,
         is_active: true,
         added_at: ts,
-        ...resolveRookieFields(type, rookieType, poolDraftYear, srcRow),
+        ...resolveRookieFields(type, rookieType, poolDraftYear, srcRow ?? null),
       })
       if (errIn) return { error: `Ajout B (joueur ${playerId}) : ${errIn.message}` }
       await log(playerId, input.poolerBId, type)
@@ -292,16 +313,8 @@ export async function submitHistChangeAction(
 
     // Joueurs de B → A
     for (const { playerId, type, rookieType, poolDraftYear } of playersBOut) {
-      const { data: srcRow, error: errOut } = await db
-        .from('pooler_rosters')
-        .update({ is_active: false, removed_at: ts })
-        .eq('pooler_id', input.poolerBId)
-        .eq('player_id', playerId)
-        .eq('pool_season_id', input.poolSeasonId)
-        .is('removed_at', null)
-        .select('rookie_type, pool_draft_year, draft_pick_id')
-        .maybeSingle()
-      if (errOut) return { error: `Retrait B (joueur ${playerId}) : ${errOut.message}` }
+      const { srcRow, error: removeError } = await removeFromRoster(input.poolerBId, playerId)
+      if (removeError) return { error: `Retrait B (joueur ${playerId}) : ${removeError}` }
       await log(playerId, input.poolerBId, null)
 
       const { error: errIn } = await db.from('pooler_rosters').insert({
@@ -311,7 +324,7 @@ export async function submitHistChangeAction(
         player_type: type,
         is_active: true,
         added_at: ts,
-        ...resolveRookieFields(type, rookieType, poolDraftYear, srcRow),
+        ...resolveRookieFields(type, rookieType, poolDraftYear, srcRow ?? null),
       })
       if (errIn) return { error: `Ajout A (joueur ${playerId}) : ${errIn.message}` }
       await log(playerId, input.poolerAId, type)
