@@ -9,7 +9,7 @@ Trocheck, Vincent;UTA;;C,RW;33;;;5625000.0;5625000;5625000;UFA;0
 Lee, Anders;UTA;;LW;36;;;5400000.0;5400000;5400000;UFA;0
 Hayton, Barrett;UTA;;C,LW;26;;;4775000.0;UFA;0;0;0
 Vejmelka, Karel;UTA;;G;30;;;4750000.0;4750000;4750000;4750000;UFA
-Marino, John;UTA;;RD;29;;;4400000.0;UFA;0;0;0
+Marino, John;UTA;;RD;29;;;4400000.0;6750000;6750000;6750000;6750000
 Crouse, Lawson;UTA;;LW,RW;29;;;4300000.0;UFA;0;0;0
 McBain, Jack;UTA;;C,LW;26;;;4250000.0;4250000;4250000;4250000;UFA
 Schmidt, Nate;UTA;;LD,RD;35;;;3500000.0;3500000;UFA;0;0
@@ -46,9 +46,9 @@ McCartney, Ben;UTA;;LW,RW;25;;;850000.0;0;0;0;0
 Roy, Joshua;UTA;;LW;22;;;850000.0;RFA;0;0;0
 Hebig, Cameron;UTA;;C,W;29;;;812500.0;UFA;0;0;0
 Ekman-Larsson, Oliver;UTA;;LD,RD;35;;;650000.0;290000;290000;290000;290000
-John MarinoDage29cap$4.40M;UTA;;;29;;;;;;;
-Barrett HaytonCage26cap$4.78M;UTA;;;26;;;;;;;
-Liam O'BrienLWage31cap$1.00M;UTA;;;31;;;;;;;
 Lawson CrouseLWage29cap$4.30M;UTA;;;29;;;;;;;
+Barrett HaytonCage26cap$4.78M;UTA;;;26;;;;;;;
+Andrew PeekeDage28cap$1.00M;UTA;;;28;;;;;;;
 Kevin StenlundCage29cap$2.75M;UTA;;;29;;;;;;;
+Liam O'BrienLWage31cap$1.00M;UTA;;;31;;;;;;;
 undefined, undefined;UTA;;;;;;;;;;
