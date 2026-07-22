@@ -21,6 +21,20 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-07-22 (suite)
+
+**[Fix données] — Nettoyage complet du lot de 342 lignes `roster_change_log` fantômes du 2026-07-10** (données staging, aucun changement de code) :
+- En resaisissant un `Changement de type` pour Steve (Nick Paul / Tyson Foerster), `checkFutureRosterConflict` a bloqué avec un message pointant un événement du 2026-06-07 — un artefact du même lot de 365 lignes déjà repéré le 2026-07-20 (`created_at` = instantané du 2026-07-10, `is_admin_override=false`), toujours présent en résidu (307 lignes à l'époque).
+- Supprimé les 2 lignes bloquantes immédiates (id 154 Nick Paul, id 170 Tyson Foerster), puis David a demandé de nettoyer tout le lot restant d'un coup plutôt que de le rencontrer une ligne à la fois au fil de la saisie.
+- Audit complet du lot (`created_at = 2026-07-10T13:04:46.765128`, 342 lignes restantes) avant suppression en bloc :
+  - 307 lignes réaffirmaient encore le statut courant de la ligne `pooler_rosters` visée (inoffensives par définition, mais deviendraient bloquantes/fantômes dès la prochaine correction touchant ce joueur — même schéma que Rinzel/Buium plus tôt dans la journée).
+  - ~30 lignes étaient des `retrait` fantômes (`new_type=null`) sur des joueurs de la banque de recrues jamais réellement retirés — invisibles pour `buildStandings()` (filtre `new_type IS NOT NULL`) mais visibles et bloquantes pour `checkFutureRosterConflict` (qui ne filtre pas les `null`).
+  - Vérifié pour chaque ligne restante qu'aucun événement réel (`is_admin_override=true`) ne dépend chronologiquement de sa présence — 7 cas limites (dont Spencer Knight, Dustin Wolf, Jiri Kulich) confirmés sans impact par simulation manuelle de `statusAt()`/`activeSegments()` avant suppression.
+  - Supprimé les 342 lignes en un seul DELETE (`roster_change_log` où `created_at` = l'horodatage exact du lot).
+- **Découverte connexe** : en vérifiant Dustin Wolf (David), 3 événements dangling *distincts* du lot (clics réels de test le 2026-07-11, `is_admin_override=false`) tronquaient sa période active au 11 juillet 2026 au lieu de la laisser ouverte (0 pt d'impact, saison déjà terminée en avril, mais mauvaise date de fin affichée dans le popup). Supprimés avec l'accord de David (id 366, 367, 371).
+- **Vérifié par simulation** (rejeu Python de `buildStandings()` contre les vraies données) : Spencer Knight inchangé (2 périodes, 52 pts) avant/après le nettoyage du lot — confirme qu'aucun point n'a bougé. Dustin Wolf repasse à 1 période ouverte, mêmes 53 pts.
+- **Risque résiduel** : reste 35 lignes non liées à ce lot dans `roster_change_log` (dont potentiellement d'autres artefacts ponctuels comme celui de Wolf) — pas d'audit exhaustif au-delà de ce qui a été croisé aujourd'hui.
+
 ### 2026-07-22
 
 **[Fix code+données] — Joueurs invisibles/points perdus après un changement de type ou un échange rétroactif** (`app/lib/standings.ts`, `app/app/admin/historique/historique-actions.ts`, données `pooler_rosters`/`roster_change_log` en staging) :
