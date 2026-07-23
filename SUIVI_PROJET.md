@@ -31,7 +31,7 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 - `checkHistLtirDurationAction` (nouveau, même pattern que `checkHistReactivationDelayAction`) : cherche le dernier événement `roster_change_log` avec `new_type='ltir'` pour ce (pooler, joueur) avant la date choisie ; si moins de `duree_min_ltir_jours` jours se sont écoulés, avertissement orange non bloquant. Câblé en direct dans le formulaire Changement de type (joueur 1 et joueur 2) et rétroactivement dans `getHistLogAction` (badge ⚠ avec tooltip dans le journal).
 - Validé : `npx tsc --noEmit` propre ; migration confirmée appliquée en staging (colonne lue avec succès, défaut 21 sur toutes les saisons) ; logique vérifiée par simulation contre les 3 lignes LTIR réelles en staging (toutes posées à l'alignement initial sans événement journalisé — comportement correct : pas d'avertissement possible, faute de date de départ connue, même limite que le délai de réactivation).
 - **Non couvert** : le délai LTIR n'est vérifié que dans `/admin/historique` (demande explicite de David) — pas dans `/gestion-effectifs` ni `/admin/transactions`, qui ont leurs propres mécanismes LTIR (`ltir`/`return_ltir`/`ltir_sign`) sans cette vérification.
-- **À faire** : rouler la même migration en prod avant que la config LTIR y soit fonctionnelle (`/admin/config` y afficherait une liste de saisons vide sans la colonne, contrairement à Historique qui dégraderait proprement sur la valeur par défaut).
+- Migration également appliquée en prod par David (confirmée : colonne présente, défaut 21 sur les 2 saisons actives). Fonctionnalité pleinement opérationnelle en staging et en prod.
 
 ### 2026-07-22 (suite)
 
