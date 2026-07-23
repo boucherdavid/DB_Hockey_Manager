@@ -6,6 +6,7 @@ import {
   submitHistChangeAction,
   getHistLogAction,
   checkHistReactivationDelayAction,
+  checkHistLtirDurationAction,
   getHistDraftPicksAction,
   updateHistLogDateAction,
   deleteHistLogAction,
@@ -28,7 +29,10 @@ const TX_TYPES: { value: HistTxType; label: string }[] = [
   { value: 'type_change', label: 'Changement de type' },
 ]
 
-const PLAYER_TYPES = ['actif', 'reserviste', 'recrue'] as const
+const PLAYER_TYPES = ['actif', 'reserviste', 'recrue', 'ltir'] as const
+const PLAYER_TYPE_LABEL: Record<string, string> = {
+  actif: 'Actif', reserviste: 'Reserviste', recrue: 'Recrue', ltir: 'LTIR',
+}
 
 const TX_TYPE_LABEL: Record<HistTxType, string> = Object.fromEntries(
   TX_TYPES.map(t => [t.value, t.label]),
@@ -177,7 +181,7 @@ function TradeSidePicker({
                           checked={sel.type === t}
                           onChange={() => onTypeChange(r.playerId, t)}
                         />
-                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                        {PLAYER_TYPE_LABEL[t]}
                       </label>
                     ))}
                   </div>
@@ -280,6 +284,10 @@ export default function HistoriqueManager({
   const [warningsAOut, setWarningsAOut] = useState<Record<number, string | null>>({})
   const [warningsBOut, setWarningsBOut] = useState<Record<number, string | null>>({})
 
+  // Avertissement (non bloquant) : durée minimale LTIR non respectée (Changement de type)
+  const [ltirWarning1, setLtirWarning1] = useState<string | null>(null)
+  const [ltirWarning2, setLtirWarning2] = useState<string | null>(null)
+
   const poolerName = poolers.find(p => p.id === poolerAId)?.name ?? ''
 
   const refreshLog = useCallback(async () => {
@@ -379,6 +387,26 @@ export default function HistoriqueManager({
     ).then(entries => { if (!cancelled) setWarningsBOut(Object.fromEntries(entries)) })
     return () => { cancelled = true }
   }, [txType, poolerAId, playersBOut, poolSeasonId, date])
+
+  // Avertissement durée minimale LTIR — Changement de type, joueur 1
+  useEffect(() => {
+    if (txType !== 'type_change' || !poolerAId || !playerOutAId || !typeChangeTo || !date) {
+      setLtirWarning1(null); return
+    }
+    const currentType = rosterA.find(r => r.playerId === playerOutAId)?.playerType ?? null
+    checkHistLtirDurationAction(poolerAId, playerOutAId, poolSeasonId, date, currentType, typeChangeTo)
+      .then(r => setLtirWarning1(r.warning))
+  }, [txType, poolerAId, playerOutAId, typeChangeTo, poolSeasonId, date, rosterA])
+
+  // Avertissement durée minimale LTIR — Changement de type, joueur 2 (optionnel)
+  useEffect(() => {
+    if (txType !== 'type_change' || !poolerAId || !typeChangeSecondPlayerId || !typeChangeSecondTo || !date) {
+      setLtirWarning2(null); return
+    }
+    const currentType = rosterA.find(r => r.playerId === typeChangeSecondPlayerId)?.playerType ?? null
+    checkHistLtirDurationAction(poolerAId, typeChangeSecondPlayerId, poolSeasonId, date, currentType, typeChangeSecondTo)
+      .then(r => setLtirWarning2(r.warning))
+  }, [txType, poolerAId, typeChangeSecondPlayerId, typeChangeSecondTo, poolSeasonId, date, rosterA])
 
   // Vide les champs de sélection joueur (garde pooler + date pour enchaîner rapidement)
   function resetSelections() {
@@ -548,10 +576,15 @@ export default function HistoriqueManager({
                       checked={typeChangeTo === t}
                       onChange={() => setTypeChangeTo(t)}
                     />
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                    {PLAYER_TYPE_LABEL[t]}
                   </label>
                 ))}
               </div>
+              {ltirWarning1 && (
+                <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-0.5">
+                  ⚠ {ltirWarning1}
+                </p>
+              )}
             </div>
 
             <div className="border-t pt-3 space-y-1">
@@ -570,10 +603,15 @@ export default function HistoriqueManager({
                         checked={typeChangeSecondTo === t}
                         onChange={() => setTypeChangeSecondTo(t)}
                       />
-                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                      {PLAYER_TYPE_LABEL[t]}
                     </label>
                   ))}
                 </div>
+              )}
+              {ltirWarning2 && (
+                <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-0.5">
+                  ⚠ {ltirWarning2}
+                </p>
               )}
             </div>
           </div>
@@ -596,7 +634,7 @@ export default function HistoriqueManager({
                     checked={playerInAType === t}
                     onChange={() => setPlayerInAType(t)}
                   />
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                  {PLAYER_TYPE_LABEL[t]}
                 </label>
               ))}
             </div>
@@ -830,6 +868,14 @@ export default function HistoriqueManager({
                           <span
                             className="ml-1 text-orange-600 cursor-help"
                             title={e.reactivationWarning}
+                          >
+                            ⚠
+                          </span>
+                        )}
+                        {e.ltirWarning && (
+                          <span
+                            className="ml-1 text-orange-600 cursor-help"
+                            title={e.ltirWarning}
                           >
                             ⚠
                           </span>

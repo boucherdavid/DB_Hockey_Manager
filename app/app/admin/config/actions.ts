@@ -391,6 +391,7 @@ export async function updateCapAction(
     delaiReactivationJours?: number
     maxSignaturesAl?: number
     maxSignaturesLtir?: number
+    dureeMinLtirJours?: number
     gestionEffectifsOuvert?: boolean
     isPlayoff?: boolean
     playoffSubmissionDeadline?: string | null
@@ -422,6 +423,7 @@ export async function updateCapAction(
   if (opts?.delaiReactivationJours !== undefined) updates.delai_reactivation_jours = opts.delaiReactivationJours
   if (opts?.maxSignaturesAl !== undefined) updates.max_signatures_al = opts.maxSignaturesAl
   if (opts?.maxSignaturesLtir !== undefined) updates.max_signatures_ltir = opts.maxSignaturesLtir
+  if (opts?.dureeMinLtirJours !== undefined) updates.duree_min_ltir_jours = opts.dureeMinLtirJours
   if (opts?.gestionEffectifsOuvert !== undefined) updates.gestion_effectifs_ouvert = opts.gestionEffectifsOuvert
   if (opts?.isPlayoff !== undefined) updates.is_playoff = opts.isPlayoff
   if (opts?.playoffSubmissionDeadline !== undefined) updates.playoff_submission_deadline = opts.playoffSubmissionDeadline ?? null

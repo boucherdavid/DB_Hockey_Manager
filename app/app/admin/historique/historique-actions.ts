@@ -100,9 +100,50 @@ export async function checkHistReactivationDelayAction(
   return { warning: null }
 }
 
+// Vérifie si playerId sort de LTIR (chez poolerId) moins de duree_min_ltir_jours après y
+// avoir été placé — avertissement non bloquant, seulement pour laisser une trace dans le
+// journal (Historique doit rester libre pour reconstituer des scénarios réels, même
+// philosophie que checkHistReactivationDelayAction). Ne s'applique qu'aux corrections qui
+// font sortir un joueur de LTIR (newType fourni et différent de 'ltir') ; le statut avant
+// la correction doit être déterminé par l'appelant (roster actuel côté A).
+export async function checkHistLtirDurationAction(
+  poolerId: string,
+  playerId: number,
+  poolSeasonId: number,
+  date: string,
+  currentType: string | null,
+  newType: string,
+): Promise<{ warning: string | null }> {
+  if (!poolerId || !playerId || !date || currentType !== 'ltir' || newType === 'ltir') return { warning: null }
+  const db = createAdminClient()
+  const ts = `${date}T12:00:00Z`
+
+  const [{ data: saison }, { data: lastLtirStart }] = await Promise.all([
+    db.from('pool_seasons').select('duree_min_ltir_jours').eq('id', poolSeasonId).single(),
+    db.from('roster_change_log')
+      .select('changed_at')
+      .eq('pooler_id', poolerId)
+      .eq('player_id', playerId)
+      .eq('pool_season_id', poolSeasonId)
+      .eq('new_type', 'ltir')
+      .lte('changed_at', ts)
+      .order('changed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  if (!lastLtirStart?.changed_at) return { warning: null }
+  const duree = saison?.duree_min_ltir_jours ?? 21
+  const days = (new Date(ts).getTime() - new Date(lastLtirStart.changed_at).getTime()) / 86_400_000
+  if (days < duree) {
+    return { warning: `Sur LTIR depuis seulement ${days.toFixed(1)} j (durée minimale configurée : ${duree} j).` }
+  }
+  return { warning: null }
+}
+
 export type HistTxType = 'swap' | 'trade' | 'ajout' | 'retrait' | 'type_change'
 
-export type HistPlayerType = 'actif' | 'reserviste' | 'recrue'
+export type HistPlayerType = 'actif' | 'reserviste' | 'recrue' | 'ltir'
 
 export type HistTradePlayer = {
   playerId: number
@@ -409,26 +450,32 @@ export type HistLogEntry = {
   effectiveDate: string   // changed_at — date du mouvement dans le pool
   loggedAt: string        // created_at — moment réel de la saisie
   reactivationWarning: string | null
+  ltirWarning: string | null
 }
 
 export async function getHistLogAction(poolSeasonId: number): Promise<HistLogEntry[]> {
   const db = createAdminClient()
   // poolers!roster_change_log_pooler_id_fkey : roster_change_log a 2 FK vers poolers
   // (pooler_id et changed_by) — PostgREST refuse un embed "poolers(...)" ambigu.
-  const [{ data, error }, { data: saison }, { data: removals }] = await Promise.all([
+  const [{ data, error }, { data: saison }, { data: removals }, { data: ltirStarts }] = await Promise.all([
     db.from('roster_change_log')
-      .select('id, pooler_id, player_id, pick_id, change_type, new_type, changed_at, created_at, players(first_name, last_name, teams(code)), poolers!roster_change_log_pooler_id_fkey(name), pool_draft_picks(round, pool_seasons(season))')
+      .select('id, pooler_id, player_id, pick_id, change_type, old_type, new_type, changed_at, created_at, players(first_name, last_name, teams(code)), poolers!roster_change_log_pooler_id_fkey(name), pool_draft_picks(round, pool_seasons(season))')
       .eq('pool_season_id', poolSeasonId)
       .like('change_type', 'hist_%')
       .order('created_at', { ascending: false })
       .limit(100),
-    db.from('pool_seasons').select('delai_reactivation_jours').eq('id', poolSeasonId).single(),
+    db.from('pool_seasons').select('delai_reactivation_jours, duree_min_ltir_jours').eq('id', poolSeasonId).single(),
     // Toutes les désactivations de la saison, pour évaluer le délai de réactivation en mémoire
     // plutôt qu'avec une requête par ligne du journal.
     db.from('pooler_rosters')
       .select('pooler_id, player_id, removed_at')
       .eq('pool_season_id', poolSeasonId)
       .not('removed_at', 'is', null),
+    // Tous les débuts de LTIR de la saison, même principe pour la durée minimale.
+    db.from('roster_change_log')
+      .select('pooler_id, player_id, changed_at')
+      .eq('pool_season_id', poolSeasonId)
+      .eq('new_type', 'ltir'),
   ])
 
   if (error) {
@@ -437,6 +484,7 @@ export async function getHistLogAction(poolSeasonId: number): Promise<HistLogEnt
   }
 
   const delai = saison?.delai_reactivation_jours ?? 7
+  const dureeLtir = saison?.duree_min_ltir_jours ?? 21
 
   return ((data ?? []) as any[]).map(r => {
     let reactivationWarning: string | null = null
@@ -451,6 +499,18 @@ export async function getHistLogAction(poolSeasonId: number): Promise<HistLogEnt
         }
       }
     }
+    let ltirWarning: string | null = null
+    if (r.old_type === 'ltir' && r.new_type && r.new_type !== 'ltir') {
+      const lastLtirStart = (ltirStarts ?? [])
+        .filter((x: any) => x.pooler_id === r.pooler_id && x.player_id === r.player_id && x.changed_at <= r.changed_at)
+        .sort((a: any, b: any) => (b.changed_at as string).localeCompare(a.changed_at))[0]
+      if (lastLtirStart) {
+        const days = (new Date(r.changed_at).getTime() - new Date(lastLtirStart.changed_at).getTime()) / 86_400_000
+        if (days < dureeLtir) {
+          ltirWarning = `Sorti de LTIR ${days.toFixed(1)} j après y avoir été placé (durée minimale configurée : ${dureeLtir} j)`
+        }
+      }
+    }
     return {
       id: r.id,
       txType: (r.change_type as string).replace('hist_', '') as HistTxType,
@@ -462,6 +522,7 @@ export async function getHistLogAction(poolSeasonId: number): Promise<HistLogEnt
       effectiveDate: r.changed_at,
       loggedAt: r.created_at,
       reactivationWarning,
+      ltirWarning,
     }
   })
 }

@@ -21,6 +21,18 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-07-22 (suite 2)
+
+**[Feat] — LTIR ajouté aux 4 sélecteurs de type dans l'onglet Historique + avertissement durée minimale** (`app/app/admin/historique/historique-actions.ts`, `HistoriqueManager.tsx`, `app/app/admin/config/actions.ts`, `SeasonConfigForm.tsx`, `app/app/admin/pool/page.tsx`, `supabase_migrations/duree_min_ltir_jours.sql`) :
+- David a remarqué que `/admin/historique` (Échange même pooler, Changement de type, Ajout seulement) n'offrait que Actif/Reserviste/Recrue — LTIR manquant partout, alors que les règles LTIR sont documentées dans `docs/regles-changements-alignement.md` et s'appliquent en saison régulière.
+- Ajouté `'ltir'` à `PLAYER_TYPES` (constante unique réutilisée aux 4 endroits) et à `HistPlayerType`. Confirmé que la contrainte CHECK de `pooler_rosters.player_type` accepte déjà `ltir` (3 lignes staging existantes, gérées ailleurs via `/gestion-effectifs`).
+- David a demandé que la durée minimale LTIR (délai avant de pouvoir sortir un joueur de LTIR, ex. 21 jours) ne soit **pas bloquante** dans Historique (même philosophie que le délai de réactivation : Historique doit rester libre pour reconstituer des scénarios réels) — seulement une trace dans le journal si non respectée.
+- Nouveau champ configurable `pool_seasons.duree_min_ltir_jours` (défaut 21), migration `supabase_migrations/duree_min_ltir_jours.sql` (exécutée manuellement par David dans le SQL Editor Supabase staging — pas de connexion Postgres directe disponible pour du DDL, contrairement aux corrections de données via l'API REST). Ajouté dans `/admin/config` à côté de Max signatures LTIR.
+- `checkHistLtirDurationAction` (nouveau, même pattern que `checkHistReactivationDelayAction`) : cherche le dernier événement `roster_change_log` avec `new_type='ltir'` pour ce (pooler, joueur) avant la date choisie ; si moins de `duree_min_ltir_jours` jours se sont écoulés, avertissement orange non bloquant. Câblé en direct dans le formulaire Changement de type (joueur 1 et joueur 2) et rétroactivement dans `getHistLogAction` (badge ⚠ avec tooltip dans le journal).
+- Validé : `npx tsc --noEmit` propre ; migration confirmée appliquée en staging (colonne lue avec succès, défaut 21 sur toutes les saisons) ; logique vérifiée par simulation contre les 3 lignes LTIR réelles en staging (toutes posées à l'alignement initial sans événement journalisé — comportement correct : pas d'avertissement possible, faute de date de départ connue, même limite que le délai de réactivation).
+- **Non couvert** : le délai LTIR n'est vérifié que dans `/admin/historique` (demande explicite de David) — pas dans `/gestion-effectifs` ni `/admin/transactions`, qui ont leurs propres mécanismes LTIR (`ltir`/`return_ltir`/`ltir_sign`) sans cette vérification.
+- **À faire** : rouler la même migration en prod avant que la config LTIR y soit fonctionnelle (`/admin/config` y afficherait une liste de saisons vide sans la colonne, contrairement à Historique qui dégraderait proprement sur la valeur par défaut).
+
 ### 2026-07-22 (suite)
 
 **[Fix données] — Nettoyage complet du lot de 342 lignes `roster_change_log` fantômes du 2026-07-10** (données staging, aucun changement de code) :

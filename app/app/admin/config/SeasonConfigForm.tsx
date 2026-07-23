@@ -13,6 +13,7 @@ type Saison = {
   delai_reactivation_jours?: number | null
   max_signatures_al?: number | null
   max_signatures_ltir?: number | null
+  duree_min_ltir_jours?: number | null
   gestion_effectifs_ouvert?: boolean | null
   is_playoff?: boolean | null
   indicator_streak_chaud?: number | null
@@ -44,6 +45,7 @@ export default function SeasonConfigForm({ saison }: { saison: Saison }) {
   const [delaiReactivation, setDelaiReactivation] = useState(String(saison.delai_reactivation_jours ?? 7))
   const [maxAl, setMaxAl] = useState(String(saison.max_signatures_al ?? 10))
   const [maxLtir, setMaxLtir] = useState(String(saison.max_signatures_ltir ?? 2))
+  const [dureeMinLtir, setDureeMinLtir] = useState(String(saison.duree_min_ltir_jours ?? 21))
   const [draftRounds, setDraftRounds] = useState(String(saison.draft_rounds ?? 4))
   const [toolOuvert, setToolOuvert] = useState(saison.gestion_effectifs_ouvert ?? true)
   const [indStreakChaud, setIndStreakChaud] = useState(String(saison.indicator_streak_chaud ?? 3))
@@ -88,6 +90,7 @@ export default function SeasonConfigForm({ saison }: { saison: Saison }) {
         delaiReactivationJours: Math.max(0, parseInt(delaiReactivation) || 0),
         maxSignaturesAl: Math.max(0, parseInt(maxAl) || 0),
         maxSignaturesLtir: Math.max(0, parseInt(maxLtir) || 0),
+        dureeMinLtirJours: Math.max(0, parseInt(dureeMinLtir) || 0),
         draftRounds: Math.max(1, parseInt(draftRounds) || 4),
         gestionEffectifsOuvert: toolOuvert,
         indicatorStreakChaud: Math.max(1, parseInt(indStreakChaud) || 3),
@@ -227,6 +230,14 @@ export default function SeasonConfigForm({ saison }: { saison: Saison }) {
               <p className="text-xs text-gray-500 mb-1">Max signatures LTIR</p>
               <input type="number" min={0} step={1} value={maxLtir}
                 onChange={e => setMaxLtir(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Durée minimale LTIR <span className="text-gray-400">(jours)</span></p>
+              <input type="number" min={0} step={1} value={dureeMinLtir}
+                onChange={e => setDureeMinLtir(e.target.value)} className={inputCls} />
+              <p className="text-xs text-gray-400 mt-1">
+                Avertissement (non bloquant) dans l&apos;onglet Historique si un joueur quitte LTIR avant ce délai.
+              </p>
             </div>
           </div>
           <div className="px-4 py-3">
