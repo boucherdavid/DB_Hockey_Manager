@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-07-22
+Derniere mise a jour: 2026-07-24
 
 ## Role du fichier
 
@@ -20,6 +20,17 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-24
+
+**[Fix données] — Audit des risques résiduels notés le 2026-07-22 (staging uniquement, prod pas encore synchronisée)** (aucun changement de code, données `pooler_rosters`/`roster_change_log` en staging) :
+- Script d'audit lecture seule écrit et lancé contre staging pour couvrir les deux risques résiduels documentés le 22 juillet : (A) lignes `roster_change_log` restantes hors du lot de 342 déjà nettoyé, (B) autres lignes `pooler_rosters` avec `added_at` figé dans la fenêtre de reconstruction (7 juin – 10 juillet 2026, même bug que Rinzel/Buium/Kasper/Kulich corrigé le 22 juillet).
+- **Audit A (10 lignes `is_admin_override=false` restantes, toutes examinées individuellement)** : 8 confirmées légitimes (vraies actions en temps réel — double-clic inoffensif sur Spencer Knight, lot réel de 5 changements de type chez Vincent le 13 juillet, désactivation Logan Mailloux). 2 confirmées comme vrais fantômes de la même famille que Dustin Wolf (clic réel fait avant qu'une correction Historique ultérieure ne referme la ligne à une date antérieure, laissant un évènement orphelin après `removed_at`) : `id=387` (Sam Rinzel, David) et `id=407` (Jiri Kulich, Vincent) — supprimés avec l'accord de David, aucun impact sur les points (déjà hors fenêtre active).
+- **Audit B (134 lignes avec `added_at` dans la fenêtre suspecte)** : 130 étaient des joueurs `recrue` en banque sans période active — aucun risque, exclus du calcul par construction (`periods.length === 0`). 1 cas confirmé par une preuve directe (correction Historique réelle datée du 2025-10-09 mais jamais reflétée dans `added_at`) : **Axel Sandin Pellikka (Vincent)** — même bug exact que Rinzel/Buium. 3 cas sans preuve directe (aucun `roster_change_log`, aucune transaction) mais au profil identique (ajoutés `actif` le 2026-07-09 à la minute près, sans aucune trace) : **Sean Monahan (Sébastien S.), Brock Nelson (Nicolas), Anton Lundell (Paule)** — confirmés par David comme devant être actifs depuis le début de saison plutôt que de vraies acquisitions de juillet.
+- **Correction appliquée en staging** (`added_at` reculé à `saison_start_date` 2025-10-07T12:00, cohérent avec la convention du 22 juillet — fonctionnellement équivalent à reculer à la date exacte de l'évènement puisque `statusAt()` retombe sur `recrue` avant l'évènement de toute façon) : `pooler_rosters` id 317 (Pellikka), 335 (Monahan), 336 (Nelson), 337 (Lundell).
+- **Vérifié par simulation** (rejeu Python de la logique `buildStandings()` contre `player_game_logs` réels, avant/après) : Pellikka +21 pts (68 matchs), Monahan +36 pts (78 matchs), Nelson +65 pts (81 matchs), Lundell +44 pts (64 matchs). **Total : +166 pts** répartis sur 4 poolers différents (Vincent, Sébastien S., Nicolas, Paule).
+- Ré-audit après correctif : Audit A à 8/8 lignes classées légitimes (0 résiduel), Audit B sans plus aucune ligne `actif`/`reserviste` dans la fenêtre suspecte (les 130 restantes sont toutes `recrue`, non-risque confirmé).
+- **Reste à faire** : ces corrections ne sont qu'en **staging**. La synchronisation vers prod (`sync_staging_to_prod.py --apply`) n'a pas encore été lancée pour ce lot — à faire quand David confirme, car ça affecte le classement réel vu par tous les poolers.
 
 ### 2026-07-22 (suite 2)
 
