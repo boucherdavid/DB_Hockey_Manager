@@ -21,6 +21,13 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-07-25 (suite)
+
+**[Fix] — Tri des joueurs par pts strictement décroissant, peu importe le statut** (`app/app/classement/ClassementTable.tsx`, `app/app/poolers/[id]/PoolerPageTabs.tsx`) :
+- David a repéré que dans la liste détaillée d'un pooler (par position), les joueurs `reserviste`/`recrue`/`ltir` étaient toujours regroupés après les `actif`, peu importe leurs points — ex: Ryan Leonard (LTIR, 4 pts) apparaissait sous Shabanov (réserviste, 0 pt) au lieu d'être classé entre Peterka (0 pt) et Cuylle (38 pts) selon ses propres points.
+- `groupAndSort()` (dupliquée à l'identique dans les deux fichiers) triait par `typeOrder(playerType)` d'abord, `poolPoints` ensuite — retiré le critère de statut, tri uniquement par `poolPoints` décroissant à l'intérieur de chaque groupe de position (attaquants/défenseurs/gardiens). Fonction `typeOrder()` supprimée (plus utilisée).
+- Validé : `npx tsc --noEmit` propre.
+
 ### 2026-07-25
 
 **[Feat] — Échange même pooler : le joueur retiré peut changer de statut au lieu de quitter le pool** (`app/app/admin/historique/historique-actions.ts`, `HistoriqueManager.tsx`) :

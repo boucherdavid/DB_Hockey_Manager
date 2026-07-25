@@ -91,12 +91,6 @@ function positionGroup(pos: string): number {
   return 0
 }
 
-function typeOrder(type: string): number {
-  if (type === 'actif') return 0
-  if (type === 'reserviste') return 1
-  return 2
-}
-
 const TYPE_BADGE: Record<string, string> = {
   reserviste: 'RES',
   ltir: 'LTIR',
@@ -105,12 +99,7 @@ const TYPE_BADGE: Record<string, string> = {
 function groupAndSort(players: PlayerContrib[]): PlayerContrib[] {
   const groups: PlayerContrib[][] = [[], [], []]
   for (const p of players) groups[positionGroup(p.position)].push(p)
-  for (const g of groups) {
-    g.sort((a, b) =>
-      typeOrder(a.playerType) - typeOrder(b.playerType) ||
-      b.poolPoints - a.poolPoints
-    )
-  }
+  for (const g of groups) g.sort((a, b) => b.poolPoints - a.poolPoints)
   return groups.flat()
 }
 
