@@ -220,12 +220,14 @@ qui ne sert qu'à réassigner un pick déjà existant.
   ligne visée, `added_at` est automatiquement reculé à cette date (avec avertissement non
   bloquant) — la date effective saisie fait toujours foi comme date de début pour le joueur
   concerné. Logique partagée dans `computeTypeChangeAddedAt()` (`app/lib/rosterTypeChange.ts`),
-  utilisée par les 3 interfaces qui modifient `player_type` sur une ligne existante sans
-  jamais toucher `added_at` : `/admin/historique` (Changement de type), `/gestion-effectifs`
-  (`activate`/`deactivate`, checkbox admin "Forcer une date effective"), `/admin/transactions`
-  (`type_change`/`promote`/`reactivate`, `transactionDate`). Toute nouvelle action qui modifie
-  `player_type` sur une ligne existante avec une date potentiellement passée doit passer par
-  cette même fonction plutôt que de dupliquer la logique.
+  utilisée par les interfaces qui modifient `player_type` sur une ligne existante sans
+  jamais toucher `added_at` : `/admin/historique` (Changement de type, et depuis le
+  2026-07-25 la branche Échange même pooler quand le joueur retiré change de statut au lieu
+  de quitter le pool — les deux passent par la même fonction interne `applyTypeChange`),
+  `/gestion-effectifs` (`activate`/`deactivate`, checkbox admin "Forcer une date effective"),
+  `/admin/transactions` (`type_change`/`promote`/`reactivate`, `transactionDate`). Toute
+  nouvelle action qui modifie `player_type` sur une ligne existante avec une date
+  potentiellement passée doit passer par cette même fonction plutôt que de dupliquer la logique.
 - **Périodes affichées** (`PlayerContrib.periods`, popup ↩ dans `/classement` et
   `/poolers/[id]`) : une entrée par fenêtre **active** contiguë (via `activeSegments()`), pas
   une entrée par ligne `pooler_rosters`. Un joueur réactivé plusieurs fois sans jamais quitter
@@ -246,11 +248,13 @@ qui ne sert qu'à réassigner un pick déjà existant.
   (`app/lib/rosterTypeChange.ts`) bloque (au lieu de nettoyer automatiquement — impossible
   de distinguer un artefact obsolète d'un vrai événement futur réel sans risquer d'effacer
   une donnée réelle) toute saisie qui créerait ce conflit. Câblé dans `submitHistChangeAction`
-  (`/admin/historique`, type_change), `deactivate`/`activate`/`addNewPlayer`
-  (`/gestion-effectifs`), et `submitTransactionAction` (`/admin/transactions` — `transfer`
-  arrivée, `promote`/`reactivate`/`type_change`, `sign`). Pas encore câblé dans les chemins
-  `trade`/`ajout`/`retrait`/`swap` de `/admin/historique` (scope volontairement limité, risque
-  de collatéral jugé plus élevé pour un gain plus faible).
+  (`/admin/historique`, type_change, et depuis le 2026-07-25 la branche Échange même pooler
+  quand le joueur retiré change de statut plutôt que de quitter le pool — voir plus haut),
+  `deactivate`/`activate`/`addNewPlayer` (`/gestion-effectifs`), et `submitTransactionAction`
+  (`/admin/transactions` — `transfer` arrivée, `promote`/`reactivate`/`type_change`, `sign`).
+  Toujours pas câblé dans les chemins `trade`/`ajout`/`retrait` de `/admin/historique`, ni
+  dans le retrait complet (sortie du pool) d'Échange même pooler — scope volontairement
+  limité, risque de collatéral jugé plus élevé pour un gain plus faible.
 - **Gap distinct comblé le 2026-07-20** : `/admin/transactions` (`submitTransactionAction`)
   mettait à jour `pooler_rosters.player_type` mais n'écrivait **aucune** ligne
   `roster_change_log` — `statusAt()` ne voyait donc jamais ces transitions et retombait sur
