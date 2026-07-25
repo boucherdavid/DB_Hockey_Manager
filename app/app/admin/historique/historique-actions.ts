@@ -161,6 +161,10 @@ export type HistChangeInput = {
   // Côté A — toujours requis
   poolerAId: string
   playerOutAId: number | null   // swap/retrait/type_change : joueur qui quitte le pooler A (ou dont le type change)
+  // swap seulement — si fourni, playerOutAId change de statut (reste chez le pooler A) au
+  // lieu de quitter le pool complètement (ex: passer LTIR pour libérer une place et signer
+  // un agent libre en même temps). null = comportement existant (retrait complet).
+  playerOutANewType: HistPlayerType | null
   playerInAId: number | null    // swap/ajout : joueur qui arrive chez le pooler A
   playerInAType: HistPlayerType
   // Côté B — trade seulement
@@ -220,48 +224,51 @@ export async function submitHistChangeAction(
     if (error) console.error('submitHistChangeAction log:', error.message)
   }
 
+  // Change le player_type d'une ligne pooler_rosters existante sans la retirer du pool —
+  // utilisé par "Changement de type" et par le nouveau cas "Échange même pooler" où le
+  // joueur retiré change de statut (ex: passe LTIR) plutôt que de quitter le pooler.
+  async function applyTypeChange(poolerId: string, playerId: number, newType: string): Promise<{ error?: string; warning?: string }> {
+    const { data: existing } = await db
+      .from('pooler_rosters')
+      .select('player_type, added_at')
+      .eq('pooler_id', poolerId)
+      .eq('player_id', playerId)
+      .eq('pool_season_id', input.poolSeasonId)
+      .is('removed_at', null)
+      .maybeSingle()
+    if (!existing) return { error: `Entrée introuvable dans le roster actuel (joueur ${playerId})` }
+
+    const conflict = await checkFutureRosterConflict(db, poolerId, playerId, input.poolSeasonId, ts, newType)
+    if (conflict.error) return conflict
+
+    const { addedAtOverride, warning } = computeTypeChangeAddedAt(existing.added_at, ts)
+    const updateFields: Record<string, unknown> = { player_type: newType }
+    if (addedAtOverride) updateFields.added_at = addedAtOverride
+
+    const { error } = await db
+      .from('pooler_rosters')
+      .update(updateFields)
+      .eq('pooler_id', poolerId)
+      .eq('player_id', playerId)
+      .eq('pool_season_id', input.poolSeasonId)
+      .is('removed_at', null)
+    if (error) return { error: `Changement de type : ${error.message}` }
+    await log(playerId, poolerId, newType, existing.player_type)
+    return { warning }
+  }
+
   // Changement de type (actif ↔ réserviste ↔ recrue) sans retrait/ajout — cas à part,
   // le(s) joueur(s) restent dans le pool. Un 2e joueur optionnel permet un échange
   // (un descend, un monte) en une seule transaction.
   if (input.txType === 'type_change') {
     if (!input.playerOutAId || !input.typeChangeTo) return { error: 'Joueur ou type manquant' }
 
-    async function applyTypeChange(playerId: number, newType: string): Promise<{ error?: string; warning?: string }> {
-      const { data: existing } = await db
-        .from('pooler_rosters')
-        .select('player_type, added_at')
-        .eq('pooler_id', input.poolerAId)
-        .eq('player_id', playerId)
-        .eq('pool_season_id', input.poolSeasonId)
-        .is('removed_at', null)
-        .maybeSingle()
-      if (!existing) return { error: `Entrée introuvable dans le roster actuel (joueur ${playerId})` }
-
-      const conflict = await checkFutureRosterConflict(db, input.poolerAId, playerId, input.poolSeasonId, ts, newType)
-      if (conflict.error) return conflict
-
-      const { addedAtOverride, warning } = computeTypeChangeAddedAt(existing.added_at, ts)
-      const updateFields: Record<string, unknown> = { player_type: newType }
-      if (addedAtOverride) updateFields.added_at = addedAtOverride
-
-      const { error } = await db
-        .from('pooler_rosters')
-        .update(updateFields)
-        .eq('pooler_id', input.poolerAId)
-        .eq('player_id', playerId)
-        .eq('pool_season_id', input.poolSeasonId)
-        .is('removed_at', null)
-      if (error) return { error: `Changement de type : ${error.message}` }
-      await log(playerId, input.poolerAId, newType, existing.player_type)
-      return { warning }
-    }
-
-    const res1 = await applyTypeChange(input.playerOutAId, input.typeChangeTo)
+    const res1 = await applyTypeChange(input.poolerAId, input.playerOutAId, input.typeChangeTo)
     if (res1.error) return { error: res1.error }
     const warnings = [res1.warning].filter((w): w is string => !!w)
 
     if (input.typeChangeSecondPlayerId && input.typeChangeSecondTo) {
-      const res2 = await applyTypeChange(input.typeChangeSecondPlayerId, input.typeChangeSecondTo)
+      const res2 = await applyTypeChange(input.poolerAId, input.typeChangeSecondPlayerId, input.typeChangeSecondTo)
       if (res2.error) return { error: res2.error }
       if (res2.warning) warnings.push(res2.warning)
     }
@@ -407,17 +414,28 @@ export async function submitHistChangeAction(
     return {}
   }
 
-  // Retirer le joueur du pooler A (swap / retrait)
+  const outWarnings: string[] = []
+
+  // Retirer OU changer le statut du joueur A (swap / retrait). playerOutANewType (swap
+  // seulement) permet de garder le joueur chez le pooler A avec un nouveau statut (ex:
+  // LTIR) plutôt que de le retirer complètement — utile pour signer un agent libre en
+  // libérant une place par LTIR/réserve dans la même transaction.
   if (input.playerOutAId) {
-    const { error } = await db
-      .from('pooler_rosters')
-      .update({ is_active: false, removed_at: ts })
-      .eq('pooler_id', input.poolerAId)
-      .eq('player_id', input.playerOutAId)
-      .eq('pool_season_id', input.poolSeasonId)
-      .is('removed_at', null)
-    if (error) return { error: `Retrait A : ${error.message}` }
-    await log(input.playerOutAId, input.poolerAId, null)
+    if (input.txType === 'swap' && input.playerOutANewType) {
+      const res = await applyTypeChange(input.poolerAId, input.playerOutAId, input.playerOutANewType)
+      if (res.error) return { error: res.error }
+      if (res.warning) outWarnings.push(res.warning)
+    } else {
+      const { error } = await db
+        .from('pooler_rosters')
+        .update({ is_active: false, removed_at: ts })
+        .eq('pooler_id', input.poolerAId)
+        .eq('player_id', input.playerOutAId)
+        .eq('pool_season_id', input.poolSeasonId)
+        .is('removed_at', null)
+      if (error) return { error: `Retrait A : ${error.message}` }
+      await log(input.playerOutAId, input.poolerAId, null)
+    }
   }
 
   // Ajouter un joueur chez le pooler A (swap / ajout)
@@ -436,7 +454,7 @@ export async function submitHistChangeAction(
 
   revalidatePath('/admin/historique')
   revalidatePath('/admin/effectifs')
-  return {}
+  return { warning: outWarnings.length > 0 ? outWarnings.join(' ') : undefined }
 }
 
 export type HistLogEntry = {

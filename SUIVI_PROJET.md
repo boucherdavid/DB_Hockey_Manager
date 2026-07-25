@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-07-24
+Derniere mise a jour: 2026-07-25
 
 ## Role du fichier
 
@@ -20,6 +20,16 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-25
+
+**[Feat] — Échange même pooler : le joueur retiré peut changer de statut au lieu de quitter le pool** (`app/app/admin/historique/historique-actions.ts`, `HistoriqueManager.tsx`) :
+- David a signalé un cas manquant dans l'onglet « Échange même pooler » : aller chercher un agent libre (dans le max de signatures LTIR décidé) en échange d'un joueur qu'on met sur LTIR — jusqu'ici le joueur retiré quittait toujours complètement le pool (`removed_at` fermé), aucune façon de simplement lui changer de statut (réserviste/recrue/LTIR) en une seule transaction avec l'ajout du nouveau joueur.
+- Nouveau champ `playerOutANewType` (optionnel) sur `HistChangeInput` : si fourni, le joueur retiré reste chez le pooler A avec ce nouveau statut (via la même logique que « Changement de type » — `checkFutureRosterConflict` + `computeTypeChangeAddedAt`) au lieu d'être fermé (`removed_at`). `null` = comportement existant inchangé (retrait complet).
+- `applyTypeChange` (auparavant définie localement dans la branche `type_change`) sortie au niveau de la fonction pour être réutilisée par les deux branches (`type_change` et `swap`), signature étendue avec `poolerId` en paramètre.
+- UI : nouveau sélecteur « Sort du joueur retiré » (Retiré du pool / Réserviste / Recrue / LTIR) affiché uniquement pour `txType === 'swap'` quand un joueur est sélectionné. Avertissement durée minimale LTIR (`checkHistLtirDurationAction`) câblé de la même façon que pour Changement de type (non bloquant, même philosophie — voir `CLAUDE.md` section 6).
+- Scope volontairement limité à « Échange même pooler » (demande explicite de David) — pas touché aux autres onglets.
+- Validé : `npx tsc --noEmit` propre ; testé en direct par David en staging pendant la session (logs serveur confirment `checkHistLtirDurationAction` appelé avec succès sur un vrai cas actif→ltir).
 
 ### 2026-07-24
 

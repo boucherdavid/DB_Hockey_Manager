@@ -247,6 +247,8 @@ export default function HistoriqueManager({
   const [poolerAId, setPoolerAId] = useState('')
   const [rosterA, setRosterA] = useState<HistRosterEntry[]>([])
   const [playerOutAId, setPlayerOutAId] = useState<number | null>(null)
+  // swap seulement — statut du joueur retiré s'il reste chez le pooler A (null = retiré du pool)
+  const [playerOutANewType, setPlayerOutANewType] = useState<HistPlayerType | null>(null)
   const [playerInA, setPlayerInA] = useState<HistPlayerResult | null>(null)
   const [playerInAType, setPlayerInAType] = useState<HistPlayerType>('actif')
   const [typeChangeTo, setTypeChangeTo] = useState<HistPlayerType | null>(null)
@@ -287,6 +289,8 @@ export default function HistoriqueManager({
   // Avertissement (non bloquant) : durée minimale LTIR non respectée (Changement de type)
   const [ltirWarning1, setLtirWarning1] = useState<string | null>(null)
   const [ltirWarning2, setLtirWarning2] = useState<string | null>(null)
+  // Avertissement (non bloquant) : durée minimale LTIR — joueur retiré qui change de statut (swap)
+  const [ltirWarningOut, setLtirWarningOut] = useState<string | null>(null)
 
   const poolerName = poolers.find(p => p.id === poolerAId)?.name ?? ''
 
@@ -408,9 +412,20 @@ export default function HistoriqueManager({
       .then(r => setLtirWarning2(r.warning))
   }, [txType, poolerAId, typeChangeSecondPlayerId, typeChangeSecondTo, poolSeasonId, date, rosterA])
 
+  // Avertissement durée minimale LTIR — Échange même pooler, joueur retiré qui change de statut
+  useEffect(() => {
+    if (txType !== 'swap' || !poolerAId || !playerOutAId || !playerOutANewType || !date) {
+      setLtirWarningOut(null); return
+    }
+    const currentType = rosterA.find(r => r.playerId === playerOutAId)?.playerType ?? null
+    checkHistLtirDurationAction(poolerAId, playerOutAId, poolSeasonId, date, currentType, playerOutANewType)
+      .then(r => setLtirWarningOut(r.warning))
+  }, [txType, poolerAId, playerOutAId, playerOutANewType, poolSeasonId, date, rosterA])
+
   // Vide les champs de sélection joueur (garde pooler + date pour enchaîner rapidement)
   function resetSelections() {
     setPlayerOutAId(null)
+    setPlayerOutANewType(null)
     setPlayerInA(null)
     setPlayerInAType('actif')
     setTypeChangeTo(null)
@@ -470,6 +485,7 @@ export default function HistoriqueManager({
         txType,
         poolerAId,
         playerOutAId: (txType === 'ajout' || txType === 'trade') ? null : playerOutAId,
+        playerOutANewType: txType === 'swap' ? playerOutANewType : null,
         playerInAId: (txType === 'retrait' || txType === 'trade') ? null : (playerInA?.id ?? null),
         playerInAType,
         poolerBId: txType === 'trade' ? poolerBId : null,
@@ -558,8 +574,47 @@ export default function HistoriqueManager({
               label={txType === 'type_change' ? 'Joueur 1' : 'Joueur retiré / cédé'}
               roster={rosterA}
               value={playerOutAId}
-              onChange={setPlayerOutAId}
+              onChange={id => { setPlayerOutAId(id); setPlayerOutANewType(null) }}
             />
+          </div>
+        )}
+
+        {/* Sort du joueur OUT (swap seulement) — retiré du pool, ou garde une place chez le
+            pooler A avec un nouveau statut (ex: LTIR pour libérer une place et signer un
+            agent libre dans la même transaction) */}
+        {txType === 'swap' && playerOutAId && (
+          <div className="space-y-1">
+            <label className="text-xs text-gray-500">Sort du joueur retiré</label>
+            <div className="flex gap-3 flex-wrap">
+              <label className="flex items-center gap-1 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  checked={playerOutANewType === null}
+                  onChange={() => setPlayerOutANewType(null)}
+                />
+                Retiré du pool
+              </label>
+              {PLAYER_TYPES.filter(t => t !== 'actif').map(t => (
+                <label key={t} className="flex items-center gap-1 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={playerOutANewType === t}
+                    onChange={() => setPlayerOutANewType(t)}
+                  />
+                  {PLAYER_TYPE_LABEL[t]}
+                </label>
+              ))}
+            </div>
+            {playerOutANewType && (
+              <p className="text-xs text-gray-400">
+                Reste chez ce pooler avec le nouveau statut au lieu de quitter le pool.
+              </p>
+            )}
+            {ltirWarningOut && (
+              <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-0.5">
+                ⚠ {ltirWarningOut}
+              </p>
+            )}
           </div>
         )}
 
