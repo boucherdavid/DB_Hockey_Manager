@@ -27,6 +27,7 @@ const TX_TYPES: { value: HistTxType; label: string }[] = [
   { value: 'ajout',  label: 'Ajout seulement' },
   { value: 'retrait', label: 'Retrait seulement' },
   { value: 'type_change', label: 'Changement de type' },
+  { value: 'ballotage', label: 'Réclamé au ballotage' },
 ]
 
 const PLAYER_TYPES = ['actif', 'reserviste', 'recrue', 'ltir'] as const
@@ -255,9 +256,15 @@ export default function HistoriqueManager({
   const [typeChangeSecondPlayerId, setTypeChangeSecondPlayerId] = useState<number | null>(null)
   const [typeChangeSecondTo, setTypeChangeSecondTo] = useState<HistPlayerType | null>(null)
 
-  // Côté B (trade)
+  // Côté B (trade / ballotage)
   const [poolerBId, setPoolerBId] = useState('')
   const [rosterB, setRosterB] = useState<HistRosterEntry[]>([])
+
+  // ballotage seulement — statut du joueur chez le pooler réclamant, et joueur optionnel
+  // que le réclamant libère lui-même pour faire de la place
+  const [ballotageType, setBallotageType] = useState<HistPlayerType>('actif')
+  const [ballotageReleasedId, setBallotageReleasedId] = useState<number | null>(null)
+  const [reactivationWarningBallotage, setReactivationWarningBallotage] = useState<string | null>(null)
 
   // Joueurs échangés (trade seulement) — N contre M
   const [playersAOut, setPlayersAOut] = useState<HistTradePlayer[]>([])
@@ -392,6 +399,13 @@ export default function HistoriqueManager({
     return () => { cancelled = true }
   }, [txType, poolerAId, playersBOut, poolSeasonId, date])
 
+  // Avertissement délai de réactivation — joueur réclamé au ballotage (arrive chez poolerB)
+  useEffect(() => {
+    if (txType !== 'ballotage' || !poolerBId || !playerOutAId || !date) { setReactivationWarningBallotage(null); return }
+    checkHistReactivationDelayAction(poolerBId, playerOutAId, poolSeasonId, date)
+      .then(r => setReactivationWarningBallotage(r.warning))
+  }, [txType, poolerBId, playerOutAId, poolSeasonId, date])
+
   // Avertissement durée minimale LTIR — Changement de type, joueur 1
   useEffect(() => {
     if (txType !== 'type_change' || !poolerAId || !playerOutAId || !typeChangeTo || !date) {
@@ -435,10 +449,13 @@ export default function HistoriqueManager({
     setPlayersBOut([])
     setPickAIds([])
     setPickBIds([])
+    setBallotageType('actif')
+    setBallotageReleasedId(null)
     setError(null)
     setReactivationWarningA(null)
     setWarningsAOut({})
     setWarningsBOut({})
+    setReactivationWarningBallotage(null)
   }
 
   // Quand le type choisi passe à "recrue", pré-remplit rookieType/poolDraftYear depuis la
@@ -486,9 +503,11 @@ export default function HistoriqueManager({
         poolerAId,
         playerOutAId: (txType === 'ajout' || txType === 'trade') ? null : playerOutAId,
         playerOutANewType: txType === 'swap' ? playerOutANewType : null,
-        playerInAId: (txType === 'retrait' || txType === 'trade') ? null : (playerInA?.id ?? null),
+        playerInAId: (txType === 'retrait' || txType === 'trade' || txType === 'ballotage') ? null : (playerInA?.id ?? null),
         playerInAType,
-        poolerBId: txType === 'trade' ? poolerBId : null,
+        poolerBId: (txType === 'trade' || txType === 'ballotage') ? poolerBId : null,
+        ballotageType: txType === 'ballotage' ? ballotageType : null,
+        ballotageReleasedId: txType === 'ballotage' ? ballotageReleasedId : null,
         typeChangeTo: txType === 'type_change' ? typeChangeTo : null,
         typeChangeSecondPlayerId: txType === 'type_change' ? typeChangeSecondPlayerId : null,
         typeChangeSecondTo: txType === 'type_change' ? typeChangeSecondTo : null,
@@ -519,7 +538,8 @@ export default function HistoriqueManager({
                                )) :
     txType === 'ajout'       ? !!playerInA :
     txType === 'retrait'     ? !!playerOutAId :
-    txType === 'type_change' ? !!playerOutAId && !!typeChangeTo && (!typeChangeSecondPlayerId || !!typeChangeSecondTo) : false
+    txType === 'type_change' ? !!playerOutAId && !!typeChangeTo && (!typeChangeSecondPlayerId || !!typeChangeSecondTo) :
+    txType === 'ballotage'   ? (!!playerOutAId && !!poolerBId && !!ballotageType) : false
   )
 
   return (
@@ -555,7 +575,7 @@ export default function HistoriqueManager({
         {/* Pooler A */}
         <div className="space-y-1">
           <label className="text-xs text-gray-500">
-            {txType === 'trade' ? 'Pooler A' : 'Pooler'}
+            {txType === 'trade' ? 'Pooler A' : txType === 'ballotage' ? 'Pooler qui libère' : 'Pooler'}
           </label>
           <select
             value={poolerAId}
@@ -571,7 +591,7 @@ export default function HistoriqueManager({
         {txType !== 'ajout' && txType !== 'trade' && (
           <div className="space-y-1">
             <RosterSelect
-              label={txType === 'type_change' ? 'Joueur 1' : 'Joueur retiré / cédé'}
+              label={txType === 'type_change' ? 'Joueur 1' : txType === 'ballotage' ? 'Joueur libéré' : 'Joueur retiré / cédé'}
               roster={rosterA}
               value={playerOutAId}
               onChange={id => { setPlayerOutAId(id); setPlayerOutANewType(null) }}
@@ -673,7 +693,7 @@ export default function HistoriqueManager({
         )}
 
         {/* Player IN (swap / ajout) */}
-        {txType !== 'retrait' && txType !== 'type_change' && txType !== 'trade' && (
+        {txType !== 'retrait' && txType !== 'type_change' && txType !== 'trade' && txType !== 'ballotage' && (
           <div className="space-y-3">
             <PlayerSearch
               label="Joueur acquis / activé"
@@ -699,6 +719,53 @@ export default function HistoriqueManager({
             {reactivationWarningA && (
               <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-1">
                 ⚠ {reactivationWarningA}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Pooler réclamant + type d'arrivée (ballotage seulement) */}
+        {txType === 'ballotage' && (
+          <div className="border-t pt-4 space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500">Pooler qui réclame</label>
+              <select
+                value={poolerBId}
+                onChange={e => setPoolerBId(e.target.value)}
+                className="w-full border rounded px-2 py-1 text-sm"
+              >
+                <option value="">— Sélectionner —</option>
+                {poolers.filter(p => p.id !== poolerAId).map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500">Type d'arrivée chez le réclamant</label>
+              <div className="flex gap-3">
+                {PLAYER_TYPES.map(t => (
+                  <label key={t} className="flex items-center gap-1 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={ballotageType === t}
+                      onChange={() => setBallotageType(t)}
+                    />
+                    {PLAYER_TYPE_LABEL[t]}
+                  </label>
+                ))}
+              </div>
+            </div>
+            {poolerBId && (
+              <RosterSelect
+                label="Joueur libéré par le réclamant (optionnel — pour faire de la place)"
+                roster={rosterB}
+                value={ballotageReleasedId}
+                onChange={setBallotageReleasedId}
+              />
+            )}
+            {reactivationWarningBallotage && (
+              <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                ⚠ {reactivationWarningBallotage}
               </p>
             )}
           </div>

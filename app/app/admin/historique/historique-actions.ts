@@ -141,7 +141,7 @@ export async function checkHistLtirDurationAction(
   return { warning: null }
 }
 
-export type HistTxType = 'swap' | 'trade' | 'ajout' | 'retrait' | 'type_change'
+export type HistTxType = 'swap' | 'trade' | 'ajout' | 'retrait' | 'type_change' | 'ballotage'
 
 export type HistPlayerType = 'actif' | 'reserviste' | 'recrue' | 'ltir'
 
@@ -167,8 +167,13 @@ export type HistChangeInput = {
   playerOutANewType: HistPlayerType | null
   playerInAId: number | null    // swap/ajout : joueur qui arrive chez le pooler A
   playerInAType: HistPlayerType
-  // Côté B — trade seulement
+  // Côté B — trade et ballotage
   poolerBId: string | null
+  // ballotage seulement — statut du joueur (playerOutAId) chez le pooler réclamant (poolerBId)
+  ballotageType: HistPlayerType | null
+  // ballotage seulement — joueur optionnel libéré par le pooler réclamant pour faire de la
+  // place (retrait complet chez poolerBId, ne repasse pas par le ballotage dans cet outil)
+  ballotageReleasedId: number | null
   // type_change seulement — nouveau player_type du joueur playerOutAId, sans le retirer du pool
   typeChangeTo: HistPlayerType | null
   // type_change seulement — 2e joueur optionnel, pour un échange (ex: un descend, un monte)
@@ -276,6 +281,84 @@ export async function submitHistChangeAction(
     revalidatePath('/admin/historique')
     revalidatePath('/admin/effectifs')
     return { warning: warnings.length > 0 ? warnings.join(' ') : undefined }
+  }
+
+  // Réclamation au ballotage : le pooler A libère un joueur, le pooler B le réclame —
+  // retrait chez A + ajout chez B (comme un trade à sens unique, un seul joueur), mais
+  // journalisé sous hist_ballotage pour rester distinguable d'un hist_trade dans le
+  // Suivi/les notifications futures. Le réclamant peut aussi devoir libérer un de ses
+  // propres joueurs pour faire de la place (ballotageReleasedId, optionnel) — ce joueur
+  // quitte simplement le pool dans cet outil simplifié, il ne repasse pas lui-même par
+  // un cycle de ballotage (ce serait une saisie distincte si applicable).
+  if (input.txType === 'ballotage') {
+    if (!input.poolerBId) return { error: 'Pooler réclamant manquant' }
+    if (!input.playerOutAId) return { error: 'Joueur manquant' }
+    if (!input.ballotageType) return { error: "Type d'arrivée manquant" }
+
+    const { data: existing } = await db
+      .from('pooler_rosters')
+      .select('added_at')
+      .eq('pooler_id', input.poolerAId)
+      .eq('player_id', input.playerOutAId)
+      .eq('pool_season_id', input.poolSeasonId)
+      .is('removed_at', null)
+      .maybeSingle()
+    if (!existing) return { error: `Entrée introuvable dans le roster actuel (joueur ${input.playerOutAId})` }
+    if (existing.added_at && ts < existing.added_at) {
+      return { error: `Date (${input.date}) antérieure à la date d'ajout au roster (${existing.added_at.slice(0, 10)}) — corrige d'abord added_at (ex: via Changement de type) avant de saisir ce ballotage.` }
+    }
+
+    if (input.ballotageReleasedId) {
+      const { data: releasedExisting } = await db
+        .from('pooler_rosters')
+        .select('added_at')
+        .eq('pooler_id', input.poolerBId)
+        .eq('player_id', input.ballotageReleasedId)
+        .eq('pool_season_id', input.poolSeasonId)
+        .is('removed_at', null)
+        .maybeSingle()
+      if (!releasedExisting) return { error: `Joueur libéré par le réclamant introuvable dans son roster actuel (joueur ${input.ballotageReleasedId}).` }
+      if (releasedExisting.added_at && ts < releasedExisting.added_at) {
+        return { error: `Date (${input.date}) antérieure à la date d'ajout au roster (${releasedExisting.added_at.slice(0, 10)}) pour le joueur libéré par le réclamant — corrige d'abord added_at.` }
+      }
+    }
+
+    const { error: e1 } = await db
+      .from('pooler_rosters')
+      .update({ is_active: false, removed_at: ts })
+      .eq('pooler_id', input.poolerAId)
+      .eq('player_id', input.playerOutAId)
+      .eq('pool_season_id', input.poolSeasonId)
+      .is('removed_at', null)
+    if (e1) return { error: `Libération (retrait A) : ${e1.message}` }
+    await log(input.playerOutAId, input.poolerAId, null)
+
+    const { error: e2 } = await db.from('pooler_rosters').insert({
+      pooler_id: input.poolerBId,
+      player_id: input.playerOutAId,
+      pool_season_id: input.poolSeasonId,
+      player_type: input.ballotageType,
+      is_active: true,
+      added_at: ts,
+    })
+    if (e2) return { error: `Réclamation (ajout B) : ${e2.message}` }
+    await log(input.playerOutAId, input.poolerBId, input.ballotageType)
+
+    if (input.ballotageReleasedId) {
+      const { error: e3 } = await db
+        .from('pooler_rosters')
+        .update({ is_active: false, removed_at: ts })
+        .eq('pooler_id', input.poolerBId)
+        .eq('player_id', input.ballotageReleasedId)
+        .eq('pool_season_id', input.poolSeasonId)
+        .is('removed_at', null)
+      if (e3) return { error: `Libération par le réclamant : ${e3.message}` }
+      await log(input.ballotageReleasedId, input.poolerBId, null)
+    }
+
+    revalidatePath('/admin/historique')
+    revalidatePath('/admin/effectifs')
+    return {}
   }
 
   // Échange entre poolers : un ou plusieurs joueurs de chaque côté (N contre M),

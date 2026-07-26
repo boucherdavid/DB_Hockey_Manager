@@ -34,7 +34,7 @@ mais ils ont des usages très différents :
 | Usage prévu | Gestion courante en direct | Reconstruction d'un historique passé |
 | Validation cap/composition (12A/6D/2G, ≥2 réservistes) | **Bloque** la soumission si non respecté | Aucune validation |
 | Budget agents libres / LTIR | Compté et limité | Ignoré (écrit dans `roster_change_log` avec des `change_type` préfixés `hist_`, jamais comptés dans les budgets `signature_agent_libre`/`signature_ltir`) |
-| Types de mouvement | swap actif/réserve, activation recrue, LTIR, retour LTIR, signature, ballotage, libération | Échange même pooler, échange entre poolers (trade), ajout seul, retrait seul |
+| Types de mouvement | swap actif/réserve, activation recrue, LTIR, retour LTIR, signature, ballotage, libération | Échange même pooler, échange entre poolers (trade), ajout seul, retrait seul, réclamé au ballotage |
 | Date appliquée à `added_at` / `removed_at` | Oui, via checkbox "Forcer une date effective" | Oui, toujours (champ Date obligatoire) |
 
 L'onglet **Historique** (`app/app/admin/historique/`, composant
@@ -81,6 +81,22 @@ du pool.
        (monter/descendre un joueur) et les mouvements de recrues
        (promotion, retour en banque) — la majorité des mouvements
        d'un historique de saison normale, en fait.
+     - **Réclamé au ballotage** (ajouté le 2026-07-26) — un pooler libère
+       un joueur, un autre le réclame : retrait chez le premier + ajout
+       chez le second en une seule transaction, avec un type d'arrivée
+       (actif/réserviste/recrue/LTIR). Champ optionnel « Joueur libéré
+       par le réclamant » si celui-ci doit lui-même se départir d'un
+       joueur pour faire de la place — ce joueur quitte simplement le
+       pool (retrait complet), il ne repasse pas par un nouveau cycle de
+       ballotage dans cet outil simplifié. ⚠️ Le pooler qui libère doit
+       encore avoir la ligne **ouverte** pour ce joueur au moment de la
+       saisie (pas déjà retirée par une autre transaction) — sinon
+       supprimer/refaire la transaction qui l'a fermée avant de saisir le
+       ballotage. Volontairement simplifié : ne modélise pas le vrai
+       processus de ballotage (notifications, ordre de priorité, délai de
+       réclamation — voir `docs/regles-changements-alignement.md`,
+       Chantier G, toujours pas construit) ; sert à tester si le journal/
+       `buildStandings()` gèrent bien ce genre de mouvement en historique.
    - Partout où un rôle est choisi pour un joueur qui arrive (Ajout,
      Échange même pooler, Échange entre poolers), le choix inclut
      **Recrue** en plus d'Actif/Réserviste — utile si le joueur reçu
@@ -163,8 +179,9 @@ a été saisie.
   joueur qui quitte puis revient chez un pooler a deux fenêtres de tenure
   distinctes, chacune avec ses propres `added_at`/`removed_at`.
 - L'onglet écrit bien dans `roster_change_log` (types `hist_swap`,
-  `hist_trade`, `hist_ajout`, `hist_retrait`) pour permettre le journal à
-  deux dates, mais ces types ne sont jamais comptés dans les budgets
+  `hist_trade`, `hist_ajout`, `hist_retrait`, `hist_ballotage`) pour
+  permettre le journal à deux dates, mais ces types ne sont jamais comptés
+  dans les budgets
   agents libres/LTIR (filtrés sur `signature_agent_libre`/`signature_ltir`
   ailleurs dans le code) ni dans le délai de réactivation. Normal pour du
   backfill historique — à garder en tête si les compteurs de la saison

@@ -1,6 +1,6 @@
 # Suivi du projet Hockey Pool App
 
-Derniere mise a jour: 2026-07-25
+Derniere mise a jour: 2026-07-26
 
 ## Role du fichier
 
@@ -20,6 +20,17 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-26
+
+**[Feat] — Nouveau type « Réclamé au ballotage » dans `/admin/historique`, pour tester la mécanique** (`app/app/admin/historique/historique-actions.ts`, `HistoriqueManager.tsx`, `docs/saisie-historique-mouvements.md`) :
+- David veut valider si le mécanisme de ballotage fonctionne en le rejouant dans l'outil de reconstruction d'historique, sans construire le vrai système complet (Chantier G — notifications, ordre de priorité par classement, délai de réclamation, tables `waiver_entries`/`waiver_claims` — toujours **non construit**, voir `docs/regles-changements-alignement.md` section Ballotage).
+- Nouveau `HistTxType = 'ballotage'` : retrait chez le pooler qui libère + ajout chez le pooler qui réclame (mécaniquement comme un `trade` à sens unique, un seul joueur), journalisé `hist_ballotage` — distinct de `hist_trade` pour rester identifiable dans un futur Suivi/notifications. Type d'arrivée choisi (actif/réserviste/recrue/LTIR).
+- Ajouté en cours de session (cas réel rencontré par David en testant : Jérôme veut réclamer Morgan Rielly mais doit libérer Alex Vlasic pour faire de la place) : champ optionnel **« Joueur libéré par le réclamant »** — si rempli, ce 2e joueur est retiré (retrait complet) du roster du réclamant à la même date, journalisé séparément. Ce joueur ne repasse pas lui-même par un nouveau cycle de ballotage dans cet outil simplifié (si besoin, saisie manuelle distincte).
+- **Piège rencontré** : le pooler qui libère doit encore avoir la ligne `pooler_rosters` **ouverte** (`removed_at IS NULL`) pour ce joueur au moment de la saisie — la fonction ne fait pas juste un ajout, elle applique retrait+ajout en un seul événement atomique (miroir du vrai processus : le joueur est encore dans l'équipe au moment d'être libéré). Cas concret : Vincent avait déjà retiré Morgan Rielly via un « Échange même pooler » antérieur (ligne déjà fermée) — pour le refaire en ballotage, il a fallu supprimer cette ligne précise dans le journal (`deleteHistLogAction`, restaure `removed_at = null`) avant de ressaisir le mouvement complet via le nouveau type. La ligne jumelle (arrivée de Roman Josi, même transaction d'origine) n'a pas eu besoin d'être touchée — chaque ligne du journal est indépendante.
+- Discussion connexe (pas de changement de code) : pas besoin d'un « panier » de transactions multi-étapes pour Historique (contrairement à `/admin/transactions`/`TransactionBuilder`, dont le panier existe justement parce que cet outil-là bloque toute soumission invalide à mi-parcours — cap, composition 12A/6D/2G, budgets). Historique ne valide jamais rien, donc un scénario en plusieurs étapes (ex: trade pour faire de la place, puis ballotage) peut simplement être saisi comme plusieurs transactions séparées, dans l'ordre chronologique logique. Rappel confirmé en cours de route : en saison régulière normale (sans "Forcer une date effective"), c'est bien l'heure réelle de soumission (`new Date().toISOString()`) qui est utilisée, pas une heure fixe — contrairement à Historique qui fixe toujours midi UTC sur la date choisie.
+- Validé : `npx tsc --noEmit` propre après chaque étape. Testé en staging par David en cours de session (scénario Rielly/Vlasic/Josi/Vincent/Jérôme).
+- **Reste à faire** : David poursuit les tests en staging dans une session future — pas encore de verdict final sur si la mécanique simplifiée couvre tous les cas voulus.
 
 ### 2026-07-25 (suite)
 
