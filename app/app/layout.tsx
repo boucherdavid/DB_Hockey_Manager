@@ -8,8 +8,8 @@ import PlayerSlideOver from '@/components/PlayerSlideOver'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = {
-  title: 'DB Hockey Manager',
-  description: 'Gestion de pool de hockey long terme',
+  title: 'Cap Crunch',
+  description: 'Pool de hockey entre amis',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'DB Hockey Manager',
+    title: 'Cap Crunch',
   },
 }
 

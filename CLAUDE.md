@@ -1,4 +1,4 @@
-﻿# Hockey Pool App — Référence Projet
+﻿# Cap Crunch — Référence Projet
 
 Ce fichier sert de référence stable pour Claude Code.
 Le suivi des changements, des décisions récentes et de l'état courant va dans `SUIVI_PROJET.md`.
@@ -26,7 +26,15 @@ Application web pour gérer un pool de hockey long terme, en remplacement d'un f
 **Stack :**
 - Frontend : Next.js 16, React 19, TypeScript, Tailwind CSS 4
 - Backend : Supabase (PostgreSQL, Auth, RLS)
-- Hébergement : Vercel (`https://db-hockeypool-manager.vercel.app/`)
+- Hébergement : Vercel (`https://cap-crunch.vercel.app/`)
+- Environnement staging distant (Vercel, branche `staging`, base Supabase staging, accessible
+  aux poolers sans compte Vercel — SSO déploiement désactivé) :
+  `https://cap-crunch-staging-git-b91a22-boucherdavids-projects.vercel.app/`. Utile pour tester
+  des fonctionnalités qui nécessitent une vraie participation à distance des poolers (ex: draft
+  en direct, réponse au ballotage) — impossible à tester avec `npm run dev` local. Projets
+  Vercel : `cap-crunch` (prod) et `cap-crunch-staging` (staging), tous deux liés au même repo
+  GitHub `boucherdavid/cap-crunch`, `rootDirectory=app`. Repo GitHub renommé `cap-crunch`
+  le 2026-07-27 (ex `DB_Hockey_Manager`) pour cohérence avec le nom de l'app.
 
 ---
 

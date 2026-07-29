@@ -1,4 +1,4 @@
-# Hockey Pool App — Règles Next.js / app/
+# Cap Crunch — Règles Next.js / app/
 
 Ce fichier complète le `CLAUDE.md` racine avec les règles spécifiques
 au code dans le dossier `app/`. En cas de conflit, ce fichier a priorité

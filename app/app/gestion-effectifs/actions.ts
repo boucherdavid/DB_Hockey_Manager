@@ -438,7 +438,7 @@ export async function submitBatchAction(input: {
     if (isAdmin) {
       const n = input.actions.length
       sendPushToUser(input.poolerId, {
-        title: 'DB Hockey Manager — Mouvements',
+        title: 'Cap Crunch — Mouvements',
         body: n === 1
           ? "Votre alignement a été modifié par l'admin."
           : `${n} mouvements ont été appliqués à votre alignement.`,

@@ -1,4 +1,4 @@
-# Guide de maintenance — Hockey Pool App
+# Guide de maintenance — Cap Crunch
 
 Ce document décrit les opérations manuelles à effectuer pour maintenir l'application à jour : scripts Python et migrations SQL.
 

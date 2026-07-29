@@ -214,7 +214,7 @@ function Header({
     <div className="flex flex-col sm:flex-row sm:items-end gap-4">
       <div className="flex-1">
         <h1 className="text-3xl font-bold text-gray-800">
-          {name ? <>Bienvenue {name} sur DB Hockey Manager</> : 'DB Hockey Manager'}
+          {name ? <>Bienvenue {name} sur Cap Crunch</> : 'Cap Crunch'}
         </h1>
         <p className="text-gray-500 mt-1">
           {saison && (

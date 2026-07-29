@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'DB Hockey Manager',
-    short_name: 'DB Hockey',
-    description: 'Gestion de pool de hockey long terme',
+    name: 'Cap Crunch',
+    short_name: 'Cap Crunch',
+    description: 'Pool de hockey entre amis',
     start_url: '/',
     display: 'standalone',
     background_color: '#f9fafb',

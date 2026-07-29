@@ -140,7 +140,7 @@ export default function FeedbackAdminView({
   const buildMarkdown = () => {
     const tabLabel = STATUS_TABS.find(t => t.key === activeTab)?.label ?? activeTab
     const lines: string[] = [
-      '# Boîte de réception — DB Hockey Manager',
+      '# Boîte de réception — Cap Crunch',
       '',
       `_Exporté le ${new Date().toLocaleDateString('fr-CA')} — filtre : ${tabLabel}_`,
       '',

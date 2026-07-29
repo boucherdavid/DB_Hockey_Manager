@@ -44,7 +44,7 @@ Tu as jusqu'au **[DATE LIMITE, ex : 8 mai 2026 à 19 h]** pour soumettre ton ali
 
 **📱 Comment accéder**
 
-👉 **https://db-hockeypool-manager.vercel.app**
+👉 **https://cap-crunch.vercel.app**
 
 Connecte-toi avec le courriel et le mot de passe que tu as déjà. Si tu as oublié ton mot de passe, utilise l'option "Mot de passe oublié" sur la page de connexion.
 
