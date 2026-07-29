@@ -33,7 +33,8 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 - URLs finales : prod `https://cap-crunch.vercel.app/`, staging `https://cap-crunch-staging.vercel.app/`. Ancien lien prod (`db-hockeypool-manager.vercel.app`) laissé actif en parallèle (David va simplement repartager le nouveau lien aux poolers, aucun n'avait encore le lien staging).
 - **Non couvert / connu et accepté** : les deux projets Vercel surveillent l'ensemble du repo, donc un push sur `main` déclenche aussi un build Preview (inoffensif, gaspille juste un peu de build-minutes) sur le projet staging, et vice-versa un push sur `staging` déclenche un Preview sur le projet prod. Pas de `vercel.json`/`ignoreCommand` mis en place pour filtrer ça — impact jugé négligeable pour l'usage actuel. Nom du dossier local (`C:\Projet_Codex\Hockey_Pool_App`) volontairement non renommé (changement disruptif pour peu de gain, aucune référence utilisateur ne l'expose).
 - Validé : `npx tsc --noEmit` propre ; les deux URLs (prod et staging) testées en HTTP direct après déploiement, titre de page confirmé "Cap Crunch".
-- Commits : `3d1421d` (main), `720933f` (staging).
+- Guide ajouté (`docs/RENOMMER_DOSSIER_LOCAL.md`) pour renommer proprement le dossier local plus tard (chemins codés en dur à corriger dans `.mcp.json`, `start_app.ps1`, `run_pipeline_*.ps1`, `docs/GIT_GUIDE.md`, 2 pages admin ; venv Python et cache `.next` à recréer ; mémoire Claude Code liée au chemin à migrer manuellement si voulu).
+- Commits : `3d1421d`, `ed1a444`, `98ca076` (main), `720933f` (staging).
 
 ### 2026-07-26
 
