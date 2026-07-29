@@ -29,7 +29,7 @@ Application web pour gérer un pool de hockey long terme, en remplacement d'un f
 - Hébergement : Vercel (`https://cap-crunch.vercel.app/`)
 - Environnement staging distant (Vercel, branche `staging`, base Supabase staging, accessible
   aux poolers sans compte Vercel — SSO déploiement désactivé) :
-  `https://cap-crunch-staging-git-b91a22-boucherdavids-projects.vercel.app/`. Utile pour tester
+  `https://cap-crunch-staging.vercel.app/`. Utile pour tester
   des fonctionnalités qui nécessitent une vraie participation à distance des poolers (ex: draft
   en direct, réponse au ballotage) — impossible à tester avec `npm run dev` local. Projets
   Vercel : `cap-crunch` (prod) et `cap-crunch-staging` (staging), tous deux liés au même repo

@@ -1,6 +1,6 @@
 # Suivi du projet Cap Crunch
 
-Derniere mise a jour: 2026-07-26
+Derniere mise a jour: 2026-07-29
 
 ## Role du fichier
 
@@ -20,6 +20,20 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-29
+
+**[Infra] — Environnement staging distant sur Vercel + renommage complet de l'app en « Cap Crunch »** (`CLAUDE.md`, `app/CLAUDE.md`, branding applicatif, config Vercel/GitHub) :
+- Point de départ : David voulait pouvoir tester à distance des fonctionnalités futures qui nécessitent une vraie participation des poolers (ex: draft en direct, réponse au ballotage) — impossible avec `npm run dev` local (accessible seulement sur son poste) et risqué à tester directement en prod.
+- **Solution retenue** : un deuxième projet Vercel (`cap-crunch-staging`, gratuit sur le plan Hobby existant — usage partagé entre tous les projets du compte mais largement dans les limites pour un pool de 8 personnes) branché sur une nouvelle branche git `staging`, avec ses propres variables d'env pointant vers la base Supabase staging (mêmes valeurs que `app/.env.staging.local`). `rootDirectory=app`, framework Next.js configuré explicitement (`vercel project add` ne le détecte pas automatiquement — premier déploiement avait échoué en 404 plateforme faute de ce réglage).
+- **Piège rencontré** : les déploiements non-Production sont protégés par défaut par la SSO Vercel (redirection vers `vercel.com/sso-api`), ce qui aurait bloqué tous les poolers (pas de compte Vercel). Désactivé via `ssoProtection: null` sur le projet staging — l'authentification réelle reste gérée par Supabase, comme en prod.
+- Réglage « Production Branch » (Settings → Environments → Production, pas Settings → Git comme dans les versions précédentes du dashboard Vercel) changé manuellement par David de `main` à `staging` sur le projet staging.
+- **Rebranding complet en cours de route** : David a profité de l'occasion pour renommer l'app « DB Hockey Manager » → **Cap Crunch** (jeu de mots sur le cap salarial + Cap'n Crunch, avec un clin d'œil à la charge de gestion des contrats qui montent en flèche). Repo GitHub renommé `boucherdavid/DB_Hockey_Manager` → `boucherdavid/cap-crunch` (remote local mis à jour), les deux projets Vercel renommés (`db-hockeypool-manager` → `cap-crunch`, `db-hockeypool-manager-staging` → `cap-crunch-staging`), et toutes les occurrences UI du nom (title, manifest PWA, notifications push, page Aide, export feedback) mises à jour dans le code.
+- **Piège rencontré (rename)** : renommer un projet Vercel ne fait *pas* automatiquement apparaître le nouveau domaine court `<nom>.vercel.app` — l'ancien domaine (`db-hockeypool-manager.vercel.app`) est resté attaché et fonctionnel (aucune interruption pour les poolers), mais il a fallu ajouter explicitement `cap-crunch.vercel.app`/`cap-crunch-staging.vercel.app` comme nouveaux domaines via l'API Vercel (`POST /v10/projects/:id/domains`) pour qu'ils pointent vers les déploiements courants.
+- URLs finales : prod `https://cap-crunch.vercel.app/`, staging `https://cap-crunch-staging.vercel.app/`. Ancien lien prod (`db-hockeypool-manager.vercel.app`) laissé actif en parallèle (David va simplement repartager le nouveau lien aux poolers, aucun n'avait encore le lien staging).
+- **Non couvert / connu et accepté** : les deux projets Vercel surveillent l'ensemble du repo, donc un push sur `main` déclenche aussi un build Preview (inoffensif, gaspille juste un peu de build-minutes) sur le projet staging, et vice-versa un push sur `staging` déclenche un Preview sur le projet prod. Pas de `vercel.json`/`ignoreCommand` mis en place pour filtrer ça — impact jugé négligeable pour l'usage actuel. Nom du dossier local (`C:\Projet_Codex\Hockey_Pool_App`) volontairement non renommé (changement disruptif pour peu de gain, aucune référence utilisateur ne l'expose).
+- Validé : `npx tsc --noEmit` propre ; les deux URLs (prod et staging) testées en HTTP direct après déploiement, titre de page confirmé "Cap Crunch".
+- Commits : `3d1421d` (main), `720933f` (staging).
 
 ### 2026-07-26
 
