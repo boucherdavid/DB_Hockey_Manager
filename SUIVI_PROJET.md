@@ -44,6 +44,7 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 - Tentative de neutraliser le clin d'œil (copier/refléter l'œil ouvert par-dessus) laissait une trace résiduelle et un raccord visible — pas d'outil de retouche fine disponible ici. David a choisi de garder le clin d'œil tel quel plutôt que de régénérer via Ideogram.
 - Fichier source déplacé de `app/public/icons/` (servi publiquement par Next.js, pas souhaitable pour un brut non recadré) vers `docs/branding/cap-crunch-mascot-source.jpg`. `DBHM_Logo.svg` (orphelin, déjà inutilisé dans le code) supprimé.
 - Non couvert : le clin d'œil reste tel quel (accepté par David) ; icône adaptative Android (`maskable`) non implémentée, juste vérifiée par anticipation que le mark tient dans la zone de sécurité circulaire.
+- Commit : `d3d850c`.
 
 ### 2026-07-26
 
