@@ -36,6 +36,15 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 - Guide ajouté (`docs/RENOMMER_DOSSIER_LOCAL.md`) pour renommer proprement le dossier local plus tard (chemins codés en dur à corriger dans `.mcp.json`, `start_app.ps1`, `run_pipeline_*.ps1`, `docs/GIT_GUIDE.md`, 2 pages admin ; venv Python et cache `.next` à recréer ; mémoire Claude Code liée au chemin à migrer manuellement si voulu).
 - Commits : `3d1421d`, `ed1a444`, `98ca076` (main), `720933f` (staging).
 
+**[Branding] — Nouvelle icône PWA/favicon (remplace l'ancien badge « DBHM »)** (`app/public/icons/*.png`, `docs/branding/`) :
+- L'icône (favicons, `apple-touch-icon`, `icon-192/512`) portait encore le texte « DBHM » (ancien nom, DB Hockey Manager) gravé dans le PNG — jamais mis à jour lors du rebranding Cap Crunch du même jour (voir entrée précédente), puisque c'est un raster, pas du texte dynamique.
+- David a généré deux mascottes sur ideogram.ai ; retenu le personnage qui cligne de l'œil (casque bleu marine, bandeau rouge, bâton + rondelle avec `$`). Fourni en JPEG haute résolution (`cap-crunch-logo.jpg`, fond crème plein).
+- Recadrage automatique (script Python/Pillow, `Pillow` installé à la volée dans `python_script/venv` — pas ajouté à `requirements.txt`, usage ponctuel) : détection de la bbox du personnage par analyse ligne par ligne des pixels non-fond, pour exclure le bandeau de texte « CAP CRUNCH / HOCKEY POOL » (illisible de toute façon sous 512px) — crop carré 538×538 dans l'original 1024×1024, puis redimensionné en 512/192/180/32/16.
+- Question posée : le mascotte clignant de l'œil paraissait-il trop enfantin ? Diagnostic : proportions chibi + clin d'œil + fond pastel crème. Fond recoloré en gris-glace (`#c8d6e0`, remplace le crème par seuillage colorimétrique) — testé aussi un fond navy foncé d'abord, rejeté : le casque (déjà navy) devenait illisible en 16/32px faute de contraste, le gris-glace clair règle ça tout en étant moins « pastel ».
+- Tentative de neutraliser le clin d'œil (copier/refléter l'œil ouvert par-dessus) laissait une trace résiduelle et un raccord visible — pas d'outil de retouche fine disponible ici. David a choisi de garder le clin d'œil tel quel plutôt que de régénérer via Ideogram.
+- Fichier source déplacé de `app/public/icons/` (servi publiquement par Next.js, pas souhaitable pour un brut non recadré) vers `docs/branding/cap-crunch-mascot-source.jpg`. `DBHM_Logo.svg` (orphelin, déjà inutilisé dans le code) supprimé.
+- Non couvert : le clin d'œil reste tel quel (accepté par David) ; icône adaptative Android (`maskable`) non implémentée, juste vérifiée par anticipation que le mark tient dans la zone de sécurité circulaire.
+
 ### 2026-07-26
 
 **[Feat] — Nouveau type « Réclamé au ballotage » dans `/admin/historique`, pour tester la mécanique** (`app/app/admin/historique/historique-actions.ts`, `HistoriqueManager.tsx`, `docs/saisie-historique-mouvements.md`) :
