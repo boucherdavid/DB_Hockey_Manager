@@ -63,7 +63,7 @@ export async function testPushAction(): Promise<{ error?: string; sent?: boolean
   const { sendPushToUser } = await import('@/lib/push')
   try {
     await sendPushToUser(user.id, {
-      title: 'DB Hockey Manager — Test',
+      title: 'Cap Crunch — Test',
       body: 'Les notifications fonctionnent correctement sur cet appareil.',
       url: '/compte',
     })

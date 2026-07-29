@@ -26,7 +26,7 @@ export async function submitFeedbackAction(
 
   const TYPE_LABEL: Record<string, string> = { bug: 'Bug', suggestion: 'Suggestion', autre: 'Commentaire' }
   sendPushToAdmins({
-    title: `DB Hockey Manager — ${TYPE_LABEL[type] ?? 'Retour'}`,
+    title: `Cap Crunch — ${TYPE_LABEL[type] ?? 'Retour'}`,
     body:  `${pooler?.name ?? 'Un pooler'} a soumis un retour : ${description.trim().slice(0, 80)}${description.length > 80 ? '…' : ''}`,
     url:   '/admin/pool?tab=communication',
   }).catch(() => {})

@@ -394,7 +394,7 @@ export default function AideTabs() {
           {activeTab === 'installation' && (
             <div className="space-y-4">
               <p className="text-sm text-gray-600">
-                DB Hockey Manager est une application web progressive (PWA). Vous pouvez l&apos;installer sur votre appareil pour y accéder comme une application normale, sans passer par un navigateur.
+                Cap Crunch est une application web progressive (PWA). Vous pouvez l&apos;installer sur votre appareil pour y accéder comme une application normale, sans passer par un navigateur.
               </p>
               {tabSections.map(s => (
                 <div key={s.id} className="bg-white rounded-lg shadow p-5">

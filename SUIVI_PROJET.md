@@ -1,4 +1,4 @@
-# Suivi du projet Hockey Pool App
+# Suivi du projet Cap Crunch
 
 Derniere mise a jour: 2026-07-26
 
