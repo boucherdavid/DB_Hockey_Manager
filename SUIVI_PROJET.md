@@ -1,6 +1,6 @@
 # Suivi du projet Cap Crunch
 
-Derniere mise a jour: 2026-07-29
+Derniere mise a jour: 2026-07-30
 
 ## Role du fichier
 
@@ -20,6 +20,33 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-30
+
+**[Infra] — Synchronisation `staging` après le nouveau logo, conflit `CLAUDE.md` résolu** :
+- `cap-crunch-staging` déploie depuis la branche git `staging`, pas `main` — les commits du
+  logo (`d3d850c` et suivants) poussés sur `main` la veille n'apparaissaient donc pas sur
+  `cap-crunch-staging.vercel.app` tant qu'un merge manuel n'était pas fait. Pas de sync
+  automatique entre les deux branches : à refaire à chaque fois que `staging` doit rattraper
+  `main`.
+- `git merge origin/main` dans `staging` → conflit dans `CLAUDE.md` (règle du projet :
+  confirmation demandée avant de committer un conflit) : la branche `staging` avait encore
+  l'ancien lien de preview Vercel (`cap-crunch-staging-git-b91a22-boucherdavids-projects.vercel.app`)
+  au lieu du domaine court actuel (`cap-crunch-staging.vercel.app`) — résolu en gardant la
+  version de `main` (confirmé par David). `SUIVI_PROJET.md` avait fusionné sans conflit.
+- Commit de fusion : `bb4c889` (branche `staging`), poussé.
+- **Diagnostic cache appris en cours de route** (utile si ça revient) : trois caches distincts
+  et indépendants peuvent faire persister l'ancien favicon/icône après un déploiement — cache
+  navigateur du favicon (quirk connu Chrome/Edge, survit à un hard refresh), icône PWA déjà
+  installée (capturée par l'OS à l'installation, ne se met pas à jour toute seule — nécessite
+  désinstaller/réinstaller), et cache d'icônes Windows pour un raccourci épinglé à la barre des
+  tâches (résolu en détachant/réépinglant, ou en redémarrant l'explorateur Windows). Vérifié
+  côté serveur avec `curl -I` sur le fichier déployé (`X-Vercel-Cache: MISS`, bytes identiques
+  au fichier local) pour confirmer que l'origine servait déjà la bonne version avant de
+  chercher la cause côté client.
+- Effet de bord sans lien avec le logo : la bannière d'installation PWA (`InstallBanner.tsx`)
+  peut sembler disparaître après ces manipulations — c'est `localStorage` (`installBannerDismissed`,
+  `pwaInstalled`) qui persiste d'une visite à l'autre sur le même navigateur, pas un bug.
 
 ### 2026-07-29
 
