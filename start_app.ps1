@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$projectRoot = 'C:\Projet_Codex\Hockey_Pool_App'
+$projectRoot = 'C:\Projet_Dev\Hockey_Pool_App'
 $appDir      = Join-Path $projectRoot 'app'
 $envStaging  = Join-Path $appDir '.env.staging.local'
 $envLocal    = Join-Path $appDir '.env.local'

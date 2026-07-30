@@ -368,7 +368,7 @@ export default async function AdminPoolPage({
           <div className="bg-white rounded-lg shadow p-6 space-y-4">
             <h2 className="text-lg font-semibold text-gray-800">{'Commandes à exécuter'}</h2>
             <p className="text-sm text-gray-600">Depuis le dossier <code>python_script</code> :</p>
-            <pre className="bg-slate-950 text-slate-100 rounded-lg p-4 overflow-x-auto text-sm"><code>{`cd C:\\Projet_Codex\\Hockey_Pool_App\\python_script
+            <pre className="bg-slate-950 text-slate-100 rounded-lg p-4 overflow-x-auto text-sm"><code>{`cd C:\\Projet_Dev\\Hockey_Pool_App\\python_script
 .\\venv\\Scripts\\python.exe .\\scrape_puckpedia.py
 .\\venv\\Scripts\\python.exe .\\import_supabase.py`}</code></pre>
           </div>

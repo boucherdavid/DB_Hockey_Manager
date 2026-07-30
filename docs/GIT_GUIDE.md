@@ -7,7 +7,7 @@ Ce guide sert de memoire rapide pour gerer le depot `Hockey_Pool_App`.
 Travailler depuis:
 
 ```powershell
-C:\Projet_Codex\Hockey_Pool_App
+C:\Projet_Dev\Hockey_Pool_App
 ```
 
 ## Etat actuel
