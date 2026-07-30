@@ -23,6 +23,18 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ### 2026-07-30
 
+**[UI] — Logo mis de l'avant sur la page d'accueil** (`app/app/page.tsx`) :
+- `Header` réécrit en lockup logo + marque : `icon-512x512.png` affiché à 64px (mobile) / 80px
+  (desktop) à gauche, `Cap Crunch` agrandi (`text-3xl`/`text-4xl`, `font-extrabold`) à droite.
+  « Bienvenue {nom} » déplacé en petite ligne discrète au-dessus du nom de marque au lieu
+  d'être fondu dans la même phrase que le titre.
+- Testé avec un compte pooler jetable créé/supprimé via l'API admin Supabase (service role,
+  `python_script`-style) piloté par Playwright (installé ponctuellement dans `app/node_modules`,
+  pas ajouté à `package.json` — pas de skill de lancement dédiée pour ce projet, à
+  considérer via `/run-skill-generator` si on refait ça souvent) : capture desktop et mobile,
+  aucune erreur console, layout responsive ok.
+- Commit : `2aa615e`.
+
 **[Infra] — Synchronisation `staging` après le nouveau logo, conflit `CLAUDE.md` résolu** :
 - `cap-crunch-staging` déploie depuis la branche git `staging`, pas `main` — les commits du
   logo (`d3d850c` et suivants) poussés sur `main` la veille n'apparaissaient donc pas sur
