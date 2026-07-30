@@ -1,7 +1,7 @@
 Joueur;Equipe;Statut;Position;Age;ELC_Saisons;Salaire_Reel_Saisons;2026-27;2027-28;2028-29;2029-30;2030-31
 Point, Brayden;TBL;;C;30;;;9500000;9500000;9500000;9500000;UFA
 Kucherov, Nikita;TBL;;RW;33;;;9500000;UFA;0;0;0
-Vasilevskiy, Andrei;TBL;;G;31;;;9500000;9500000;UFA;0;0
+Vasilevskiy, Andrei;TBL;;G;32;;;9500000;9500000;UFA;0;0
 Guentzel, Jake;TBL;;LW,C;31;;;9000000;9000000;9000000;9000000;9000000
 Carlson, John;TBL;;RD;36;;;8500000;8500000;UFA;0;0
 Hedman, Victor;TBL;;LD;35;;;8000000;8000000;8000000;UFA;0
@@ -25,7 +25,7 @@ Allard, Tristan;TBL;ELC;;24;2026-27;;947500;RFA;0;0;0
 Szturc, Gabriel;TBL;ELC;C,LW;22;2026-27;;945000;RFA;0;0;0
 Roelens, Milo;TBL;ELC;C,LW;23;2026-27;;945000;RFA;0;0;0
 Gill, Dyllan;TBL;ELC;D;22;2026-27;;945000;RFA;0;0;0
-Kurth, Connor;TBL;ELC;F;22;2026-27;;945000;RFA;0;0;0
+Kurth, Connor;TBL;ELC;F;23;2026-27;;945000;RFA;0;0;0
 Flinton, Robert;TBL;ELC;LW;22;2026-27;;942500;RFA;0;0;0
 Duke, Dylan;TBL;ELC;LW,C;23;2026-27;;942500;RFA;0;0;0
 O'Reilly, Sam;TBL;ELC;C;20;2026-27|2027-28|2028-29;;936056;936056;936056;RFA;0
@@ -38,20 +38,18 @@ Crozier, Maxwell;TBL;;RD;26;;;875000;875000;UFA;0;0
 Groshev, Maxim;TBL;;LD;24;;;875000;875000;RFA;0;0
 D'Astous, Charle-Edouard;TBL;;LD;28;;;875000;UFA;0;0;0
 Pelletier, Jakob;TBL;;LW,C;25;;;875000;875000;UFA;0;0
-Harkins, Jansen;TBL;;C,LW;29;;;850000;UFA;0;0;0
 Rodrigue, Olivier;TBL;;G;26;;;850000;0;0;0;0
-Santini, Steven;TBL;;RD;31;;;850000;UFA;0;0;0
 Callahan, Michael;TBL;;LD;26;;;850000;UFA;0;0;0
-Lundmark, Simon;TBL;;D;25;;;850000;0;0;0;0
-Sogaard, Mads;TBL;;G;25;;;850000;0;0;0;0
+Santini, Steven;TBL;;RD;31;;;850000;UFA;0;0;0
+Harkins, Jansen;TBL;;C,LW;29;;;850000;UFA;0;0;0
 Lilleberg, Emil;TBL;;LD,RD;25;;;850000;RFA;0;0;0
-Sabourin, Scott;TBL;;RW,LW;33;;;850000;UFA;0;0;0
+Sabourin, Scott;TBL;;RW,LW;34;;;850000;UFA;0;0;0
 Abruzzese, Nicholas;TBL;;C,LW;27;;;850000;UFA;0;0;0
+Sogaard, Mads;TBL;;G;25;;;850000;0;0;0;0
+Lundmark, Simon;TBL;;D;25;;;850000;0;0;0;0
 Hildeby, Dennis;TBL;;G;24;;;841667;841667;RFA;0;0
-Gage GoncalvesCage25cap$1.20M;TBL;;;25;;;;;;;
+Jonas JohanssonGage30cap$1.25M;TBL;;G;30;;;;;;;
 Pontus HolmbergCage27cap$1.55M;TBL;;G;27;;;;;;;
 Nikita KucherovRWage33cap$9.50M;TBL;;;33;;;;;;;
-Zemgus GirgensonsCage32cap$925k;TBL;;;32;;;;;;;
-Jonas JohanssonGage30cap$1.25M;TBL;;G;30;;;;;;;
 Alnefelt, Hugo;TBL;;G;25;;;RFA;0;0;0;0
 undefined, undefined;TBL;;;;;;;;;;
