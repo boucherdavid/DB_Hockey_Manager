@@ -9,6 +9,7 @@ import {
   type RecapPooler,
 } from '@/lib/daily-recap'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export const dynamic = 'force-dynamic'
 
@@ -211,10 +212,21 @@ function Header({
   saison: { season: string; pool_cap: number } | null
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-      <div className="flex-1">
-        <h1 className="text-3xl font-bold text-gray-800">
-          {name ? <>Bienvenue {name} sur Cap Crunch</> : 'Cap Crunch'}
+    <div className="flex items-center gap-4 sm:gap-5">
+      <Image
+        src="/icons/icon-512x512.png"
+        alt="Cap Crunch"
+        width={80}
+        height={80}
+        className="rounded-2xl shadow-sm shrink-0 w-16 h-16 sm:w-20 sm:h-20"
+        priority
+      />
+      <div className="min-w-0">
+        {name && (
+          <p className="text-sm font-medium text-gray-400">Bienvenue, {name}</p>
+        )}
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-800 tracking-tight">
+          Cap Crunch
         </h1>
         <p className="text-gray-500 mt-1">
           {saison && (
