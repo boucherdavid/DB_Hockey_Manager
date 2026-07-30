@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$projectRoot = 'C:\Projet_Codex\Hockey_Pool_App'
+$projectRoot = 'C:\Projet_Dev\Hockey_Pool_App'
 $scriptsDir = Join-Path $projectRoot 'python_script'
 $envFile = Join-Path $scriptsDir '.env.staging'
 
