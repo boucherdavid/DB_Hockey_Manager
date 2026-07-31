@@ -1,6 +1,6 @@
 # Suivi du projet Cap Crunch
 
-Derniere mise a jour: 2026-07-30
+Derniere mise a jour: 2026-07-31
 
 ## Role du fichier
 
@@ -20,6 +20,24 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-07-31
+
+**[Chore] — Validation log pipeline staging et push CSV vers prod** (CSV pipeline) :
+- David a roulé le pipeline en staging (`run_pipeline_staging_2026-07-30_10-23-37.log`, 5527 lignes) : aucune erreur/exception. 1527 joueurs mis à jour, 4345 contrats upserted, 0 changement repêchage (376 `is_rookie` resynchronisés), backfill `nhl_id` 1/566 trouvé (profil habituel, cf. entrée du 2026-07-19, pas une anomalie). Pipeline complet en 207s.
+- CSV poussés sur `main` (`a83fed3`) selon la convention établie — déclenche l'import GitHub Actions vers prod, vérifié avec `gh run watch` (30552155193, succès).
+
+**[Planification] — Import automatisé de l'historique de roster depuis Excel, en remplacement de la saisie manuelle `/admin/historique`** (`excel/Mouvements_consolides.xlsx` — **hors dépôt git, `.gitignore` ligne 6** — aucune trace dans l'historique Git, cette entrée est la seule mémoire du contexte) :
+- Point de départ : la reconstruction manuelle de l'historique de saison via `/admin/historique` (voir entrées 2026-07-18 à 2026-07-20) est jugée beaucoup trop longue par David. Il a en main `excel/Mouvements_consolides.xlsx`, son suivi personnel des transactions de la saison (279 lignes), et a demandé si je pouvais m'en servir pour faire la saisie à sa place.
+- **Structure du fichier** (feuille `Mouvements`) : une ligne = un mouvement pour **un seul pooler** (`Joueur acquis/activé` + `Joueur cédé/désactivé`, avec dates `Date`/`Jusqu'à`/`Date tri`/`Date estimée`). Colonnes `Choix acquis`/`Choix cédé`/`Année` pour les picks, `Échange Pooler`/`Choix Pooler` pour lier les deux côtés d'un vrai échange à 2 poolers.
+- **Itération avec David** : le fichier original avait une colonne `Type` à 11 valeurs incohérentes (Ballotage, BLT/BLT 1/BLT 2, Agent Libre 1/2, Gestion Blessure, IR, Gestion Lineup, Échange Pooler, vide) sans indication du **statut résultant** (actif/réserviste/recrue/LTIR) — impossible à mapper de façon fiable vers les 6 types de l'outil Historique sans deviner. David a enrichi le fichier lui-même : renommé `Type` avec le vocabulaire de l'outil (`Changement de type` / `Échange même pooler - X` / `Échange entre pooler` / `Retrait seulement de l'alignement` / `Ballotage`), ajouté 2 colonnes `Statut joueur acquis` / `Statut joueur cédé`, et un onglet `Feuil1` (notes en texte libre pour les transactions complexes multi-joueurs, ex: "Réclame Morgan Rielly; laisse aller Alex Vlasic et Alex Laferriere; monte Zachary Bolduc...").
+- **Règles confirmées avec David** (à respecter dans le script d'import) :
+  - `Statut cédé = 'Ballotage'` → le joueur quitte réellement l'alignement du pooler, peu importe le `Type` de la ligne (pas une histoire de rester avec un nouveau statut).
+  - `Échange même pooler - IR` (et variantes Agent libre) : le joueur acquis n'entre pas forcément par échange — peut être un agent libre. Le sens mécanique reste le même (un joueur entre Actif, un autre passe IR **sans quitter** le même pooler) — la source exacte du joueur acquis n'a pas d'impact sur l'écriture en BD.
+  - `Ballotage` : la ligne ne montre que le côté du réclamant (joueur acquis + joueur libéré pour faire de la place). Le côté "qui perd le joueur" ne sera **pas** ajouté comme colonne — je le déduirai en simulant l'état du roster de tous les poolers en ordre chronologique (je sais déjà qui possédait le joueur juste avant cette ligne).
+- **Validation de légalité demandée par David** : au fil de l'historique reconstruit, vérifier que chaque pooler reste dans les règles (12A/6D/2G actifs max, min. 2 réservistes, masse salariale ≤ cap du pool) — mêmes règles que `validateFinalRoster()` dans `/admin/transactions/actions.ts`, absentes de `/admin/historique` aujourd'hui. David sait qu'il y a des transactions impossibles à retracer (trous dans son suivi) — **décision** : le script produira un **rapport de dry-run** listant les incohérences (date, pooler, problème) plutôt que de bloquer l'import ; David corrige ce qui est corrigeable, accepte le reste en connaissance de cause. Rien n'est écrit en base avant validation du rapport.
+- **État à la reprise** : David finit encore la correction du fichier (36 lignes sur 273 restaient sur les anciens libellés de `Type` au dernier passage). **Script d'import pas encore écrit** — prochaine étape une fois le fichier prêt : lire le fichier enrichi, simuler chronologiquement, produire le rapport de légalité, puis (après revue) écrire réellement dans `pooler_rosters`/`roster_change_log` en respectant la même logique que `submitHistChangeAction` (`app/app/admin/historique/historique-actions.ts`) — `computeTypeChangeAddedAt`, `checkFutureRosterConflict`, vocabulaire `roster_change_log.change_type`.
+- Cible : **staging uniquement**, comme le reste de la reconstruction d'historique (voir `project_staging_prod_sync.md` — sync vers prod seulement une fois l'historique complet et validé).
 
 ### 2026-07-30
 
