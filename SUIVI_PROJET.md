@@ -1,6 +1,6 @@
 # Suivi du projet Cap Crunch
 
-Derniere mise a jour: 2026-07-31
+Derniere mise a jour: 2026-08-03
 
 ## Role du fichier
 
@@ -20,6 +20,47 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-08-03
+
+**[Feat] — Script d'import de l'historique de roster 2025-26 depuis Excel (dry-run livré, `--apply` pas encore lancé)** (`python_script/import_mouvements_excel.py`, nouveau) :
+- Suite de la planification du 2026-07-31 : `excel/Mouvements_consolides.xlsx` (269 lignes,
+  hors dépôt git) n'a jamais été parfaitement nettoyé par David (colonne `Type` toujours à
+  21 libellés incohérents), mais il a demandé d'avancer quand même — dry-run d'abord.
+- **Mécanique retenue, indépendante du texte `Type`** (jugé peu fiable après lecture
+  détaillée du fichier — ex: une ligne "Échange entre pooler" s'est avérée être un simple
+  changement de statut interne) : simulation chronologique par joueur, décidant à partir de
+  l'état simulé courant (pas du texte) si un "Joueur acquis" est un changement de statut
+  interne, un vrai transfert, ou un ajout neuf ; le "Joueur cédé" reste chez le même pooler
+  sauf si son statut est `Ballotage` (départ réel, pool devient "non détenu") ou si la
+  colonne `Echange Pooler` est remplie (transfert réel vers cet autre pooler). Validé en
+  confrontant le résultat simulé aux 2 cas déjà corrigés manuellement et connus comme
+  corrects (Zeev Buium/Sam Rinzel, Jiri Kulich) — la simulation, entièrement indépendante,
+  arrive exactement au même état final que ces corrections déjà validées en juillet.
+- **Hors scope confirmé avec David** : les colonnes de choix de repêchage (Choix
+  acquis/cédé, Choix Pooler) ne sont pas rejouées dans `pool_draft_picks` — seulement
+  listées dans le rapport (9 lignes concernées). Le script ne réinitialise rien avant de
+  tourner : il régénère entièrement l'historique (delete + reinsert) de tout joueur touché
+  par le fichier, donc les corrections manuelles déjà faites (McMichael/Blake/Rinzel/Buium/
+  Kasper/Kulich/Isaac Howard) sont simplement recalculées, pas dupliquées.
+- Résolution des noms via le pattern `unidecode` déjà établi dans ce dossier
+  (`import_supabase.py`, `backfill_nhl_ids.py`) — aucune approximation silencieuse, les
+  noms non résolus vont dans le rapport avec suggestion `difflib` optionnelle.
+- **Résultat du dry-run** (`python_script/logs/import_mouvements_*.log`) : 269/269 lignes
+  traitées, 155 joueurs touchés, 1 seul nom non résolu (`Leon Draisatl`, typo pour
+  Draisaitl), 1 anomalie (statut cédé manquant, ligne 226 — vrai trou dans le fichier). 97
+  "origines déduites" (joueur jamais vu avant sa première mention dans le fichier — statut
+  de départ supposé `actif`, à vérifier au cas par cas si un résultat semble faux). 147
+  violations de légalité listées mais **peu fiables** : le baseline utilisé pour les joueurs
+  jamais touchés vient de l'état DB actuel (pas garanti valide rétroactivement) — noté
+  explicitement dans le rapport pour ne pas les lire comme 147 vrais problèmes distincts.
+  Diff de sanité (simulé final vs DB actuelle) : 96/155 joueurs touchés diffèrent — attendu,
+  puisque la quasi-totalité de cette histoire n'a jamais été saisie dans l'app.
+- Suit le pattern déjà établi par `sync_staging_to_prod.py` (dry-run par défaut, `--apply`
+  + confirmation `oui`, log dupliqué sur fichier via `Tee`).
+- **Reste à faire** : David doit relire le rapport (`Noms non résolus`, `Anomalies`,
+  `Diff de sanité`) avant tout `--apply`. `--apply` n'a **pas** été exécuté cette session —
+  aucune écriture en base. Cible restée staging uniquement, comme prévu.
 
 ### 2026-07-31
 
