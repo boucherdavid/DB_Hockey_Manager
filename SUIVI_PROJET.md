@@ -62,6 +62,29 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
   `Diff de sanité`) avant tout `--apply`. `--apply` n'a **pas** été exécuté cette session —
   aucune écriture en base. Cible restée staging uniquement, comme prévu.
 
+**[Amélioration] — Onglet `Roster_Initial` pour remplacer le bootstrap heuristique par la vraie donnée** (`python_script/import_mouvements_excel.py`) :
+- Les « origines déduites » (joueur jamais vu avant sa première mention dans le fichier,
+  statut de départ deviné) représentaient 97 des 155 joueurs touchés — trop pour être
+  fiable. David a proposé de fournir l'alignement réel de chaque pooler en tout début de
+  saison ; ajouté lui-même un onglet `Roster_Initial` (Pooler/Joueur/Statut, 320 lignes,
+  alignement complet des 8 poolers) dans `Mouvements_consolides.xlsx`.
+- `Simulation.preload_initial()` charge ces 320 lignes avant de rejouer les mouvements —
+  le bootstrap heuristique (`actif` par défaut) ne s'applique plus qu'en dernier recours,
+  pour un joueur absent à la fois de `Roster_Initial` et de tout mouvement antérieur.
+- Effet sur le dry-run : « origines déduites » 97 → **13** (317/320 lignes de
+  `Roster_Initial` résolues ; 3 problèmes mineurs restants : 2 noms légèrement mal
+  orthographiés — `Axel Sandin-Pellikka` avec trait d'union au lieu d'espace, `Dmitry
+  Simashev` au lieu de `Dmitriy` —, 1 doublon `Matvei Michkov` chez le même pooler). Noms
+  non résolus et anomalies diverses : déjà à 0 (David avait corrigé la typo Draisaitl et le
+  statut manquant de la ligne 226 entre-temps). Violations de légalité 147 → 214 — attendu
+  et pas une régression : l'ancien bootstrap ne posait une ligne qu'à la première mention
+  d'un joueur, donc beaucoup de joueurs touchés étaient invisibles (absents de tout calcul)
+  pendant les premières semaines de saison ; avec l'alignement réel préchargé dès le 7
+  octobre, le calcul de légalité est maintenant plus complet, donc plus de vraies
+  compositions (probablement réellement en dépassement à l'époque) apparaissent.
+- **Reste à faire** : David peut corriger les 3 derniers problèmes `Roster_Initial` dans le
+  fichier (optionnel, faible enjeu). `--apply` toujours pas exécuté.
+
 ### 2026-07-31
 
 **[Chore] — Validation log pipeline staging et push CSV vers prod** (CSV pipeline) :

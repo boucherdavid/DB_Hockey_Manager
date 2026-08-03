@@ -61,6 +61,7 @@ STATUS_MAP = {
     'reserviste': 'reserviste',
     'recrue': 'recrue',
     'ir': 'ltir',
+    'ltir': 'ltir',
     'ballotage': 'BALLOTAGE',
 }
 
@@ -137,6 +138,20 @@ def load_excel_rows():
     return rows
 
 
+def load_roster_initial_rows():
+    """Onglet 'Roster_Initial' (Pooler, Joueur, Statut) — l'alignement réel de chaque
+    pooler au tout début de la saison, ajouté par David le 2026-08-03 pour remplacer
+    l'hypothèse par défaut 'actif' du bootstrap par la vraie donnée. Optionnel : si
+    l'onglet n'existe pas encore, la simulation retombe sur le bootstrap heuristique."""
+    wb = openpyxl.load_workbook(EXCEL_PATH, data_only=True)
+    if 'Roster_Initial' not in wb.sheetnames:
+        return None
+    ws = wb['Roster_Initial']
+    headers = [c.value for c in ws[1]]
+    rows = [dict(zip(headers, r)) for r in ws.iter_rows(min_row=2, values_only=True)]
+    return [r for r in rows if r.get('Pooler') and r.get('Joueur')]
+
+
 def to_date_str(v):
     if v is None:
         return None
@@ -209,6 +224,8 @@ class Report:
         self.anomalies = []              # (row_idx, date, pooler, message)
         self.pick_rows = []              # (row_idx, date, pooler, description)
         self.legality_violations = []    # (date, pooler, message)
+        self.roster_initial_issues = []  # (message) — noms non résolus / statuts invalides / doublons
+        self.roster_initial_count = 0
         self.rows_processed = 0
         self.players_touched = set()
         self.poolers_touched = set()
@@ -223,6 +240,19 @@ class Simulation:
         self.season_start_ts = season_start_ts
         self.current_owner = {}                      # player_id -> pooler_name | None
         self.rows_by_pair = defaultdict(list)         # (pooler_name, player_id) -> [row dicts]
+
+    def preload_initial(self, pooler, player_id, ptype):
+        """Pose l'état réel de départ (onglet Roster_Initial) — appelé avant de rejouer
+        les mouvements, remplace le bootstrap heuristique pour tout joueur listé."""
+        row = {
+            'added_at': self.season_start_ts,
+            'removed_at': None,
+            'player_type': ptype,
+            'transitions': [(self.season_start_ts, None, ptype)],
+            'bootstrap': False,
+        }
+        self.rows_by_pair[(pooler, player_id)].append(row)
+        self.current_owner[player_id] = pooler
 
     def get_open_row(self, pooler, player_id):
         lst = self.rows_by_pair.get((pooler, player_id))
@@ -402,6 +432,40 @@ def main():
     sim = Simulation(season_start_ts)
     report = Report()
 
+    # Roster initial réel (onglet Roster_Initial, ajouté par David le 2026-08-03) — préposé
+    # avant de rejouer les mouvements pour remplacer le bootstrap heuristique ('actif' par
+    # défaut) par la vraie donnée, pour tout joueur listé.
+    roster_initial_rows = load_roster_initial_rows()
+    if roster_initial_rows is None:
+        print("[INFO] Pas d'onglet 'Roster_Initial' — bootstrap heuristique utilisé pour tous les cas.")
+    else:
+        seen_players = {}  # player_id -> pooler_name (détection de conflit : 2 poolers pour le même joueur)
+        loaded = 0
+        for r in roster_initial_rows:
+            pooler = map_pooler(r.get('Pooler'))
+            if not pooler:
+                report.roster_initial_issues.append(f"Pooler non reconnu : {r.get('Pooler')!r} (joueur {r.get('Joueur')!r})")
+                continue
+            name = parse_player_name(r.get('Joueur'))
+            pid, note = pindex.resolve(name) if name else (None, "Nom vide")
+            if pid is None:
+                report.roster_initial_issues.append(f"{pooler} : {note}")
+                continue
+            stype = map_status(r.get('Statut'))
+            if stype is None or stype == 'BALLOTAGE':
+                report.roster_initial_issues.append(
+                    f"{pooler} : statut invalide pour {name!r} : {r.get('Statut')!r}")
+                continue
+            if pid in seen_players:
+                report.roster_initial_issues.append(
+                    f"{name!r} listé chez {seen_players[pid]} ET {pooler} — deuxième occurrence ignorée")
+                continue
+            seen_players[pid] = pooler
+            sim.preload_initial(pooler, pid, stype)
+            loaded += 1
+        report.roster_initial_count = loaded
+        print(f"[INFO] Roster_Initial : {loaded} joueurs préchargés, {len(report.roster_initial_issues)} problème(s).")
+
     for idx, r in indexed_rows:
         pooler = map_pooler(r.get('Pooler'))
         if not pooler:
@@ -466,16 +530,34 @@ def main():
     print(f"Lignes traitées      : {report.rows_processed} / {len(excel_rows)}")
     print(f"Joueurs touchés      : {len(report.players_touched)}")
     print(f"Poolers touchés      : {len(report.poolers_touched)} — {sorted(report.poolers_touched)}")
+    print(f"Roster_Initial       : {report.roster_initial_count} joueurs préchargés")
+
+    print(f"\n--- Problèmes Roster_Initial ({len(report.roster_initial_issues)}) ---")
+    for msg in report.roster_initial_issues:
+        print(f"  {msg}")
 
     print(f"\n--- Noms non résolus ({len(report.unresolved_names)}) ---")
     for idx, date, pooler, side, name, note in report.unresolved_names:
         print(f"  L{idx} [{date}] {pooler} ({side}) : {note}")
 
     print(f"\n--- Origines déduites / bootstrap ({len(report.bootstraps)}) ---")
-    print("(joueur supposé déjà présent depuis le début de saison, statut de départ estimé 'actif' — à vérifier si le résultat semble faux)")
+    print("(joueur absent de l'onglet Roster_Initial ET jamais vu avant sa première mention —")
+    print(" statut de départ estimé 'actif' par défaut, faute de meilleure info. Si ce nombre")
+    print(" est élevé, l'onglet Roster_Initial est peut-être incomplet pour ces joueurs.")
+    print(" Triées par écart décroissant depuis le début de saison — plus l'écart est grand,")
+    print(" plus le risque de mal attribuer des points sur cette période est élevé. Les")
+    print(" premières de la liste méritent une vérification prioritaire ; un écart de 0-2")
+    print(" jours a un impact quasi nul peu importe le vrai statut de départ.)")
+    season_start_date = datetime.strptime(season['saison_start_date'], '%Y-%m-%d')
+    bootstraps_with_gap = []
     for pooler, pid, date, reason in report.bootstraps:
+        event_date = datetime.strptime(date[:10], '%Y-%m-%d')
+        gap_days = (event_date - season_start_date).days
+        bootstraps_with_gap.append((gap_days, pooler, pid, date, reason))
+    bootstraps_with_gap.sort(key=lambda t: -t[0])
+    for gap_days, pooler, pid, date, reason in bootstraps_with_gap:
         p = pindex.by_id.get(pid, {})
-        print(f"  [{date}] {pooler} <- {p.get('first_name','?')} {p.get('last_name','?')} ({reason})")
+        print(f"  [+{gap_days:>3}j] [{date}] {pooler} <- {p.get('first_name','?')} {p.get('last_name','?')} ({reason})")
 
     print(f"\n--- Mésaccords 'Echange Pooler' déclaré vs propriétaire simulé ({len(report.echange_mismatches)}) ---")
     for idx, date, pooler, pid, declared, actual in report.echange_mismatches:
