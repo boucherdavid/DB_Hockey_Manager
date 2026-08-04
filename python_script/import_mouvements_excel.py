@@ -326,6 +326,24 @@ class Simulation:
             self.open_row(pooler, player_id, date, new_type)
 
     def process_cede(self, pooler, player_id, date, new_type_raw, echange_pooler, row_idx, report):
+        cur = self.current_owner.get(player_id)
+
+        # Le fichier consolide d'anciens onglets par pooler (extract_mouvements.py) — un
+        # même échange réel entre 2 poolers peut donc apparaître 2 fois (une ligne "acquis"
+        # dans le tab du receveur, une ligne "cédé" dans le tab du donneur), à des dates
+        # parfois légèrement différentes. Si l'échange a déjà été appliqué (le joueur est
+        # déjà chez echange_pooler au moment de traiter cette ligne), ce n'est pas un 2e
+        # retrait réel — juste la réaffirmation du même événement vu de l'autre côté.
+        if echange_pooler and cur == echange_pooler and echange_pooler != pooler:
+            self.change_type(echange_pooler, player_id, date,
+                              new_type_raw if new_type_raw != 'BALLOTAGE' else 'actif',
+                              report, f"ligne {row_idx} (jumelle d'un échange déjà appliqué)")
+            return
+
+        if cur is not None and cur != pooler and cur != echange_pooler:
+            report.anomalies.append((row_idx, date, pooler,
+                f"Cédé déclaré chez {pooler} mais détenu par {cur} selon la simulation (joueur {player_id}) — chronologie incohérente, à vérifier dans le fichier."))
+
         self.ensure_owner(player_id, pooler, date, report, f"Première mention (côté cédé, ligne {row_idx})")
         if new_type_raw == 'BALLOTAGE':
             self.close_row(pooler, player_id, date, report)
@@ -418,14 +436,18 @@ def main():
     excel_rows = load_excel_rows()
     print(f"[INFO] {len(excel_rows)} lignes lues dans la feuille Mouvements.")
 
-    # Le fichier n'est pas garanti parfaitement trié (ex: lignes ajoutées après le dernier
-    # passage de sort_mouvements.py, sans "Date tri" — repli sur "Date"). La simulation
-    # dépend d'un ordre chronologique strict, donc on trie explicitement ici (tri stable :
-    # égalité de date -> ordre d'origine dans le fichier, déjà cohérent par pooler).
+    # "Date" est le champ saisi directement par David, toujours renseigné (vérifié : aucune
+    # ligne blanche sur les 272). "Date tri" est un champ dérivé (sort_mouvements.py, forward-
+    # fill par pooler) calculé une seule fois par le passé — peut désynchroniser de "Date" si
+    # "Date" a été corrigée/ajoutée après coup sans relancer ce script (5 lignes concernées,
+    # ex: ligne 41 "Date"=2025-12-23 mais "Date tri" encore à 2025-11-08, ce qui faisait
+    # traiter la réclamation au ballotage de Morgan Rielly 6 semaines trop tôt et cassait
+    # la chronologie de son roster). "Date" prime donc désormais ; "Date tri" ne sert que de
+    # repli si "Date" est un jour manquant.
     indexed_rows = list(enumerate(excel_rows, start=2))  # ligne 2 = première ligne de données
     def row_date_key(item):
         _, r = item
-        d = to_date_str(r.get('Date tri')) or to_date_str(r.get('Date'))
+        d = to_date_str(r.get('Date')) or to_date_str(r.get('Date tri'))
         return d or '9999-99-99'
     indexed_rows.sort(key=row_date_key)
 
@@ -471,7 +493,7 @@ def main():
         if not pooler:
             report.anomalies.append((idx, None, r.get('Pooler'), f"Pooler non reconnu : {r.get('Pooler')!r}"))
             continue
-        date = to_date_str(r.get('Date tri')) or to_date_str(r.get('Date'))
+        date = to_date_str(r.get('Date')) or to_date_str(r.get('Date tri'))
         if not date:
             report.anomalies.append((idx, None, pooler, "Aucune date exploitable (Date tri et Date vides)"))
             continue

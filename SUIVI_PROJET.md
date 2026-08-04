@@ -1,6 +1,6 @@
 # Suivi du projet Cap Crunch
 
-Derniere mise a jour: 2026-08-03
+Derniere mise a jour: 2026-08-04
 
 ## Role du fichier
 
@@ -20,6 +20,39 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-08-04
+
+**[Fix] — Deux bugs de simulation trouvés en creusant les bootstraps restants** (`python_script/import_mouvements_excel.py`) :
+- En cherchant pourquoi Morgan Rielly (Vincent) déclenchait un bootstrap alors que son
+  historique semblait complet, traçage en direct de la simulation (import du module,
+  monkeypatch des méthodes `Simulation` pour logguer chaque appel touchant son `player_id`)
+  a révélé la vraie cause : **`Date tri` désynchronisée de `Date`** sur 5 lignes (ex: ligne
+  41, `Date`=2025-12-23 mais `Date tri` encore à 2025-11-08 — reliquat d'un run antérieur de
+  `sort_mouvements.py`, jamais relancé après une correction de `Date` par David). Le script
+  utilisait `Date tri` en priorité ; la réclamation au ballotage de Rielly par Jérôme était
+  donc traitée 6 semaines trop tôt, fermant la ligne de Vincent avant même ses propres
+  événements (descente en réserve, mise au ballotage) du 17 décembre — d'où le faux
+  bootstrap. **Corrigé** : `Date` (toujours renseignée, vérifié sur les 272 lignes) prime
+  maintenant sur `Date tri`, qui ne sert plus que de repli si `Date` est vide.
+- **2e bug, distinct** : le fichier vient à l'origine de tabs séparés par pooler
+  (`extract_mouvements.py`) — un même échange entre 2 poolers apparaît donc souvent 2 fois
+  (une ligne "acquis" côté receveur, une ligne "cédé" côté donneur, à des dates parfois
+  légèrement différentes). La simulation traitait chaque ligne comme un événement
+  indépendant ; si la ligne "acquis" s'appliquait en premier (transfert réel), la ligne
+  "cédé" jumelle tentait de re-retirer le joueur d'un pooler qui ne l'avait déjà plus,
+  déclenchant un bootstrap fantôme (touchait Jiri Kulich, Liam Greentree, Brady Tkachuk,
+  Jagger Firkus). **Corrigé** dans `process_cede` : si le joueur est déjà chez
+  `Echange Pooler` au moment de traiter la ligne, elle est traitée comme la réaffirmation
+  d'un échange déjà appliqué (simple `change_type`), pas un 2e retrait.
+- Effet combiné : bootstraps 11 → **6** sur 156 joueurs touchés. Nouveau : un vrai contrôle
+  d'anomalie signale maintenant les cas où un "cédé" est déclaré chez un pooler qui, selon
+  la simulation, ne détient déjà plus le joueur (au lieu de bootstraper silencieusement à
+  tort) — 5 cas détectés (Janis Jérôme Moser, Trevor Zegras, Jamie Drysdale, Jakob Chychrun
+  ×2), tous des incohérences chronologiques réelles dans le fichier à faire valider par
+  David plutôt que des bugs de script.
+- **Reste à faire** : revue des 5 anomalies + 6 bootstraps avec David avant `--apply`.
+  Toujours aucune écriture en base.
 
 ### 2026-08-03
 
