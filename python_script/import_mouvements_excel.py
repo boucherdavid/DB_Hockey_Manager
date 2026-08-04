@@ -43,6 +43,7 @@ from unidecode import unidecode
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EXCEL_PATH = os.path.normpath(os.path.join(BASE_DIR, '..', 'excel', 'Mouvements_consolides.xlsx'))
+CORRECTIONS_PATH = os.path.normpath(os.path.join(BASE_DIR, '..', 'excel', 'correction_violations_alignements.txt'))
 
 POOLER_NAME_MAP = {
     'vincent': 'Vincent',
@@ -152,6 +153,42 @@ def load_roster_initial_rows():
     return [r for r in rows if r.get('Pooler') and r.get('Joueur')]
 
 
+LEGALITY_LINE_RE = re.compile(
+    r'(\S.*?) \[(.*?)\] (Trop de \w+ actifs \(\d+/\d+\)|Moins de 2 .*?) : (.*)')
+
+
+def load_legality_corrections():
+    """excel/correction_violations_alignements.txt (optionnel, ajouté par David le
+    2026-08-04) — même format que la section 'Violations de légalité' du rapport, mais
+    avec la vraie liste des joueurs actifs à chaque période au lieu de celle simulée.
+    Retourne pooler -> bucket -> [(date_debut, {noms corrects}), ...] trié chronologiquement."""
+    if not os.path.exists(CORRECTIONS_PATH):
+        return None
+    groups = defaultdict(list)
+    with open(CORRECTIONS_PATH, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            m = LEGALITY_LINE_RE.match(line)
+            if not m:
+                print(f"[AVERTISSEMENT] Ligne de corrections non reconnue, ignorée : {line!r}")
+                continue
+            pooler_raw, label, msg, names = m.groups()
+            pooler = map_pooler(pooler_raw) or pooler_raw
+            bucket_m = re.search(r'Trop de (\w+)', msg)
+            bucket_label_to_key = {'attaquants': 'forward', 'défenseurs': 'defense', 'gardiens': 'goalie'}
+            bucket = bucket_label_to_key.get(bucket_m.group(1)) if bucket_m else None
+            if bucket is None:
+                continue  # 'Moins de 2 réservistes' — hors scope (aucune ligne de David ne le concerne)
+            start = label.split(' -> ')[0].split(' au ')[0].replace('du ', '').strip()
+            corrected_names = frozenset(n.strip() for n in names.split(',') if n.strip())
+            groups[(pooler, bucket)].append((start, corrected_names))
+    for key in groups:
+        groups[key].sort(key=lambda t: t[0])
+    return groups
+
+
 def to_date_str(v):
     if v is None:
         return None
@@ -226,6 +263,8 @@ class Report:
         self.legality_violations = []    # (date, pooler, message)
         self.roster_initial_issues = []  # (message) — noms non résolus / statuts invalides / doublons
         self.roster_initial_count = 0
+        self.legality_corrections_applied = []  # (pooler, name, action, date)
+        self.legality_correction_issues = []    # (message)
         self.rows_processed = 0
         self.players_touched = set()
         self.poolers_touched = set()
@@ -301,13 +340,28 @@ class Simulation:
         self.current_owner[player_id] = pooler
 
     def change_type(self, pooler, player_id, date, new_type, report, reason):
+        """Insère une transition à `date`. Résout le statut juste AVANT `date` en parcourant
+        les transitions déjà connues (pas seulement row['player_type'], qui ne reflète que
+        le statut le plus RÉCENT chronologiquement) — nécessaire pour les corrections de
+        légalité appliquées après coup, à une date potentiellement antérieure à une
+        transition déjà traitée (ex: Jake Neighbours corrigé au 23 octobre après que le
+        vrai mouvement du 11 novembre ait déjà été simulé : row['player_type'] valait déjà
+        'reserviste' à ce moment-là, faisant passer la correction pour un no-op à tort).
+        Recalcule ensuite row['player_type'] comme le statut de la toute dernière transition
+        chronologique, pas celui de la dernière transition insérée."""
         self.ensure_owner(player_id, pooler, date, report, reason)
         row = self.get_open_row(pooler, player_id)
-        old = row['player_type']
-        if old == new_type:
+        status_before = row['transitions'][0][2] if row['transitions'] else row['player_type']
+        for changed_at, _old_t, new_t in sorted(row['transitions'], key=lambda t: t[0]):
+            if changed_at <= date:
+                status_before = new_t
+            else:
+                break
+        if status_before == new_type:
             return
-        row['player_type'] = new_type
-        row['transitions'].append((date, old, new_type))
+        row['transitions'].append((date, status_before, new_type))
+        row['transitions'].sort(key=lambda t: t[0])
+        row['player_type'] = row['transitions'][-1][2]
 
     def process_acquis(self, pooler, player_id, date, new_type, echange_pooler, row_idx, report):
         cur = self.current_owner.get(player_id)
@@ -360,7 +414,7 @@ class Simulation:
 # Légalité (best-effort, non bloquant — cap volontairement omis, voir plan)
 # ---------------------------------------------------------------------------
 
-def check_legality(sim, baseline_roster, touched_ids, positions, pindex, pooler, date, report):
+def get_roster_snapshot(sim, baseline_roster, touched_ids, pooler, date):
     """baseline_roster: pooler_name -> {player_id: player_type} pour les joueurs JAMAIS
     touchés par le fichier (état DB courant, valide tout au long puisque non modifié).
     Les joueurs touchés sont exclus du baseline — leur présence/statut à `date` vient
@@ -371,7 +425,23 @@ def check_legality(sim, baseline_roster, touched_ids, positions, pindex, pooler,
             continue
         row = lst[-1]
         if row['added_at'] <= date and (row['removed_at'] is None or row['removed_at'] > date):
-            roster[pid] = row['player_type']
+            # Statut à `date`, pas le statut final de la ligne — cette fonction est appelée
+            # après la fin de la simulation complète (corrections + vérification finale),
+            # donc row['player_type'] reflète le tout dernier changement, pas forcément celui
+            # en vigueur à `date` (ex: un joueur redevenu actif plus tard dans la saison
+            # apparaîtrait à tort comme actif à une date antérieure où il était recrue).
+            status = row['player_type']
+            for changed_at, _old_type, new_type in sorted(row['transitions'], key=lambda t: t[0]):
+                if changed_at <= date:
+                    status = new_type
+                else:
+                    break
+            roster[pid] = status
+    return roster
+
+
+def check_legality(sim, baseline_roster, touched_ids, positions, pindex, pooler, date, report):
+    roster = get_roster_snapshot(sim, baseline_roster, touched_ids, pooler, date)
 
     def pname(pid):
         p = pindex.by_id.get(pid, {})
@@ -507,19 +577,20 @@ def main():
         report.roster_initial_count = loaded
         print(f"[INFO] Roster_Initial : {loaded} joueurs préchargés, {len(report.roster_initial_issues)} problème(s).")
 
-    # La légalité n'est vérifiée qu'une fois par (date, pooler), une fois toutes les lignes
-    # de cette date appliquées — pas après chaque ligne individuelle. Plusieurs lignes du
-    # fichier peuvent partager la même date (plusieurs transactions saisies le même jour) ;
-    # vérifier après chacune capture des états transitoires en plein milieu de journée (ex:
-    # 14 puis 15 attaquants actifs le même jour) qui n'ont jamais vraiment existé sur la
-    # glace — seul l'état de fin de journée est un signal valide.
+    # Les (date, pooler) à vérifier pour la légalité sont accumulés pendant la boucle
+    # principale, mais la vérification elle-même est différée après l'application des
+    # corrections manuelles (voir plus bas) — sinon le rapport final ne refléterait pas les
+    # bancs déjà corrigés par David. Un seul passage par (date, pooler), pas par ligne
+    # individuelle : plusieurs lignes du fichier peuvent partager la même date (plusieurs
+    # transactions saisies le même jour) et vérifier après chacune capturerait des états
+    # transitoires en plein milieu de journée qui n'ont jamais vraiment existé sur la glace.
     poolers_touched_today = set()
     current_date = None
+    date_pooler_pairs = []  # [(date, pooler), ...] dans l'ordre chronologique, dédoublonné
 
     def flush_legality_checks():
         for p in poolers_touched_today:
-            check_legality(sim, baseline_roster, all_touched_ids, positions, pindex,
-                            p, f"{current_date}T12:00:00Z", report)
+            date_pooler_pairs.append((current_date, p))
         poolers_touched_today.clear()
 
     for idx, r in indexed_rows:
@@ -581,6 +652,59 @@ def main():
 
     flush_legality_checks()  # dernière date du fichier
 
+    # Corrections manuelles de légalité (optionnel, excel/correction_violations_alignements.txt,
+    # ajouté par David le 2026-08-04) — appliquées après la simulation Excel complète, avant
+    # le rapport final, pour que celui-ci reflète les bancs corrigés plutôt que l'état brut.
+    # Pour chaque période (triée chronologiquement par pooler/catégorie), compare la vraie
+    # liste d'actifs donnée par David à l'état RÉELLEMENT simulé à cette date précise (pas
+    # une supposition basée sur les corrections précédentes) : qui est actif chez nous mais
+    # pas chez lui est banni (change_type -> reserviste) ; qui devrait être actif chez lui
+    # mais ne l'est pas dans la simulation est réactivé (change_type -> actif). Se base
+    # toujours sur un snapshot frais — nécessaire pour bien gérer un joueur réactivé entre-
+    # temps par un vrai mouvement du fichier (ex: Ryan Leonard, banni par une correction au
+    # 3 novembre, réellement réactivé par le fichier autour du 13, puis re-banni par une
+    # autre correction au 17 décembre — un simple suivi "déjà banni par une correction
+    # précédente" raterait ce second bannissement puisque la vraie réactivation intermédiaire
+    # ne passe pas par le mécanisme de correction). Traité groupe par groupe (indépendants
+    # les uns des autres, pas besoin d'un ordre global).
+    legality_corrections = load_legality_corrections()
+    if legality_corrections:
+        for (pooler, bucket), periods in legality_corrections.items():
+            for start, corrected_names in periods:
+                ts = start  # déjà un timestamp complet ("...T12:00:00Z"), voir load_legality_corrections
+                snapshot = get_roster_snapshot(sim, baseline_roster, all_touched_ids, pooler, ts)
+                current_active_ids = {pid for pid, t in snapshot.items() if t == 'actif'
+                                       and get_player_bucket(positions.get(pid)) == bucket}
+                current_names = {}
+                for pid in current_active_ids:
+                    p = pindex.by_id.get(pid, {})
+                    current_names[f"{p.get('first_name','?')} {p.get('last_name','?')}"] = pid
+
+                for name, pid in current_names.items():
+                    if name not in corrected_names:
+                        sim.change_type(pooler, pid, ts, 'reserviste', report, f"correction légalité ({bucket})")
+                        report.legality_corrections_applied.append((pooler, name, 'banni', start))
+
+                for name in corrected_names:
+                    if name in current_names:
+                        continue
+                    pid, note = pindex.resolve(name)
+                    if pid is None:
+                        report.legality_correction_issues.append(
+                            f"{pooler} [{start}] ({bucket}) : {note}")
+                    elif sim.get_open_row(pooler, pid) is not None:
+                        sim.change_type(pooler, pid, ts, 'actif', report, f"réactivation légalité ({bucket})")
+                        report.legality_corrections_applied.append((pooler, name, 'réactivé', start))
+        print(f"[INFO] Corrections de légalité : {len(legality_corrections)} groupe(s), "
+              f"{len(report.legality_corrections_applied)} changement(s) de statut appliqué(s).")
+    else:
+        print(f"[INFO] Pas de fichier de corrections de légalité ({os.path.basename(CORRECTIONS_PATH)} absent).")
+
+    # Vérification de légalité finale — une fois par (date, pooler), après corrections.
+    for date, pooler in date_pooler_pairs:
+        check_legality(sim, baseline_roster, all_touched_ids, positions, pindex,
+                        pooler, f"{date}T12:00:00Z", report)
+
     # -----------------------------------------------------------------
     # Rapport
     # -----------------------------------------------------------------
@@ -632,7 +756,16 @@ def main():
     for idx, date, pooler, desc in report.pick_rows:
         print(f"  L{idx} [{date}] {pooler} : {desc}")
 
-    print(f"\n--- Violations de légalité (non bloquantes, {len(report.legality_violations)}) ---")
+    print(f"\n--- Corrections de légalité appliquées ({len(report.legality_corrections_applied)}) ---")
+    print("(à partir de excel/correction_violations_alignements.txt, si présent)")
+    for pooler, name, action, date in sorted(report.legality_corrections_applied, key=lambda t: t[3]):
+        print(f"  [{date}] {pooler} : {name} — {action}")
+
+    print(f"\n--- Problèmes dans le fichier de corrections ({len(report.legality_correction_issues)}) ---")
+    for msg in report.legality_correction_issues:
+        print(f"  {msg}")
+
+    print(f"\n--- Violations de légalité résiduelles, après corrections (non bloquantes, {len(report.legality_violations)}) ---")
     print("(NOTE : le baseline des joueurs jamais touchés par le fichier vient de l'état DB")
     print(" ACTUEL, utilisé comme approximation constante sur toute la saison — un pooler")
     print(" déjà en dépassement aujourd'hui sur ses joueurs non touchés apparaîtra donc en")

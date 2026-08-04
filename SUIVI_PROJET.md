@@ -21,6 +21,40 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-08-04 (suite 4)
+
+**[Feat + Fix] — Application automatique des corrections de légalité depuis un fichier texte, 4 bugs de chronologie trouvés en le débogant** (`python_script/import_mouvements_excel.py`) :
+- David a produit `excel/correction_violations_alignements.txt` (47 lignes, même format que
+  la section « Violations de légalité » du rapport — la vraie liste des joueurs actifs à
+  chaque période au lieu de celle simulée), couvrant les 97 violations de la session
+  précédente pour les 6 poolers concernés (pas seulement David/Vincent).
+- Plutôt que de demander à David d'éditer 27 lignes dans `Mouvements` à la main, le script
+  lit maintenant ce fichier directement (`load_legality_corrections()`) et applique les
+  changements de statut lui-même : `pooler_rosters`/`roster_change_log` équivalents générés
+  automatiquement pour chaque joueur à bannir/réactiver, à la bonne date, sans jamais
+  toucher aux points déjà gagnés en dehors de la période corrigée.
+- **4 bugs de chronologie trouvés en creusant pourquoi les corrections ne s'appliquaient pas
+  toutes correctement** (aucun n'était un problème du fichier de David) :
+  1. `get_roster_snapshot` lisait `row['player_type']` (statut **final** de la ligne) au lieu
+     de résoudre le statut à la date demandée — cassé par le déplacement de la vérification
+     de légalité après les corrections (avant, elle tournait immédiatement après chaque
+     date traitée, donc "final" coïncidait avec "à cette date").
+  2. `ts = f"{start}T12:00:00Z"` alors que `start` était déjà un timestamp complet →
+     `"...T12:00:00ZT12:00:00Z"`, cassant silencieusement les comparaisons de chaînes.
+  3. `change_type` décidait qu'un changement était un no-op en comparant au statut **actuel**
+     de la ligne plutôt qu'au statut **au moment visé** — ratait les corrections insérées à
+     une date antérieure à un événement déjà simulé (ex: Jake Neighbours, corrigé au 23
+     octobre après que son vrai déclassement du 11 novembre ait déjà tourné).
+  4. Le suivi interne "déjà banni par une correction" ne voyait pas les vraies réactivations
+     survenues entre-temps via le fichier (Ryan Leonard : banni par correction le 3
+     novembre, réactivé pour de vrai le 13, aurait dû être re-banni le 17 décembre par une
+     2e correction — ratée car le suivi le croyait encore banni). Remplacé par une
+     comparaison toujours basée sur un snapshot frais de l'état réellement simulé, plutôt
+     qu'un suivi de "qui j'ai déjà banni".
+- **Résultat final : 0 violation résiduelle** (parti de 97, en passant par 55 → 25 → 0
+  changements appliqués au fil des corrections de bugs). Toujours dry-run, `--apply` pas
+  exécuté — reste à faire une dernière relecture du rapport avec David avant de lancer.
+
 ### 2026-08-04 (suite 3)
 
 **[Fix] — Bug de fuite baseline pour les joueurs à première mention tardive + tri chronologique du rapport** (`python_script/import_mouvements_excel.py`) :
