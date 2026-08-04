@@ -360,7 +360,7 @@ class Simulation:
 # Légalité (best-effort, non bloquant — cap volontairement omis, voir plan)
 # ---------------------------------------------------------------------------
 
-def check_legality(sim, baseline_roster, touched_ids, positions, pooler, date, report):
+def check_legality(sim, baseline_roster, touched_ids, positions, pindex, pooler, date, report):
     """baseline_roster: pooler_name -> {player_id: player_type} pour les joueurs JAMAIS
     touchés par le fichier (état DB courant, valide tout au long puisque non modifié).
     Les joueurs touchés sont exclus du baseline — leur présence/statut à `date` vient
@@ -373,23 +373,26 @@ def check_legality(sim, baseline_roster, touched_ids, positions, pooler, date, r
         if row['added_at'] <= date and (row['removed_at'] is None or row['removed_at'] > date):
             roster[pid] = row['player_type']
 
+    def pname(pid):
+        p = pindex.by_id.get(pid, {})
+        return f"{p.get('first_name','?')} {p.get('last_name','?')}"
+
     actifs = [pid for pid, t in roster.items() if t == 'actif']
     reserves = [pid for pid, t in roster.items() if t == 'reserviste']
-    counts = {'forward': 0, 'defense': 0, 'goalie': 0}
+    by_bucket = {'forward': [], 'defense': [], 'goalie': []}
     for pid in actifs:
-        counts[get_player_bucket(positions.get(pid))] += 1
+        by_bucket[get_player_bucket(positions.get(pid))].append(pid)
 
-    msgs = []
-    if counts['forward'] > ACTIVE_LIMITS['forward']:
-        msgs.append(f"Trop d'attaquants actifs ({counts['forward']}/{ACTIVE_LIMITS['forward']})")
-    if counts['defense'] > ACTIVE_LIMITS['defense']:
-        msgs.append(f"Trop de défenseurs actifs ({counts['defense']}/{ACTIVE_LIMITS['defense']})")
-    if counts['goalie'] > ACTIVE_LIMITS['goalie']:
-        msgs.append(f"Trop de gardiens actifs ({counts['goalie']}/{ACTIVE_LIMITS['goalie']})")
+    labels = {'forward': "attaquants", 'defense': "défenseurs", 'goalie': "gardiens"}
+    for bucket, limit in ACTIVE_LIMITS.items():
+        if len(by_bucket[bucket]) > limit:
+            names = tuple(sorted(pname(pid) for pid in by_bucket[bucket]))
+            msg = f"Trop de {labels[bucket]} actifs ({len(by_bucket[bucket])}/{limit})"
+            report.legality_violations.append((date, pooler, bucket, msg, names))
     if len(reserves) < 2:
-        msgs.append(f"Moins de 2 réservistes ({len(reserves)})")
-    for m in msgs:
-        report.legality_violations.append((date, pooler, m))
+        names = tuple(sorted(pname(pid) for pid in reserves))
+        msg = f"Moins de 2 réservistes ({len(reserves)})"
+        report.legality_violations.append((date, pooler, 'reserve', msg, names))
 
 
 # ---------------------------------------------------------------------------
@@ -488,6 +491,21 @@ def main():
         report.roster_initial_count = loaded
         print(f"[INFO] Roster_Initial : {loaded} joueurs préchargés, {len(report.roster_initial_issues)} problème(s).")
 
+    # La légalité n'est vérifiée qu'une fois par (date, pooler), une fois toutes les lignes
+    # de cette date appliquées — pas après chaque ligne individuelle. Plusieurs lignes du
+    # fichier peuvent partager la même date (plusieurs transactions saisies le même jour) ;
+    # vérifier après chacune capture des états transitoires en plein milieu de journée (ex:
+    # 14 puis 15 attaquants actifs le même jour) qui n'ont jamais vraiment existé sur la
+    # glace — seul l'état de fin de journée est un signal valide.
+    poolers_touched_today = set()
+    current_date = None
+
+    def flush_legality_checks():
+        for p in poolers_touched_today:
+            check_legality(sim, baseline_roster, report.players_touched, positions, pindex,
+                            p, f"{current_date}T12:00:00Z", report)
+        poolers_touched_today.clear()
+
     for idx, r in indexed_rows:
         pooler = map_pooler(r.get('Pooler'))
         if not pooler:
@@ -497,12 +515,18 @@ def main():
         if not date:
             report.anomalies.append((idx, None, pooler, "Aucune date exploitable (Date tri et Date vides)"))
             continue
+        if date != current_date:
+            if current_date is not None:
+                flush_legality_checks()
+            current_date = date
         ts = f"{date}T12:00:00Z"
         echange_pooler = map_pooler(r.get('Echange Pooler')) if r.get('Echange Pooler') else None
         report.rows_processed += 1
         report.poolers_touched.add(pooler)
+        poolers_touched_today.add(pooler)
         if echange_pooler:
             report.poolers_touched.add(echange_pooler)
+            poolers_touched_today.add(echange_pooler)
 
         # Choix de repêchage — hors scope, listés seulement
         if r.get('Choix acquis') or r.get('Choix cede'):
@@ -539,9 +563,7 @@ def main():
                 else:
                     sim.process_cede(pooler, pid, ts, stype, echange_pooler, idx, report)
 
-        # Légalité — best-effort, non bloquant (cap volontairement omis)
-        for p in {pooler} | ({echange_pooler} if echange_pooler else set()):
-            check_legality(sim, baseline_roster, report.players_touched, positions, p, ts, report)
+    flush_legality_checks()  # dernière date du fichier
 
     # -----------------------------------------------------------------
     # Rapport
@@ -600,13 +622,24 @@ def main():
     print(" déjà en dépassement aujourd'hui sur ses joueurs non touchés apparaîtra donc en")
     print(" dépassement à chaque ligne le concernant, même si ce n'était pas forcément vrai")
     print(" à l'époque. Signal à interpréter avec prudence, pas une liste de vrais problèmes.)")
-    seen = set()
-    for date, pooler, msg in report.legality_violations:
-        key = (date, pooler, msg)
-        if key in seen:
-            continue
-        seen.add(key)
-        print(f"  [{date}] {pooler} : {msg}")
+    print(" Regroupé par pooler/catégorie : une ligne par période où la composition fautive")
+    print(" reste identique (avec les noms), plutôt qu'une ligne par date traitée.")
+    by_group = defaultdict(list)  # (pooler, bucket) -> [(date, msg, names), ...]
+    for date, pooler, bucket, msg, names in report.legality_violations:
+        by_group[(pooler, bucket)].append((date, msg, names))
+
+    bucket_order = {'forward': 0, 'defense': 1, 'goalie': 2, 'reserve': 3}
+    for (pooler, bucket), entries in sorted(by_group.items(), key=lambda kv: (kv[0][0], bucket_order.get(kv[0][1], 9))):
+        entries.sort(key=lambda e: e[0])
+        run_start = entries[0][0]
+        run_msg, run_names = entries[0][1], entries[0][2]
+        prev_date = entries[0][0]
+        for date, msg, names in entries[1:] + [(None, None, None)]:
+            if names != run_names:
+                label = f"du {run_start} au {prev_date}" if run_start != prev_date else run_start
+                print(f"  {pooler} [{label}] {run_msg} : {', '.join(run_names) if run_names else '(aucun)'}")
+                run_start, run_msg, run_names = date, msg, names
+            prev_date = date
 
     # Diff de sanité : état simulé final vs état actuel réel en base, pour les joueurs touchés
     print(f"\n--- Diff de sanité (simulé final vs DB actuelle, joueurs touchés) ---")

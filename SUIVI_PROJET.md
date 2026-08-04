@@ -21,6 +21,35 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-08-04 (suite 2)
+
+**[Fix + Feat] — Vérification de légalité une fois par jour, rapport enrichi avec les noms de joueurs** (`python_script/import_mouvements_excel.py`) :
+- David a validé toutes les corrections restantes du fichier (Moser, trade Zegras/McMichael/
+  Drysdale contre Reinhart, Chychrun, Monahan) — **0 bootstrap, 0 anomalie, 0 nom non résolu**
+  atteint pour la première fois. Chronologie du fichier maintenant entièrement cohérente.
+- David a ensuite demandé à voir les joueurs concernés par les 206 violations de légalité
+  pour décider qui mettre sur le banc — ajouté les noms + regroupement par période stable
+  au rapport (`check_legality` prend maintenant `pindex`, stocke `(date, pooler, bucket,
+  msg, noms)` au lieu de juste `(date, pooler, msg)`).
+- **Bug trouvé par David en examinant le détail** : la même date affichait plusieurs
+  compteurs différents pour le même pooler (ex: Vincent 14 puis 15 attaquants actifs le
+  9 octobre) — la légalité était vérifiée après **chaque ligne individuelle** du fichier,
+  capturant des états transitoires en plein milieu de journée quand plusieurs transactions
+  du même pooler partagent la même date, plutôt que l'état de fin de journée. Corrigé :
+  vérification différée à une fois par `(date, pooler)`, après que toutes les lignes de
+  cette date aient été appliquées (`flush_legality_checks()`). Effet : 206 → **106**
+  violations (~moitié de bruit).
+- **Analyse des noyaux « toujours actifs »** (joueurs présents dans 100% des violations
+  d'un groupe pooler/catégorie, donc jamais rétrogradés une seule fois de la saison) :
+  confirmée stable avant/après le fix du bug de comptage — donc un vrai signal, pas du
+  bruit. David a identifié des candidats pour David et Vincent (attaquants et défenseurs),
+  mais tous sont des joueurs actuellement `actif` toute la saison dans les données (jamais
+  touchés par le fichier Excel) — les marquer réservistes rétroactivement sans date précise
+  leur retirerait des points potentiellement mérités. **Décision en suspens** : attendre que
+  David précise soit des dates approximatives, soit qu'il accepte ces dépassements comme
+  imperfection connue (rappel : la légalité n'affecte jamais le calcul des points).
+- Toujours dry-run, `--apply` pas exécuté.
+
 ### 2026-08-04
 
 **[Fix] — Deux bugs de simulation trouvés en creusant les bootstraps restants** (`python_script/import_mouvements_excel.py`) :
