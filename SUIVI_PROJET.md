@@ -21,6 +21,28 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-08-04 (suite 3)
+
+**[Fix] — Bug de fuite baseline pour les joueurs à première mention tardive + tri chronologique du rapport** (`python_script/import_mouvements_excel.py`) :
+- David a repéré en lisant le détail (ajouté à la session précédente) que Trevor Zegras
+  apparaissait comme actif chez David dès le 8 octobre, alors qu'il ne l'a acquis que le
+  21 octobre (`Mouvements` ligne 18). Cause : `check_legality` exclut du baseline (état DB
+  actuel) les joueurs "touchés" par le fichier via `report.players_touched`, construit
+  **incrémentalement** pendant la boucle — un joueur dont la première mention est tardive
+  n'est donc pas encore dans cet ensemble pour les dates qui précèdent sa première ligne,
+  et fuit dans le baseline (son statut DB actuel, `actif`) pour ces dates-là.
+- **Corrigé** : calcul d'un `all_touched_ids` complet en un seul passage sur tout le fichier
+  avant la boucle principale (au lieu de l'ensemble incrémental), utilisé pour l'exclusion
+  du baseline. Violations 106 → **97**.
+- David a aussi demandé un tri chronologique du rapport de légalité (au lieu d'un
+  regroupement par pooler/catégorie) pour pouvoir le parcourir dans l'ordre de la saison et
+  construire un fichier de corrections joueur par joueur — fait.
+- **Prochaine étape (David)** : il prépare un fichier listant, pour chaque ligne de
+  violation, la vraie liste des joueurs actifs à ce moment (au lieu de la liste simulée) —
+  je pourrai alors calculer les corrections précises (qui doit être réserviste, et depuis
+  quand) sans risquer de retirer des points à tort.
+- Toujours dry-run, `--apply` pas exécuté.
+
 ### 2026-08-04 (suite 2)
 
 **[Fix + Feat] — Vérification de légalité une fois par jour, rapport enrichi avec les noms de joueurs** (`python_script/import_mouvements_excel.py`) :

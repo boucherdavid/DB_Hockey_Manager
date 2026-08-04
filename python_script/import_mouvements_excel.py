@@ -457,6 +457,22 @@ def main():
     sim = Simulation(season_start_ts)
     report = Report()
 
+    # Ensemble complet des joueurs touchés par le fichier, calculé à l'avance (pas construit
+    # incrémentalement pendant la boucle) — utilisé pour exclure ces joueurs du baseline dans
+    # check_legality. Sans ça, un joueur dont la première mention est tardive (ex: Trevor
+    # Zegras, acquis par David seulement le 21 octobre) reste dans le baseline (état DB
+    # actuel, potentiellement 'actif') pour toutes les dates AVANT sa première mention — bug
+    # trouvé par David en lisant le détail des violations (Zegras apparaissait comme actif
+    # chez David dès le 8 octobre, avant même son acquisition réelle).
+    all_touched_ids = set()
+    for _, r in indexed_rows:
+        for cell in (r.get('Joueur acquis/activé'), r.get('Joueur cede/desactive')):
+            name = parse_player_name(cell)
+            if name:
+                pid, _ = pindex.resolve(name)
+                if pid is not None:
+                    all_touched_ids.add(pid)
+
     # Roster initial réel (onglet Roster_Initial, ajouté par David le 2026-08-03) — préposé
     # avant de rejouer les mouvements pour remplacer le bootstrap heuristique ('actif' par
     # défaut) par la vraie donnée, pour tout joueur listé.
@@ -502,7 +518,7 @@ def main():
 
     def flush_legality_checks():
         for p in poolers_touched_today:
-            check_legality(sim, baseline_roster, report.players_touched, positions, pindex,
+            check_legality(sim, baseline_roster, all_touched_ids, positions, pindex,
                             p, f"{current_date}T12:00:00Z", report)
         poolers_touched_today.clear()
 
@@ -622,14 +638,15 @@ def main():
     print(" déjà en dépassement aujourd'hui sur ses joueurs non touchés apparaîtra donc en")
     print(" dépassement à chaque ligne le concernant, même si ce n'était pas forcément vrai")
     print(" à l'époque. Signal à interpréter avec prudence, pas une liste de vrais problèmes.)")
-    print(" Regroupé par pooler/catégorie : une ligne par période où la composition fautive")
-    print(" reste identique (avec les noms), plutôt qu'une ligne par date traitée.")
+    print(" Une ligne par période où la composition fautive reste identique pour un même")
+    print(" pooler/catégorie (avec les noms), plutôt qu'une ligne par date traitée — le tout")
+    print(" trié par ordre chronologique croissant.")
     by_group = defaultdict(list)  # (pooler, bucket) -> [(date, msg, names), ...]
     for date, pooler, bucket, msg, names in report.legality_violations:
         by_group[(pooler, bucket)].append((date, msg, names))
 
-    bucket_order = {'forward': 0, 'defense': 1, 'goalie': 2, 'reserve': 3}
-    for (pooler, bucket), entries in sorted(by_group.items(), key=lambda kv: (kv[0][0], bucket_order.get(kv[0][1], 9))):
+    runs = []  # (run_start, pooler, label, msg, names)
+    for (pooler, bucket), entries in by_group.items():
         entries.sort(key=lambda e: e[0])
         run_start = entries[0][0]
         run_msg, run_names = entries[0][1], entries[0][2]
@@ -637,9 +654,13 @@ def main():
         for date, msg, names in entries[1:] + [(None, None, None)]:
             if names != run_names:
                 label = f"du {run_start} au {prev_date}" if run_start != prev_date else run_start
-                print(f"  {pooler} [{label}] {run_msg} : {', '.join(run_names) if run_names else '(aucun)'}")
+                runs.append((run_start, pooler, label, run_msg, run_names))
                 run_start, run_msg, run_names = date, msg, names
             prev_date = date
+
+    runs.sort(key=lambda r: r[0])
+    for _, pooler, label, msg, names in runs:
+        print(f"  {pooler} [{label}] {msg} : {', '.join(names) if names else '(aucun)'}")
 
     # Diff de sanité : état simulé final vs état actuel réel en base, pour les joueurs touchés
     print(f"\n--- Diff de sanité (simulé final vs DB actuelle, joueurs touchés) ---")
