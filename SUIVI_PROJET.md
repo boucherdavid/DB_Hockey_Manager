@@ -21,6 +21,36 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-08-05 (suite 5)
+
+**[Planification] — Réconciliation des choix de repêchage échangés durant 2025-26 (hors scope du script, à faire manuellement)** (aucun changement de code) :
+- Les colonnes de choix de repêchage du fichier Excel (`Choix acquis/cédé`, `Echange
+  Pooler`, `Choix Pooler`) sont volontairement hors scope de
+  `import_mouvements_excel.py` (décidé le 2026-08-03) — jamais rejouées dans
+  `pool_draft_picks`. David veut les ajuster manuellement avant la sync vers prod.
+- Le rapport du script liste 8 lignes brutes concernées (« Lignes avec choix de
+  repêchage, non traitées »). En les pairant (une ligne par côté d'un même échange, même
+  principe que les mouvements de joueurs — voir la mécanique documentée le 2026-08-04),
+  ça se résout en **6 mouvements de choix distincts**, tous saison 2026 :
+
+  | Ronde | Propriétaire original | Nouveau propriétaire |
+  |---|---|---|
+  | 4e | Paule | David |
+  | 2e | David | Vincent |
+  | 4e | Vincent | David |
+  | 2e | Nicolas | Vincent |
+  | 2e | Paule | David |
+  | 3e | David | Steve |
+
+- **Point à vérifier par David avant d'appliquer** : le choix « 2e ronde, original Paule →
+  David » (26 février) correspond à l'échange où David cède Jakob Chychrun à Paule contre
+  un choix — David avait mentionné verbalement une 3e ronde à l'époque (voir entrée du
+  2026-08-04, section Chychrun), mais le fichier Excel indique une 2e ronde. À confirmer
+  laquelle est correcte avant la réassignation.
+- **À faire par David, manuellement** : réassigner ces 6 choix via `/admin/init?tab=choix`
+  (interface existante pour réassigner le propriétaire d'un pick échangé hors-app) — pas
+  couvert par le script d'import.
+
 ### 2026-08-05 (suite 4)
 
 **[Data] — `--apply` exécuté : historique 2025-26 reconstruit en staging** (`python_script/import_mouvements_excel.py`, données `pooler_rosters`/`roster_change_log` en staging) :
