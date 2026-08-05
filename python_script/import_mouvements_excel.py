@@ -837,6 +837,28 @@ def main():
             print(f"  {p.get('first_name','?')} {p.get('last_name','?')} — simulé={sim_final} / DB actuelle={db_final}")
     print(f"  ({diffs} joueurs avec un écart sur {len(report.players_touched)} touchés)")
 
+    # Alignements finaux : tous les joueurs touchés encore sous contrat à la fin de la
+    # simulation (pas seulement les écarts vs DB) — pour une revue complète, pooler par
+    # pooler, plutôt qu'un simple diff.
+    print(f"\n--- Alignements finaux (joueurs touchés, au terme de la simulation) ---")
+    by_pooler_final = defaultdict(list)  # pooler -> [(status, name), ...]
+    for (pooler, pid), lst in sim.rows_by_pair.items():
+        if pid not in report.players_touched:
+            continue
+        row = lst[-1]
+        if row['removed_at'] is not None:
+            continue
+        p = pindex.by_id.get(pid, {})
+        name = f"{p.get('first_name','?')} {p.get('last_name','?')}"
+        by_pooler_final[pooler].append((row['player_type'], name))
+
+    status_order = {'actif': 0, 'reserviste': 1, 'ltir': 2, 'recrue': 3}
+    for pooler in sorted(by_pooler_final):
+        entries = sorted(by_pooler_final[pooler], key=lambda e: (status_order.get(e[0], 9), e[1]))
+        print(f"  {pooler} ({len(entries)}) :")
+        for status, name in entries:
+            print(f"    {status:12s} {name}")
+
     print("\n" + "=" * 70)
     if not apply_mode:
         print("[DRY-RUN] Aucune écriture effectuée. Relancer avec --apply pour appliquer.")

@@ -21,6 +21,16 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-08-05 (suite)
+
+**[Feat] — Section « Alignements finaux » ajoutée au rapport** (`python_script/import_mouvements_excel.py`) :
+- David voulait valider les alignements complets de chaque pooler au 16 avril (fin de
+  saison), pas seulement les écarts vs la base (le diff de sanité n'affiche que les joueurs
+  qui diffèrent, pas la liste complète). Ajouté une nouvelle section listant, pooler par
+  pooler, tous les joueurs touchés par le fichier encore sous contrat à la fin de la
+  simulation, groupés par statut (actif/réserviste/ltir/recrue).
+- Reste à faire : David termine sa relecture de cette nouvelle section avant `--apply`.
+
 ### 2026-08-05
 
 **[Fix] — Mapping pooler incomplet (« Sébastien F. » non reconnu) + statut de banc non naturel pour les corrections de légalité** (`python_script/import_mouvements_excel.py`) :
