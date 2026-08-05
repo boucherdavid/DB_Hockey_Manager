@@ -21,6 +21,27 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-08-05 (suite 4)
+
+**[Data] — `--apply` exécuté : historique 2025-26 reconstruit en staging** (`python_script/import_mouvements_excel.py`, données `pooler_rosters`/`roster_change_log` en staging) :
+- Après une longue session de revue (voir toutes les entrées du 2026-08-03 au 2026-08-05),
+  David a confirmé que le rapport dry-run était propre (0 bootstrap, 0 anomalie, 0 nom non
+  résolu, 0 violation de légalité résiduelle, 0 signalement d'alignement final) et a donné
+  le feu vert pour appliquer.
+- **`--apply` exécuté avec succès** : 383 lignes `pooler_rosters` + 808 lignes
+  `roster_change_log` insérées pour les 155 joueurs touchés par le fichier (remplacement
+  complet — delete + reinsert, les corrections manuelles `/admin/historique` déjà faites
+  pour ces joueurs sont maintenant recalculées, pas dupliquées). `pooler_rosters` passe de
+  336 à 577 lignes pour la saison (528 ouvertes / 49 fermées). Vérifié directement en base :
+  Conor Geekie → David/recrue depuis le 2 février, Trevor Zegras → Sébastien F./réserviste
+  depuis le 6 mars — cohérent avec les corrections validées.
+- **Cible : staging uniquement**, comme prévu depuis le début. Prod pas touchée.
+- **Reste à faire** : valider le classement (`/classement`) en staging avec les nouveaux
+  points calculés, puis synchroniser vers prod via `sync_staging_to_prod.py` une fois
+  l'historique jugé définitif (voir `project_staging_prod_sync.md`). Les colonnes de choix
+  de repêchage du fichier Excel restent hors scope (jamais rejouées dans
+  `pool_draft_picks`) — à traiter séparément si souhaité.
+
 ### 2026-08-05 (suite 3)
 
 **[Feat] — Corrections d'alignement final depuis un fichier texte, même principe que les corrections de légalité** (`python_script/import_mouvements_excel.py`) :
