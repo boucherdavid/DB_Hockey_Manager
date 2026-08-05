@@ -837,27 +837,40 @@ def main():
             print(f"  {p.get('first_name','?')} {p.get('last_name','?')} — simulé={sim_final} / DB actuelle={db_final}")
     print(f"  ({diffs} joueurs avec un écart sur {len(report.players_touched)} touchés)")
 
-    # Alignements finaux : tous les joueurs touchés encore sous contrat à la fin de la
-    # simulation (pas seulement les écarts vs DB) — pour une revue complète, pooler par
-    # pooler, plutôt qu'un simple diff.
-    print(f"\n--- Alignements finaux (joueurs touchés, au terme de la simulation) ---")
-    by_pooler_final = defaultdict(list)  # pooler -> [(status, name), ...]
+    # Alignements complets : TOUS les joueurs de chaque pooler au terme de la simulation
+    # (joueurs touchés par le fichier + joueurs jamais touchés, dont le statut reste celui
+    # de la DB actuelle, inchangé) — regroupés par position puis par statut, pour une revue
+    # complète pooler par pooler plutôt qu'un simple diff des écarts.
+    print(f"\n--- Alignements finaux (tous les joueurs, par position et statut) ---")
+    by_pooler_full = defaultdict(list)  # pooler -> [(bucket, status, name), ...]
     for (pooler, pid), lst in sim.rows_by_pair.items():
-        if pid not in report.players_touched:
-            continue
         row = lst[-1]
         if row['removed_at'] is not None:
             continue
         p = pindex.by_id.get(pid, {})
         name = f"{p.get('first_name','?')} {p.get('last_name','?')}"
-        by_pooler_final[pooler].append((row['player_type'], name))
+        by_pooler_full[pooler].append((get_player_bucket(positions.get(pid)), row['player_type'], name))
 
+    for pooler, roster in baseline_roster.items():
+        for pid, status in roster.items():
+            if (pooler, pid) in sim.rows_by_pair:
+                continue  # déjà couvert par la simulation (touché OU préchargé via Roster_Initial)
+            p = pindex.by_id.get(pid, {})
+            name = f"{p.get('first_name','?')} {p.get('last_name','?')}"
+            by_pooler_full[pooler].append((get_player_bucket(positions.get(pid)), status, name))
+
+    bucket_order = {'forward': 0, 'defense': 1, 'goalie': 2}
+    bucket_labels = {'forward': 'Attaquants', 'defense': 'Défenseurs', 'goalie': 'Gardiens'}
     status_order = {'actif': 0, 'reserviste': 1, 'ltir': 2, 'recrue': 3}
-    for pooler in sorted(by_pooler_final):
-        entries = sorted(by_pooler_final[pooler], key=lambda e: (status_order.get(e[0], 9), e[1]))
+    for pooler in sorted(by_pooler_full):
+        entries = by_pooler_full[pooler]
         print(f"  {pooler} ({len(entries)}) :")
-        for status, name in entries:
-            print(f"    {status:12s} {name}")
+        for bucket in sorted({e[0] for e in entries}, key=lambda b: bucket_order.get(b, 9)):
+            bucket_entries = sorted((e for e in entries if e[0] == bucket),
+                                     key=lambda e: (status_order.get(e[1], 9), e[2]))
+            print(f"    {bucket_labels.get(bucket, bucket)} ({len(bucket_entries)}) :")
+            for _, status, name in bucket_entries:
+                print(f"      {status:12s} {name}")
 
     print("\n" + "=" * 70)
     if not apply_mode:

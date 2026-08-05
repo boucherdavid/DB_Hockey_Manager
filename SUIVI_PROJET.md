@@ -21,6 +21,25 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-08-05 (suite 2)
+
+**[Feat + Fix] — Section « Alignements finaux » étendue à tous les joueurs (pas seulement les touchés), regroupés par position/statut** (`python_script/import_mouvements_excel.py`) :
+- David voulait valider l'alignement complet de chaque pooler (recrues jamais bougées
+  incluses), pas seulement les joueurs touchés par le fichier. Étendu la section pour
+  combiner joueurs simulés (touchés + préchargés via `Roster_Initial`) et joueurs jamais
+  touchés (statut DB actuel, inchangé), regroupés par position (attaquants/défenseurs/
+  gardiens) puis par statut.
+- **Bug trouvé immédiatement en testant** : plusieurs joueurs dupliqués (Kyle Connor, Lucas
+  Raymond, Mark Scheifele, Evan Bouchard, plusieurs recrues). Vérifié d'abord côté base
+  (seul le doublon déjà connu du 2026-08-03 existe, aucun nouveau) — donc bug de script :
+  `Roster_Initial` précharge déjà TOUS les ~320 joueurs dans `sim.rows_by_pair` (pas
+  seulement les touchés), mais la boucle ajoutant les joueurs "non touchés" depuis la DB ne
+  vérifiait que `pid not in all_touched_ids`, sans tenir compte de ce préchargement — un
+  joueur jamais touché par `Mouvements` mais présent dans `Roster_Initial` se faisait donc
+  compter deux fois. Corrigé : exclusion basée sur `(pooler, pid) in sim.rows_by_pair`
+  plutôt que sur l'ensemble des joueurs touchés.
+- Reste à faire : David termine sa relecture des alignements complets avant `--apply`.
+
 ### 2026-08-05 (suite)
 
 **[Feat] — Section « Alignements finaux » ajoutée au rapport** (`python_script/import_mouvements_excel.py`) :
