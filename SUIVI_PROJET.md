@@ -1,6 +1,6 @@
 # Suivi du projet Cap Crunch
 
-Derniere mise a jour: 2026-08-04
+Derniere mise a jour: 2026-08-05
 
 ## Role du fichier
 
@@ -20,6 +20,36 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-08-05
+
+**[Fix] — Mapping pooler incomplet (« Sébastien F. » non reconnu) + statut de banc non naturel pour les corrections de légalité** (`python_script/import_mouvements_excel.py`) :
+- En relisant le diff de sanité en détail, David a repéré plusieurs incohérences : Trevor
+  Zegras encore chez David en fin de saison alors qu'il avait été échangé à Sébastien F.
+  (confirmé le 2026-08-04), Matias Maccelli/Victor Hedman/Jordan Kyrou/Jonathan Marchessault
+  encore listés réservistes alors qu'ils avaient été mis au ballotage, Conor Geekie/Fyodor
+  Svechkov listés réservistes plutôt que recrue.
+- **Cause Zegras (et 2 autres lignes)** : `POOLER_NAME_MAP` reconnaissait `"Sébastien S."`
+  comme variante directe (ajoutée le 2026-08-03) mais pas l'équivalent `"Sébastien F."` —
+  quand la cellule `Echange Pooler` contenait littéralement ce texte (lignes 198-200, le
+  vrai échange Zegras/McMichael/Drysdale contre Reinhart), `map_pooler()` retournait `None`
+  silencieusement, faisant échouer le transfert vers l'autre pooler. Corrigé : ajout de
+  `'sebastien f.': 'Sébastien F.'`.
+- **Effet de bord découvert en corrigeant Zegras** : une ligne 201 dupliquait le retrait de
+  Connor McMichael côté David (sans `Echange Pooler` cette fois, contrairement à la ligne
+  198 qui gère déjà correctement son départ) — un vrai doublon de reconstruction, du même
+  type que les autres déjà nettoyés. Supprimée par David.
+- **Cause Geekie/Svechkov** : leur statut `Recrue` (acquis le 2 février lors de l'échange
+  avec Nicolas, confirmé par David) était correct dans la simulation, mais le mécanisme de
+  correction de légalité les rebasculait systématiquement vers `Réserviste` en les
+  bannissant, sans tenir compte de leur vrai statut de repli. Nouvelle fonction
+  `get_status_before_activation()` : au lieu de toujours bannir vers `reserviste`, résout le
+  statut qui précédait le dernier passage à `actif` (ex: Svechkov promu `recrue`→`actif` le
+  15 avril, banni immédiatement après pour dépassement — redescend maintenant à `recrue`,
+  son vrai statut de repli, pas `reserviste`).
+- **Résultat** : 0 bootstrap, 0 anomalie, 0 violation résiduelle, tous les cas signalés par
+  David désormais cohérents entre simulé et attendu. Toujours dry-run, `--apply` pas encore
+  exécuté — David termine sa relecture du diff de sanité avant de donner le feu vert.
 
 ### 2026-08-04 (suite 4)
 

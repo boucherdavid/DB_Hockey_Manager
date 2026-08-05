@@ -55,6 +55,7 @@ POOLER_NAME_MAP = {
     'sebastien_fau': 'Sébastien F.',
     'sebastien_stl': 'Sébastien S.',
     'sebastien s.': 'Sébastien S.',
+    'sebastien f.': 'Sébastien F.',
 }
 
 STATUS_MAP = {
@@ -440,6 +441,21 @@ def get_roster_snapshot(sim, baseline_roster, touched_ids, pooler, date):
     return roster
 
 
+def get_status_before_activation(sim, pooler, player_id, date):
+    """Statut qui précédait le passage à 'actif' le plus récent avant `date` — utilisé pour
+    savoir à quoi revenir en bannissant un joueur pour une correction de légalité (ex: un
+    joueur normalement 'recrue' promu temporairement, comme Fyodor Svechkov/Conor Geekie
+    promus le 15 avril, doit redescendre à 'recrue', pas systématiquement 'reserviste')."""
+    row = sim.get_open_row(pooler, player_id)
+    if row is None:
+        return 'reserviste'
+    prev_status = None
+    for changed_at, old_t, _new_t in sorted(row['transitions'], key=lambda t: t[0]):
+        if changed_at <= date:
+            prev_status = old_t
+    return prev_status or 'reserviste'
+
+
 def check_legality(sim, baseline_roster, touched_ids, positions, pindex, pooler, date, report):
     roster = get_roster_snapshot(sim, baseline_roster, touched_ids, pooler, date)
 
@@ -682,8 +698,9 @@ def main():
 
                 for name, pid in current_names.items():
                     if name not in corrected_names:
-                        sim.change_type(pooler, pid, ts, 'reserviste', report, f"correction légalité ({bucket})")
-                        report.legality_corrections_applied.append((pooler, name, 'banni', start))
+                        bench_type = get_status_before_activation(sim, pooler, pid, ts)
+                        sim.change_type(pooler, pid, ts, bench_type, report, f"correction légalité ({bucket})")
+                        report.legality_corrections_applied.append((pooler, name, f'banni ({bench_type})', start))
 
                 for name in corrected_names:
                     if name in current_names:
