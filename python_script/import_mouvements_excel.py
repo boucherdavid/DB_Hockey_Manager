@@ -44,6 +44,7 @@ from unidecode import unidecode
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EXCEL_PATH = os.path.normpath(os.path.join(BASE_DIR, '..', 'excel', 'Mouvements_consolides.xlsx'))
 CORRECTIONS_PATH = os.path.normpath(os.path.join(BASE_DIR, '..', 'excel', 'correction_violations_alignements.txt'))
+FINAL_ALIGNMENT_CORRECTIONS_PATH = os.path.normpath(os.path.join(BASE_DIR, '..', 'excel', 'correction_alignements_finaux.txt'))
 
 POOLER_NAME_MAP = {
     'vincent': 'Vincent',
@@ -190,6 +191,36 @@ def load_legality_corrections():
     return groups
 
 
+def load_final_alignment_corrections():
+    """excel/correction_alignements_finaux.txt (optionnel, ajouté par David le 2026-08-05) —
+    même format que la section 'Alignements finaux' du rapport (indentation 2/4/6 espaces :
+    pooler / position / statut+nom), mais avec la vraie composition voulue au lieu de celle
+    simulée. Retourne pooler -> {nom: statut}."""
+    if not os.path.exists(FINAL_ALIGNMENT_CORRECTIONS_PATH):
+        return None
+    target = defaultdict(dict)
+    current_pooler = None
+    valid_statuses = {'actif', 'reserviste', 'ltir', 'recrue'}
+    with open(FINAL_ALIGNMENT_CORRECTIONS_PATH, encoding='utf-8') as f:
+        for raw_line in f:
+            line = raw_line.rstrip('\n')
+            if not line.strip():
+                continue
+            indent = len(line) - len(line.lstrip(' '))
+            content = line.strip()
+            if indent <= 2:
+                m = re.match(r'(.+?)\s*\(\d+\)\s*:$', content)
+                current_pooler = (map_pooler(m.group(1)) or m.group(1)) if m else None
+                continue
+            if indent == 4:
+                continue  # en-tête de position (Attaquants/Défenseurs/Gardiens) — ignoré
+            if indent >= 6 and current_pooler:
+                parts = content.split(None, 1)
+                if len(parts) == 2 and parts[0] in valid_statuses:
+                    target[current_pooler][parts[1].strip()] = parts[0]
+    return dict(target)
+
+
 def to_date_str(v):
     if v is None:
         return None
@@ -266,6 +297,8 @@ class Report:
         self.roster_initial_count = 0
         self.legality_corrections_applied = []  # (pooler, name, action, date)
         self.legality_correction_issues = []    # (message)
+        self.final_alignment_corrections_applied = []  # (name, from_pooler, from_status, to_pooler, to_status)
+        self.final_alignment_correction_issues = []     # (message)
         self.rows_processed = 0
         self.players_touched = set()
         self.poolers_touched = set()
@@ -439,6 +472,29 @@ def get_roster_snapshot(sim, baseline_roster, touched_ids, pooler, date):
                     break
             roster[pid] = status
     return roster
+
+
+def compute_final_rosters(sim, baseline_roster, all_touched_ids, positions, pindex):
+    """pooler -> [(bucket, status, name, player_id), ...] — combine les joueurs simulés
+    (touchés + préchargés via Roster_Initial, tous déjà dans sim.rows_by_pair) et les
+    joueurs jamais touchés (statut DB actuel, inchangé). Réutilisé pour l'affichage des
+    alignements finaux et pour l'application des corrections d'alignement final."""
+    by_pooler = defaultdict(list)
+    for (pooler, pid), lst in sim.rows_by_pair.items():
+        row = lst[-1]
+        if row['removed_at'] is not None:
+            continue
+        p = pindex.by_id.get(pid, {})
+        name = f"{p.get('first_name','?')} {p.get('last_name','?')}"
+        by_pooler[pooler].append((get_player_bucket(positions.get(pid)), row['player_type'], name, pid))
+    for pooler, roster in baseline_roster.items():
+        for pid, status in roster.items():
+            if (pooler, pid) in sim.rows_by_pair:
+                continue
+            p = pindex.by_id.get(pid, {})
+            name = f"{p.get('first_name','?')} {p.get('last_name','?')}"
+            by_pooler[pooler].append((get_player_bucket(positions.get(pid)), status, name, pid))
+    return by_pooler
 
 
 def get_status_before_activation(sim, pooler, player_id, date):
@@ -722,6 +778,56 @@ def main():
         check_legality(sim, baseline_roster, all_touched_ids, positions, pindex,
                         pooler, f"{date}T12:00:00Z", report)
 
+    # Corrections manuelles d'alignement final (optionnel, excel/correction_alignements_finaux.txt,
+    # ajouté par David le 2026-08-05) — appliquées en dernier, à la date de fin de saison
+    # (choix délibéré de garder ça simple plutôt que de demander une date précise par joueur,
+    # confirmé avec David). Compare la composition finale voulue à celle réellement simulée ;
+    # un même statut dans le même pooler ne fait rien, un statut différent dans le même
+    # pooler déclenche un changement de type, un pooler différent déclenche un vrai transfert
+    # (fermeture de l'ancienne ligne + ouverture de la nouvelle). Un joueur absent du fichier
+    # n'est jamais retiré automatiquement — trop risqué d'inférer une suppression depuis une
+    # simple omission ; seulement signalé dans le rapport pour revue manuelle.
+    final_alignment_corrections = load_final_alignment_corrections()
+    if final_alignment_corrections:
+        end_ts = f"{season['saison_end_date']}T12:00:00Z"
+        before_rosters = compute_final_rosters(sim, baseline_roster, all_touched_ids, positions, pindex)
+        current_by_name = {}
+        for pooler, entries in before_rosters.items():
+            for _bucket, status, name, pid in entries:
+                current_by_name[name] = (pooler, status, pid)
+
+        target_names = {name for d in final_alignment_corrections.values() for name in d}
+        for target_pooler, players in final_alignment_corrections.items():
+            for name, target_status in players.items():
+                pid, note = pindex.resolve(name)
+                if pid is None:
+                    report.final_alignment_correction_issues.append(f"{target_pooler} : {note}")
+                    continue
+                cur = current_by_name.get(name)
+                cur_pooler, cur_status = (cur[0], cur[1]) if cur else (None, None)
+                if cur_pooler == target_pooler and cur_status == target_status:
+                    continue
+                if cur_pooler == target_pooler:
+                    sim.change_type(target_pooler, pid, end_ts, target_status, report, "correction alignement final")
+                else:
+                    if cur_pooler and sim.get_open_row(cur_pooler, pid) is not None:
+                        sim.close_row(cur_pooler, pid, end_ts, report)
+                    sim.open_row(target_pooler, pid, end_ts, target_status)
+                report.final_alignment_corrections_applied.append(
+                    (name, cur_pooler, cur_status, target_pooler, target_status))
+
+        for name, (cur_pooler, cur_status, _pid) in current_by_name.items():
+            if name not in target_names:
+                report.final_alignment_correction_issues.append(
+                    f"{name} présent dans la simulation ({cur_pooler}, {cur_status}) mais absent du "
+                    f"fichier de corrections — ignoré, pas retiré automatiquement.")
+
+        print(f"[INFO] Corrections d'alignement final : "
+              f"{len(report.final_alignment_corrections_applied)} changement(s) appliqué(s).")
+    else:
+        print(f"[INFO] Pas de fichier de corrections d'alignement final "
+              f"({os.path.basename(FINAL_ALIGNMENT_CORRECTIONS_PATH)} absent).")
+
     # -----------------------------------------------------------------
     # Rapport
     # -----------------------------------------------------------------
@@ -812,6 +918,15 @@ def main():
     for _, pooler, label, msg, names in runs:
         print(f"  {pooler} [{label}] {msg} : {', '.join(names) if names else '(aucun)'}")
 
+    print(f"\n--- Corrections d'alignement final appliquées ({len(report.final_alignment_corrections_applied)}) ---")
+    print("(à partir de excel/correction_alignements_finaux.txt, si présent — appliquées à la date de fin de saison)")
+    for name, from_pooler, from_status, to_pooler, to_status in report.final_alignment_corrections_applied:
+        print(f"  {name} : {from_pooler}/{from_status} -> {to_pooler}/{to_status}")
+
+    print(f"\n--- Problèmes / signalements alignement final ({len(report.final_alignment_correction_issues)}) ---")
+    for msg in report.final_alignment_correction_issues:
+        print(f"  {msg}")
+
     # Diff de sanité : état simulé final vs état actuel réel en base, pour les joueurs touchés
     print(f"\n--- Diff de sanité (simulé final vs DB actuelle, joueurs touchés) ---")
     current_by_player = defaultdict(dict)
@@ -842,22 +957,7 @@ def main():
     # de la DB actuelle, inchangé) — regroupés par position puis par statut, pour une revue
     # complète pooler par pooler plutôt qu'un simple diff des écarts.
     print(f"\n--- Alignements finaux (tous les joueurs, par position et statut) ---")
-    by_pooler_full = defaultdict(list)  # pooler -> [(bucket, status, name), ...]
-    for (pooler, pid), lst in sim.rows_by_pair.items():
-        row = lst[-1]
-        if row['removed_at'] is not None:
-            continue
-        p = pindex.by_id.get(pid, {})
-        name = f"{p.get('first_name','?')} {p.get('last_name','?')}"
-        by_pooler_full[pooler].append((get_player_bucket(positions.get(pid)), row['player_type'], name))
-
-    for pooler, roster in baseline_roster.items():
-        for pid, status in roster.items():
-            if (pooler, pid) in sim.rows_by_pair:
-                continue  # déjà couvert par la simulation (touché OU préchargé via Roster_Initial)
-            p = pindex.by_id.get(pid, {})
-            name = f"{p.get('first_name','?')} {p.get('last_name','?')}"
-            by_pooler_full[pooler].append((get_player_bucket(positions.get(pid)), status, name))
+    by_pooler_full = compute_final_rosters(sim, baseline_roster, all_touched_ids, positions, pindex)
 
     bucket_order = {'forward': 0, 'defense': 1, 'goalie': 2}
     bucket_labels = {'forward': 'Attaquants', 'defense': 'Défenseurs', 'goalie': 'Gardiens'}
@@ -869,7 +969,7 @@ def main():
             bucket_entries = sorted((e for e in entries if e[0] == bucket),
                                      key=lambda e: (status_order.get(e[1], 9), e[2]))
             print(f"    {bucket_labels.get(bucket, bucket)} ({len(bucket_entries)}) :")
-            for _, status, name in bucket_entries:
+            for _, status, name, _pid in bucket_entries:
                 print(f"      {status:12s} {name}")
 
     print("\n" + "=" * 70)

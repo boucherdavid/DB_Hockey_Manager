@@ -21,6 +21,28 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 
 ## Journal des sessions
 
+### 2026-08-05 (suite 3)
+
+**[Feat] — Corrections d'alignement final depuis un fichier texte, même principe que les corrections de légalité** (`python_script/import_mouvements_excel.py`) :
+- David voulait pouvoir corriger des erreurs repérées dans la section « Alignements
+  finaux » (ex: statuts finaux erronés) sans éditer `Mouvements` à la main. Décidé de
+  garder ça simple : appliqué à la date de fin de saison (`saison_end_date`), sans demander
+  de date précise par joueur (confirmé avec David — pas besoin de préserver l'attribution
+  fine des points pour ces ajustements de toute fin de saison).
+- `load_final_alignment_corrections()` lit `excel/correction_alignements_finaux.txt` —
+  **même format que la section du rapport** (indentation 2/4/6 espaces : pooler / position /
+  statut+nom) — David copie la section, corrige les lignes fautives, je la relis directement.
+- Nouvelle fonction `compute_final_rosters()` (extraite de la logique d'affichage
+  existante, réutilisée aux deux endroits) pour éviter de dupliquer le calcul combiné
+  simulé+baseline. Applique changement de statut (même pooler) ou vrai transfert (pooler
+  différent) selon le cas. Un joueur absent du fichier n'est **jamais** retiré
+  automatiquement (trop risqué d'inférer une suppression depuis une omission) — seulement
+  signalé pour revue manuelle.
+- Testé avec le fichier que David avait déjà préparé : 5 corrections appliquées sans
+  erreur (Jackson Blake, Matthew Schaefer, Ryker Evans, Brandon Bussi, Scott Wedgewood —
+  tous des passages recrue/réserviste → actif chez le même pooler).
+- Toujours dry-run, `--apply` pas exécuté.
+
 ### 2026-08-05 (suite 2)
 
 **[Feat + Fix] — Section « Alignements finaux » étendue à tous les joueurs (pas seulement les touchés), regroupés par position/statut** (`python_script/import_mouvements_excel.py`) :
