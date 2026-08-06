@@ -57,6 +57,45 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
   manuel plutôt qu'une règle automatique).
 - Sync vers prod (`sync_staging_to_prod.py`) à ne surtout pas lancer avant ce nettoyage.
 
+**[Data] — Nettoyage des 191 doublons `pooler_rosters` en staging + découverte d'un second gap (métadonnées recrue perdues)** (staging uniquement, script one-off non committé) :
+- En préparant le nettoyage des 191 paires identifiées ci-dessus, découverte d'un
+  problème distinct : l'insertion de l'apply du 2026-08-05
+  (`import_mouvements_excel.py` ~ligne 1002) n'écrit que `pooler_id`/`player_id`/
+  `pool_season_id`/`player_type`/`is_active`/`added_at`/`removed_at` — jamais
+  `rookie_type`/`pool_draft_year`/`draft_pick_id`. Ces champs pilotent la protection
+  recrue (`isProtected()` dans `app/app/poolers/[id]/page.tsx`, fenêtre de 5 saisons) et
+  le lien vers `pool_draft_picks`. Sur les 234 lignes `recrue` ouvertes en staging à ce
+  moment, 126 n'avaient ni l'un ni l'autre — bien plus large que les 191 doublons
+  (touche tout joueur recrue rejoué par l'apply, dupliqué ou non). Effet pratique :
+  `isProtected()` retombe sur `!row.rookie_type → true` (protection par défaut, pas de
+  perte de protection, mais impossible de calculer une date d'expiration correcte).
+- Décidé avec David : traiter en deux temps. D'abord fusionner-puis-dédupliquer les 191
+  paires (récupérer `rookie_type`/`pool_draft_year`/`draft_pick_id` de la ligne
+  supprimée vers la ligne conservée quand elle les avait), reporter le gap plus large
+  (joueurns recrue touchés mais jamais dupliqués) à une session séparée.
+- **Logique de résolution par paire** (script one-off, non committé — vit dans le
+  scratchpad de la session) : pour chaque paire, reconstruit l'état correct à partir des
+  entrées `roster_change_log` `change_type='excel_import'` de la paire (la première
+  transition `old_type IS NULL` donne le vrai `added_at`, la chaîne de transitions
+  rejouée donne le vrai `player_type` final) ; la ligne dont `(added_at, player_type)`
+  correspond à cet état reconstruit est conservée, l'autre est supprimée. Quand les deux
+  lignes correspondent exactement (doublon de valeur pur), conserve l'id le plus bas.
+  Avant chaque suppression, copie `rookie_type`/`pool_draft_year`/`draft_pick_id` de la
+  ligne supprimée vers la ligne conservée si cette dernière ne les a pas déjà.
+  191/191 paires résolues automatiquement (0 cas ambigu nécessitant un arbitrage manuel
+  — y compris les 2 cas repérés avec un vrai changement de statut, ex: Matthew Schaefer
+  recrue→actif le 16 avril, David Jiricek actif→réserviste le 9 octobre : la ligne
+  reconstruite à partir de `roster_change_log` était la bonne dans les deux cas, celle
+  gardée par erreur lors de l'apply était la ligne périmée d'avant le 2026-08-05).
+- **Exécuté** : 105 lignes fusionnées (métadonnées recrue récupérées), 191 lignes en
+  double supprimées. Vérifié après coup : 0 paire dupliquée restante, `pooler_rosters`
+  passe de 577 à 386 lignes. Gap résiduel (recrues touchées par l'apply, jamais
+  dupliquées, toujours sans `rookie_type`/`draft_pick_id`) : 21 lignes sur 128 recrues
+  ouvertes — à traiter séparément.
+- **Reste à faire** : combler le gap résiduel de 21 lignes recrue ; revalider
+  `/classement` en staging (points ne devraient plus être doublés) ; seulement ensuite
+  envisager `sync_staging_to_prod.py`.
+
 ### 2026-08-05 (suite 5)
 
 **[Planification] — Réconciliation des choix de repêchage échangés durant 2025-26 (hors scope du script, à faire manuellement)** (aucun changement de code) :
