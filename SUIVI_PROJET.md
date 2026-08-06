@@ -1,6 +1,6 @@
 # Suivi du projet Cap Crunch
 
-Derniere mise a jour: 2026-08-05
+Derniere mise a jour: 2026-08-06
 
 ## Role du fichier
 
@@ -20,6 +20,42 @@ jusqu'au 2026-07-17 (encore `/admin/joueurs`, `/admin/poolers`, `/admin/rosters`
 admin courantes, alors que ces routes avaient été consolidées en pages hub à onglets).
 
 ## Journal des sessions
+
+### 2026-08-06
+
+**[Fix] — Bug de doublons `pooler_rosters` causé par l'apply du 2026-08-05, repéré par David via `/classement` et `/poolers/[id]`** (`python_script/import_mouvements_excel.py`) :
+- David a repéré des joueurs (ex: Tage Thompson) avec 2 « périodes actives » commençant
+  toutes les deux le 7 octobre dans le popup de points, et le même joueur listé deux fois
+  dans l'onglet Alignement d'un pooler (cap et compte de postes doublés, ex: « Attaquants
+  20/12 » au lieu de 10/12).
+- **Cause confirmée en base (staging)** : l'étape de suppression de l'apply (`--apply`)
+  ne vide `pooler_rosters`/`roster_change_log` que pour `report.players_touched` (les
+  joueurs réellement mentionnés dans l'onglet `Mouvements`, ~155), mais l'étape
+  d'insertion qui suit boucle sur `sim.rows_by_pair` au complet — qui contient aussi les
+  ~320 joueurs préchargés depuis l'onglet `Roster_Initial` (`preload_initial()`), qu'ils
+  aient été touchés ou non. Chaque joueur préchargé mais jamais mentionné dans
+  `Mouvements` s'est donc fait insérer une ligne `pooler_rosters` neuve en plus de sa
+  ligne préexistante jamais supprimée — même bug de fond que celui déjà corrigé le
+  2026-08-05 (suite 2) pour l'affichage du rapport (`compute_final_rosters`), mais jamais
+  appliqué à la vraie boucle d'écriture en base.
+- **Portée confirmée par requête directe sur staging** : 191 joueurs avec 2 lignes
+  `pooler_rosters` ouvertes simultanément. Point rassurant vérifié explicitement :
+  **aucun cas cross-pooler** (0 joueur avec 2 lignes ouvertes chez 2 poolers différents)
+  — la contrainte « un joueur = un seul pooler à la fois » n'est donc pas violée pour de
+  vrai, c'est un doublon de bookkeeping chez le même pooler. Impact réel : points
+  doublés dans `buildStandings()` (Thompson : 81 pts réels affichés 162), cap et compte
+  de postes doublés dans l'onglet Alignement, pour ~191 des ~320 joueurs de la saison.
+- **Correctif appliqué** : la boucle d'insertion (`import_mouvements_excel.py` autour de
+  la ligne 996) ignore maintenant les paires `(pooler, pid)` dont `pid` n'est pas dans
+  `touched_ids`, pour rester alignée avec la boucle de suppression qui précède.
+- **Staging pas encore nettoyé** : les 191 doublons déjà insérés le 2026-08-05 sont
+  toujours en base. David a choisi de prioriser le correctif du script pour l'instant;
+  le nettoyage des lignes déjà dupliquées en staging reste à faire (analyse déjà faite :
+  87 paires parfaitement identiques, 104 paires avec une ligne datée réellement + une
+  ligne parasite datée exactement au début de saison — mécaniquement résolubles —, et 1
+  cas (David Jiricek chez Paule, `actif` vs `reserviste`) qui demande un arbitrage
+  manuel plutôt qu'une règle automatique).
+- Sync vers prod (`sync_staging_to_prod.py`) à ne surtout pas lancer avant ce nettoyage.
 
 ### 2026-08-05 (suite 5)
 

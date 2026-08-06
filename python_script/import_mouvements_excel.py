@@ -992,8 +992,14 @@ def main():
         db.table('pooler_rosters').delete().eq('pool_season_id', season_id).eq('player_id', pid).execute()
 
     print("[APPLY] Insertion de l'historique simulé...")
+    touched_id_set = set(touched_ids)
     inserted_rows, inserted_logs = 0, 0
     for (pooler, pid), lst in sim.rows_by_pair.items():
+        if pid not in touched_id_set:
+            # Joueur préchargé depuis Roster_Initial mais jamais mentionné dans Mouvements :
+            # sa ligne pooler_rosters existante n'a pas été supprimée ci-dessus (scope
+            # touched_ids), la réinsérer créerait un doublon (ligne ouverte en double).
+            continue
         pooler_id = pooler_name_to_id.get(pooler)
         if not pooler_id:
             print(f"[ERREUR] Pooler inconnu en base : {pooler}")
