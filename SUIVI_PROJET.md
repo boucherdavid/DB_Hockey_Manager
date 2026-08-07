@@ -1,6 +1,6 @@
 # Suivi du projet Cap Crunch
 
-Derniere mise a jour: 2026-08-06
+Derniere mise a jour: 2026-08-07
 
 ## Role du fichier
 
@@ -95,6 +95,51 @@ admin courantes, alors que ces routes avaient été consolidées en pages hub à
 - **Reste à faire** : combler le gap résiduel de 21 lignes recrue ; revalider
   `/classement` en staging (points ne devraient plus être doublés) ; seulement ensuite
   envisager `sync_staging_to_prod.py`.
+
+**[Investigation] — David signale des joueurs encore actifs en fin de saison qui ne devraient plus l'être (ex: 17 attaquants actifs chez David au lieu de 12) — comparaison avec marqueur.com démarrée, pas terminée** (aucun changement de code, DB pas modifiée) :
+- Après le nettoyage des doublons ci-dessus, David a signalé un problème distinct : sur
+  `/poolers/[id]` (onglet Alignement), David semblait avoir 17 attaquants « actifs »
+  (non grisés) au lieu du maximum légal de 12. Vérification directe en base : le compte
+  réel de lignes `pooler_rosters.player_type='actif'` ouvertes pour David n'est que de 7
+  attaquants — donc le « 17 » observé dans l'app était très probablement un rendu en
+  cache d'avant le nettoyage (ISR/ revalidate), pas un nouveau bug de code.
+- **Mais la vérification a quand même révélé un vrai problème de fond** : le statut
+  final (`actif` vs `réserviste`) issu de la reconstruction Excel du 2026-08-05 est
+  incorrect pour un nombre significatif de joueurs, indépendamment du bug de doublons
+  déjà corrigé. David a fourni 8 captures d'écran (une par pooler) du classement final
+  réel sur marqueur.com, déposées dans `marqueur/` (dossier ajouté au `.gitignore`, même
+  traitement que `excel/` — matériel de référence local, pas du code applicatif) :
+  `marqueur/Alignement_final_{David,Vincent,Jerome,Nicolas,Paule,Sebastien_Fau,Sebastien_Stl,Steve}.jpg`.
+  Sur marqueur.com, les lignes en rouge = joueur inactif en fin de saison (les gardiens
+  ont un bogue connu côté marqueur.com : jamais de ligne rouge pour eux, donc ce signal
+  n'est pas utilisable pour valider les gardiens — se fier à nos propres règles
+  (max 2 gardiens actifs) à la place).
+- **Comparaison ciblée faite (liste `actif` courante en DB vs couleur sur marqueur.com)**,
+  avec un niveau de confiance variable selon le cas (images ~270px de large, pas d'OCR
+  disponible dans cet environnement — lecture visuelle directe, pas de script fiable à
+  100 % pour le nom exact de chaque ligne). Cas confirmés avec bonne confiance :
+  - **David** : Igor Chernyshov et Teuvo Teravainen sont marqués `actif` en DB mais
+    apparaissent en rouge (inactifs) sur marqueur.com. À l'inverse, plusieurs joueurs que
+    marqueur.com montre actifs (ex: Marchenko, Eklund, Blake, Stankoven, Malkin, Savoie,
+    Konecny, McCann) ne sont **pas** actuellement `actif` pour David en DB — Eklund en
+    particulier est actuellement rattaché à un tout autre pooler (Vincent) dans notre DB.
+  - **Sébastien F.** : Ivan Barbashev et Artturi Lehkonen marqués `actif` en DB mais
+    rouges sur marqueur.com.
+  - **Steve** : Artyom Levshunov (défense) semble rouge sur marqueur.com alors que la DB
+    le dit actif — moins confiant que les cas ci-dessus, à revérifier.
+  - Joueurs confirmés **corrects** (DB actif = marqueur.com blanc/actif), pour référence :
+    Connor, Pastrnak, Raymond, Scheifele, Tuch (David) ; Debrincat, Sennecke, Zacha
+    (Sébastien F.) ; O'Reilly, Michkov (Sébastien S.) ; Carlsson, Graf, Malinski (Steve).
+- **Pas encore fait / à reprendre en priorité la prochaine session** :
+  - Comparaison complète et fiable pour les 8 poolers (celle-ci n'a couvert qu'un
+    sous-ensemble ciblé, pas la totalité de chaque alignement — le mismatch touche
+    apparemment ~30-40 % des joueurs actuellement `actif`, pas juste quelques cas isolés).
+  - Décider d'une méthode plus fiable que la lecture visuelle d'image basse résolution :
+    soit David confirme/corrige manuellement les cas ambigus, soit il fournit les données
+    marqueur.com dans un format texte/exportable plutôt qu'en capture d'écran.
+  - Une fois la liste des écarts confirmée, corriger `pooler_rosters` en staging (aucune
+    écriture faite pour cette partie-là — uniquement l'investigation).
+  - Ne toujours pas synchroniser vers prod tant que ce point n'est pas réglé.
 
 ### 2026-08-05 (suite 5)
 
